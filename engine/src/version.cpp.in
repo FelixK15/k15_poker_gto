@@ -1,0 +1,7 @@
+#include "gto/version.h"
+
+namespace gto {
+
+std::string_view engine_version() noexcept { return "@PROJECT_VERSION@"; }
+
+}  // namespace gto

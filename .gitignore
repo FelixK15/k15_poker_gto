@@ -1,0 +1,25 @@
+# C++ build
+/build/
+/out/
+/vcpkg_installed/
+CMakeUserPresets.json
+.vs/
+
+# Flutter
+app/.dart_tool/
+app/build/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/.gradle/
+app/android/local.properties
+app/android/app/debug/
+app/android/app/profile/
+app/android/app/release/
+app/windows/flutter/ephemeral/
+*.iml
+.idea/
+
+# OS / editors
+Thumbs.db
+.DS_Store
+.vscode/
