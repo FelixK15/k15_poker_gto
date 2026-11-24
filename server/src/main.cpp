@@ -4,6 +4,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -29,6 +30,7 @@ struct Options {
   std::string data_dir = "gto-data";
   unsigned threads = 0;
   std::uint64_t memory_limit_mb = 0;  // 0 = 80% of the machine's RAM
+  bool exit_with_stdin = false;
 };
 
 void print_usage() {
@@ -48,6 +50,9 @@ void print_usage() {
       "                          everything in memory only.\n"
       "  --threads <n>           Threads for solving (default: all).\n"
       "  --memory-limit-mb <n>   Largest solve to accept (default: 80% of RAM).\n"
+      "  --exit-with-stdin       Shut down when standard input closes. For a\n"
+      "                          client that starts the server itself: the\n"
+      "                          server then never outlives it.\n"
       "  --version               Print version and exit.\n"
       "  --help                  Print this help and exit.\n\n"
       "After startup the server prints one line 'LISTENING <port>' on stdout.\n"
@@ -112,6 +117,8 @@ bool parse_args(int argc, char** argv, Options& options, int& exit_code) {
       if (!parse_number(next(), 1u, 4096u, options.threads)) {
         return fail("--threads needs a number from 1 to 4096");
       }
+    } else if (arg == "--exit-with-stdin") {
+      options.exit_with_stdin = true;
     } else if (arg == "--memory-limit-mb") {
       if (!parse_number<std::uint64_t>(next(), 1, 1ull << 40, options.memory_limit_mb)) {
         return fail("--memory-limit-mb needs a positive number");
@@ -193,6 +200,15 @@ int main(int argc, char** argv) {
 
   std::signal(SIGINT, on_signal);
   std::signal(SIGTERM, on_signal);
+  if (options.exit_with_stdin) {
+    // Blocks until the other end of the pipe is closed, which also happens
+    // when the process holding it dies.
+    std::thread([] {
+      while (std::cin.get() != std::char_traits<char>::eof()) {
+      }
+      g_stop = true;
+    }).detach();
+  }
   while (!g_stop) std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
   spdlog::info("shutting down");
