@@ -40,6 +40,13 @@ class Card {
   std::uint8_t index_ = 0;
 };
 
+/// Rank index (0 = deuce … 12 = ace) for '2'…'9', 'T', 'J', 'Q', 'K', 'A' in
+/// either case, or -1.
+int rank_from_char(char c) noexcept;
+
+/// Inverse of rank_from_char for 0…12.
+char rank_to_char(int rank) noexcept;
+
 /// Parses a run of cards such as "AsKd7c" or "As Kd 7c".
 /// Returns nullopt on any malformed or duplicated card.
 std::optional<std::vector<Card>> parse_cards(std::string_view text);

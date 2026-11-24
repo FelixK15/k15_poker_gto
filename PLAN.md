@@ -217,9 +217,9 @@ Durations are rough guesses for one focused developer, not commitments.
 
 | # | Milestone | Done when | Rough size |
 |---|---|---|---|
-| M0 | Skeleton | Repo builds on Windows and Linux; proto compiles to C++ and Dart; CI green | 1 week |
-| M1 | Engine core | Cards, evaluator, ranges, tree builder; river spots solve via `gto-cli`; Kuhn/Leduc tests pass | 3–4 weeks |
-| M2 | Full postflop | Turn and flop solves; isomorphism; multithreading; exploitability; results match reference solvers | 4–6 weeks |
+| M0 | Skeleton | **Done.** Repo builds on Windows; proto compiles to C++ and Dart. Linux build and CI not yet run | 1 week |
+| M1 | Engine core | **Done.** Cards, evaluator, ranges, tree builder, DCFR solver with exploitability; river spots solve via `gto-cli`; Kuhn poker and a river spot with a known answer pass | 3–4 weeks |
+| M2 | Full postflop | Chance nodes, so turn and flop solve; Leduc poker test (needs a chance node, moved here from M1); isomorphism; multithreading; results match reference solvers | 4–6 weeks |
 | M3 | Server | Jobs, queue, progress stream, solution store, `GetNode`, auth | 3 weeks |
 | M4 | Client MVP | Connect screen (local/remote), manual spot setup, solve, browse strategy matrix on Windows | 4–5 weeks |
 | M5 | Range library | 6-max/9-max × 100/200/300BB scenarios, range editor, import/export, tree presets | 2–3 weeks |

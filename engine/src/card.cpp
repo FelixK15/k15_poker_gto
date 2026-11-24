@@ -11,6 +11,13 @@ constexpr std::string_view kSuits = "cdhs";
 
 }  // namespace
 
+int rank_from_char(char c) noexcept {
+  const auto rank = kRanks.find(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+  return rank == std::string_view::npos ? -1 : static_cast<int>(rank);
+}
+
+char rank_to_char(int rank) noexcept { return kRanks[static_cast<std::size_t>(rank)]; }
+
 std::string Card::to_string() const {
   return {kRanks[static_cast<std::size_t>(rank())], kSuits[static_cast<std::size_t>(suit())]};
 }

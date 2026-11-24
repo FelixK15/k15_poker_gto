@@ -5,6 +5,7 @@
     "grpc",
     "protobuf",
     "spdlog",
+    "nlohmann-json",
     "gtest"
   ],
   "builtin-baseline": "2f8bf7a5bad48aaef99d80b221fca712f016ab8f"
