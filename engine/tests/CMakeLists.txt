@@ -2,8 +2,11 @@ add_executable(solver_tests
   card_test.cpp
   game_tree_test.cpp
   hand_evaluator_test.cpp
+  persistence_test.cpp
   range_test.cpp
   solver_test.cpp
+  streets_test.cpp
+  thread_pool_test.cpp
   terminal_test.cpp
   version_test.cpp
 )

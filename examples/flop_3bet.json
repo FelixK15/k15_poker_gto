@@ -1,0 +1,37 @@
+// A flop in a 3-bet pot with narrow ranges and a simple tree, small enough to
+// solve in well under a minute. Chips are big blinds.
+//
+// The flop is two-tone, so clubs and diamonds are interchangeable and their
+// turn cards are solved only once.
+//
+// Try: --node check --node bet6.93/call/2c --node bet6.93/call/2d
+{
+  "board": "Ks 9s 4h",
+  "pot": 21,
+  "effective_stack": 90,
+  "ranges": {
+    "oop": "AA, KK, QQ, JJ, TT, AKs, AKo, AQs, KQs, A5s, A4s",
+    "ip": "QQ, JJ, TT, 99, 88, AKo, AQs, AJs, KQs, KJs, QJs, JTs, T9s"
+  },
+  "tree": {
+    "flop": {
+      "oop": { "bet_pct": [33] },
+      "ip": { "bet_pct": [50], "raise_pct": [60] }
+    },
+    "turn": {
+      "oop": { "bet_pct": [66] },
+      "ip": { "bet_pct": [66] }
+    },
+    "river": {
+      "oop": { "bet_pct": [75], "allin": true },
+      "ip": { "bet_pct": [75], "allin": true }
+    },
+    "raise_cap": 1,
+    "allin_threshold_pct": 67
+  },
+  "solve": {
+    "max_iterations": 300,
+    "target_exploitability_pct": 0.5,
+    "check_interval": 20
+  }
+}

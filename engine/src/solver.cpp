@@ -1,8 +1,10 @@
 #include "gto/solver.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cmath>
+#include <cstring>
+#include <istream>
+#include <ostream>
 
 namespace gto {
 
@@ -14,122 +16,72 @@ constexpr double kGamma = 2.0;  // average strategy
 constexpr float kNegativeDiscount = 0.5f;  // beta = 0
 
 std::size_t block_size(const Game& game, const Node& node) {
-  return node.actions.size() * game.hands.hands[node.player].size();
+  return static_cast<std::size_t>(node.num_children) * game.hands[node.player].size();
+}
+
+std::uint64_t mapped_mask(const Hand& hand, const CardMap& map) {
+  std::uint64_t mask = 0;
+  for (int c = 0; c < hand.num_cards; ++c) mask |= std::uint64_t{1} << map[hand.cards[c]];
+  return mask;
 }
 
 }  // namespace
 
-/// Bump allocator for the scratch vectors of one tree traversal, so that the
-/// recursion does not touch the heap.
-class Solver::Arena {
- public:
-  explicit Arena(std::size_t size) : buffer_(size) {}
-
-  float* alloc(std::size_t count) {
-    assert(top_ + count <= buffer_.size());
-    float* result = buffer_.data() + top_;
-    top_ += count;
-    return result;
-  }
-  std::size_t mark() const noexcept { return top_; }
-  void release(std::size_t mark) noexcept { top_ = mark; }
-
- private:
-  std::vector<float> buffer_;
-  std::size_t top_ = 0;
-};
-
-std::optional<Game> make_game(const SpotConfig& config, std::string* error) {
-  const auto fail = [&](std::string message) -> std::optional<Game> {
-    if (error) *error = std::move(message);
-    return std::nullopt;
-  };
-
-  if (config.board.size() != 5) {
-    return fail("only river spots (five board cards) are supported so far");
-  }
-  std::uint64_t board_mask = 0;
-  for (const Card card : config.board) {
-    if ((board_mask & card.mask()) != 0) return fail("the board contains a card twice");
-    board_mask |= card.mask();
-  }
-
-  Game game;
-  game.rake_rate = config.rake_rate;
-  game.rake_cap = config.rake_cap;
-  if (!(game.rake_rate >= 0 && game.rake_rate < 1)) return fail("rake must be between 0 and 1");
-  if (!(game.rake_cap >= 0)) return fail("the rake cap cannot be negative");
-
-  auto tree = build_tree(config.tree, Street::River, error);
-  if (!tree) return std::nullopt;
-  game.tree = std::move(*tree);
-
-  std::array<Card, 7> cards{};
-  std::copy(config.board.begin(), config.board.end(), cards.begin());
-  for (std::size_t player = 0; player < 2; ++player) {
-    for (int combo = 0; combo < Range::kNumCombos; ++combo) {
-      const float weight = config.ranges[player].weight(combo);
-      if (!(weight > 0)) continue;
-      const auto [a, b] = Range::combo_cards(combo);
-      if (((a.mask() | b.mask()) & board_mask) != 0) continue;
-      cards[5] = a;
-      cards[6] = b;
-      game.hands.hands[player].push_back(make_hand({a.index(), b.index()}, weight));
-      game.hands.strength[player].push_back(evaluate_hand(cards));
-    }
-    if (game.hands.hands[player].empty()) {
-      return fail(std::string(player == kOop ? "the OOP" : "the IP") +
-                  " range has no hands that are possible on this board");
-    }
-  }
-
-  // Both ranges may be non-empty and still never meet, e.g. AsAh against AsAd.
-  bool compatible = false;
-  for (const Hand& a : game.hands.hands[0]) {
-    for (const Hand& b : game.hands.hands[1]) {
-      if ((a.mask & b.mask) == 0) {
-        compatible = true;
-        break;
-      }
-    }
-    if (compatible) break;
-  }
-  if (!compatible) return fail("the two ranges cannot be held at the same time");
-
-  return game;
-}
-
-Solver::Solver(Game game) : game_(std::move(game)), terminal_(game_.hands) {
-  const auto& nodes = game_.tree.nodes;
+Solver::Solver(Game game, const SolverConfig& config)
+    : game_(std::move(game)), terminal_(game_.hands), pool_(config.threads) {
+  const GameTree& tree = game_.tree;
+  const auto& nodes = tree.nodes;
 
   offset_.assign(nodes.size(), 0);
-  std::size_t total = 0;
-  std::size_t max_actions = 1;
-  std::size_t max_depth = 1;
-  std::vector<std::size_t> depth(nodes.size(), 0);
+  std::uint64_t total = 0;
   for (std::size_t i = 0; i < nodes.size(); ++i) {
-    const Node& node = nodes[i];
-    // Nodes are stored parent first, so the parent's depth is already known.
-    const std::size_t parent_depth = i == 0 ? 0 : depth[node.parent];
-    if (node.type != NodeType::Action) {
-      depth[i] = parent_depth;
-      continue;
-    }
-    depth[i] = parent_depth + 1;
-    max_depth = std::max(max_depth, depth[i]);
-    max_actions = std::max(max_actions, node.actions.size());
+    if (nodes[i].type != NodeType::Action) continue;
     offset_[i] = total;
-    total += block_size(game_, node);
+    total += block_size(game_, nodes[i]);
   }
   regrets_.assign(total, 0.0f);
   strategy_sum_.assign(total, 0.0f);
 
-  const std::size_t max_hands = std::max(num_hands(0), num_hands(1));
-  arena_size_ = max_depth * (2 * max_actions + 1) * max_hands;
+  // Find the chance nodes that have no chance node above them.
+  top_level_chance_.assign(tree.chances.size(), false);
+  {
+    std::vector<std::uint32_t> stack = {GameTree::kRoot};
+    while (!stack.empty()) {
+      const std::uint32_t index = stack.back();
+      stack.pop_back();
+      if (nodes[index].type == NodeType::Chance) {
+        top_level_chance_[nodes[index].aux] = true;
+        continue;
+      }
+      for (const std::uint32_t child : tree.children_of(index)) stack.push_back(child);
+    }
+  }
 
-  for (int player = 0; player < 2; ++player) {
-    for (const Hand& hand : game_.hands.hands[player]) {
-      initial_reach_[player].push_back(hand.weight);
+  const std::size_t scratch = scratch_need(GameTree::kRoot);
+  main_arena_.resize(scratch);
+  worker_arenas_.resize(pool_.size());
+  for (Arena& arena : worker_arenas_) arena.resize(scratch);
+
+  for (std::size_t player = 0; player < 2; ++player) {
+    const auto& hands = game_.hands[player];
+    for (std::size_t h = 0; h < hands.size(); ++h) {
+      initial_reach_[player].push_back(hands[h].weight);
+      hand_index_[player].emplace(hands[h].mask, static_cast<std::uint32_t>(h));
+    }
+  }
+
+  for (const CardMap& map : tree.swaps) {
+    auto& swapped = swap_hands_.emplace_back();
+    for (std::size_t player = 0; player < 2; ++player) {
+      const auto& hands = game_.hands[player];
+      swapped[player].resize(hands.size());
+      for (std::size_t h = 0; h < hands.size(); ++h) {
+        const auto it = hand_index_[player].find(mapped_mask(hands[h], map));
+        // The tree only uses swaps that keep both ranges intact.
+        assert(it != hand_index_[player].end());
+        swapped[player][h] =
+            it != hand_index_[player].end() ? it->second : static_cast<std::uint32_t>(h);
+      }
     }
   }
 
@@ -139,6 +91,22 @@ Solver::Solver(Game game) : game_(std::move(game)), terminal_(game_.hands) {
     pair_weight_ += static_cast<double>(initial_reach_[0][h]) * compatible[h];
   }
   assert(pair_weight_ > 0);
+}
+
+std::size_t Solver::scratch_need(std::uint32_t node_index) const {
+  const Node& node = game_.tree.nodes[node_index];
+  if (node.type != NodeType::Action && node.type != NodeType::Chance) return 0;
+
+  std::size_t below = 0;
+  for (const std::uint32_t child : game_.tree.children_of(node_index)) {
+    below = std::max(below, scratch_need(child));
+  }
+  const std::size_t max_hands = std::max(num_hands(0), num_hands(1));
+  const std::size_t children = node.num_children;
+  // Action: a strategy and the action values. Chance: one value vector per
+  // card and a reach vector.
+  const std::size_t here = node.type == NodeType::Action ? 2 * children + 1 : children + 1;
+  return here * max_hands + below;
 }
 
 std::size_t Solver::estimate_memory_bytes(const Game& game) noexcept {
@@ -151,6 +119,73 @@ std::size_t Solver::estimate_memory_bytes(const Game& game) noexcept {
 
 std::size_t Solver::memory_bytes() const noexcept {
   return (regrets_.size() + strategy_sum_.size()) * sizeof(float);
+}
+
+namespace {
+
+constexpr char kStateMagic[8] = {'K', '1', '5', 'G', 'T', 'O', 'S', '1'};
+
+/// Fixed-size header of a saved solver state. Little-endian, as written by
+/// every platform we build for.
+struct StateHeader {
+  char magic[8];
+  std::uint32_t version;
+  std::int32_t iteration;
+  std::uint64_t nodes;
+  std::uint64_t hands[2];
+  std::uint64_t values;
+};
+
+constexpr std::uint32_t kStateVersion = 1;
+
+}  // namespace
+
+void Solver::save(std::ostream& out) const {
+  StateHeader header{};
+  std::memcpy(header.magic, kStateMagic, sizeof(kStateMagic));
+  header.version = kStateVersion;
+  header.iteration = iteration_;
+  header.nodes = game_.tree.nodes.size();
+  header.hands[0] = num_hands(0);
+  header.hands[1] = num_hands(1);
+  header.values = regrets_.size();
+
+  const auto bytes = static_cast<std::streamsize>(regrets_.size() * sizeof(float));
+  out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+  out.write(reinterpret_cast<const char*>(regrets_.data()), bytes);
+  out.write(reinterpret_cast<const char*>(strategy_sum_.data()), bytes);
+}
+
+bool Solver::load(std::istream& in, std::string* error) {
+  const auto fail = [&](const char* message) {
+    if (error) *error = message;
+    return false;
+  };
+
+  StateHeader header{};
+  in.read(reinterpret_cast<char*>(&header), sizeof(header));
+  if (!in || std::memcmp(header.magic, kStateMagic, sizeof(kStateMagic)) != 0) {
+    return fail("not a saved solver state");
+  }
+  if (header.version != kStateVersion) return fail("saved by an incompatible version");
+  if (header.nodes != game_.tree.nodes.size() || header.hands[0] != num_hands(0) ||
+      header.hands[1] != num_hands(1) || header.values != regrets_.size() ||
+      header.iteration < 0) {
+    return fail("the saved state belongs to a different spot");
+  }
+
+  // Read into copies so that a truncated file leaves this solver as it was.
+  std::vector<float> regrets(regrets_.size());
+  std::vector<float> strategy_sum(strategy_sum_.size());
+  const auto bytes = static_cast<std::streamsize>(regrets.size() * sizeof(float));
+  in.read(reinterpret_cast<char*>(regrets.data()), bytes);
+  in.read(reinterpret_cast<char*>(strategy_sum.data()), bytes);
+  if (!in) return fail("the saved state is incomplete");
+
+  regrets_ = std::move(regrets);
+  strategy_sum_ = std::move(strategy_sum);
+  iteration_ = header.iteration;
+  return true;
 }
 
 double Solver::rake(double final_pot) const noexcept {
@@ -175,13 +210,11 @@ bool Solver::terminal_values(const Node& node, int player, const float* opponent
       const double mine = node.committed[static_cast<std::size_t>(player)];
       const double theirs = node.committed[static_cast<std::size_t>(1 - player)];
       const double taken = rake(pot + mine + theirs);
-      terminal_.showdown(player, pot + theirs - taken, (pot - taken) / 2, -mine, opponent_reach,
-                         out);
+      terminal_.showdown(game_.showdowns[node.aux], player, pot + theirs - taken,
+                         (pot - taken) / 2, -mine, opponent_reach, out);
       return true;
     }
     case NodeType::Chance:
-      assert(false && "chance nodes are not supported yet");
-      return true;
     case NodeType::Action:
       return false;
   }
@@ -190,7 +223,7 @@ bool Solver::terminal_values(const Node& node, int player, const float* opponent
 
 void Solver::current_strategy(std::uint32_t node_index, float* out) const {
   const Node& node = game_.tree.nodes[node_index];
-  const std::size_t actions = node.actions.size();
+  const std::size_t actions = node.num_children;
   const std::size_t hands = num_hands(node.player);
   const float* regrets = regrets_.data() + offset_[node_index];
   const float uniform = 1.0f / static_cast<float>(actions);
@@ -206,7 +239,7 @@ void Solver::current_strategy(std::uint32_t node_index, float* out) const {
 
 void Solver::average_strategy(std::uint32_t node_index, float* out) const {
   const Node& node = game_.tree.nodes[node_index];
-  const std::size_t actions = node.actions.size();
+  const std::size_t actions = node.num_children;
   const std::size_t hands = num_hands(node.player);
   const float* sums = strategy_sum_.data() + offset_[node_index];
   const float uniform = 1.0f / static_cast<float>(actions);
@@ -220,83 +253,36 @@ void Solver::average_strategy(std::uint32_t node_index, float* out) const {
   }
 }
 
-void Solver::cfr(std::uint32_t node_index, int player, const float* opponent_reach, float* out,
-                 Arena& arena) {
+void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const float* opponent_reach,
+                      float* out, Arena& arena) const {
   const Node& node = game_.tree.nodes[node_index];
   if (terminal_values(node, player, opponent_reach, out)) return;
-
-  const std::size_t mark = arena.mark();
-  const std::size_t actions = node.actions.size();
-  const std::size_t my_hands = num_hands(player);
-  const std::size_t actor_hands = num_hands(node.player);
-
-  float* strategy = arena.alloc(actions * actor_hands);
-  current_strategy(node_index, strategy);
-
-  if (node.player == player) {
-    // Our decision: value every action, then move regrets towards the better ones.
-    float* action_values = arena.alloc(actions * my_hands);
-    for (std::size_t a = 0; a < actions; ++a) {
-      cfr(node.children[a], player, opponent_reach, action_values + a * my_hands, arena);
-    }
-
-    std::fill(out, out + my_hands, 0.0f);
-    for (std::size_t a = 0; a < actions; ++a) {
-      for (std::size_t h = 0; h < my_hands; ++h) {
-        out[h] += strategy[a * my_hands + h] * action_values[a * my_hands + h];
-      }
-    }
-
-    float* regrets = regrets_.data() + offset_[node_index];
-    for (std::size_t a = 0; a < actions; ++a) {
-      for (std::size_t h = 0; h < my_hands; ++h) {
-        float& regret = regrets[a * my_hands + h];
-        regret = regret * (regret > 0 ? positive_discount_ : negative_discount_) +
-                 action_values[a * my_hands + h] - out[h];
-      }
-    }
-  } else {
-    // Opponent's decision: split their reach by their strategy and record it
-    // in their average strategy, weighted by how often each hand gets here.
-    float* child_reach = arena.alloc(actor_hands);
-    float* child_values = arena.alloc(my_hands);
-    float* sums = strategy_sum_.data() + offset_[node_index];
-
-    std::fill(out, out + my_hands, 0.0f);
-    for (std::size_t a = 0; a < actions; ++a) {
-      for (std::size_t h = 0; h < actor_hands; ++h) {
-        child_reach[h] = opponent_reach[h] * strategy[a * actor_hands + h];
-        float& sum = sums[a * actor_hands + h];
-        sum = sum * strategy_discount_ + child_reach[h];
-      }
-      cfr(node.children[a], player, child_reach, child_values, arena);
-      for (std::size_t h = 0; h < my_hands; ++h) out[h] += child_values[h];
-    }
+  if (node.type == NodeType::Chance) {
+    traverse_chance(mode, node_index, player, opponent_reach, out, arena);
+    return;
   }
 
-  arena.release(mark);
-}
-
-void Solver::evaluate_node(std::uint32_t node_index, int player, const float* opponent_reach,
-                           float* out, bool best_response, Arena& arena) const {
-  const Node& node = game_.tree.nodes[node_index];
-  if (terminal_values(node, player, opponent_reach, out)) return;
-
   const std::size_t mark = arena.mark();
-  const std::size_t actions = node.actions.size();
+  const auto children = game_.tree.children_of(node_index);
+  const std::size_t actions = children.size();
   const std::size_t my_hands = num_hands(player);
   const std::size_t actor_hands = num_hands(node.player);
 
   float* strategy = arena.alloc(actions * actor_hands);
-  average_strategy(node_index, strategy);
+  if (mode == Mode::Train) {
+    current_strategy(node_index, strategy);
+  } else {
+    average_strategy(node_index, strategy);
+  }
 
   if (node.player == player) {
+    // Our decision: value every action.
     float* action_values = arena.alloc(actions * my_hands);
     for (std::size_t a = 0; a < actions; ++a) {
-      evaluate_node(node.children[a], player, opponent_reach, action_values + a * my_hands,
-                    best_response, arena);
+      traverse(mode, children[a], player, opponent_reach, action_values + a * my_hands, arena);
     }
-    if (best_response) {
+
+    if (mode == Mode::BestResponse) {
       std::copy(action_values, action_values + my_hands, out);
       for (std::size_t a = 1; a < actions; ++a) {
         for (std::size_t h = 0; h < my_hands; ++h) {
@@ -311,18 +297,103 @@ void Solver::evaluate_node(std::uint32_t node_index, int player, const float* op
         }
       }
     }
+
+    if (mode == Mode::Train) {
+      // Move regrets towards the actions that did better than the mix.
+      float* regrets = regrets_.data() + offset_[node_index];
+      for (std::size_t a = 0; a < actions; ++a) {
+        for (std::size_t h = 0; h < my_hands; ++h) {
+          float& regret = regrets[a * my_hands + h];
+          regret = regret * (regret > 0 ? positive_discount_ : negative_discount_) +
+                   action_values[a * my_hands + h] - out[h];
+        }
+      }
+    }
   } else {
+    // Opponent's decision: split their reach by their strategy. When training,
+    // also record it in their average strategy, weighted by how often each
+    // hand gets here.
     float* child_reach = arena.alloc(actor_hands);
     float* child_values = arena.alloc(my_hands);
+    float* sums = strategy_sum_.data() + offset_[node_index];
+
     std::fill(out, out + my_hands, 0.0f);
     for (std::size_t a = 0; a < actions; ++a) {
       for (std::size_t h = 0; h < actor_hands; ++h) {
         child_reach[h] = opponent_reach[h] * strategy[a * actor_hands + h];
       }
-      evaluate_node(node.children[a], player, child_reach, child_values, best_response, arena);
+      if (mode == Mode::Train) {
+        for (std::size_t h = 0; h < actor_hands; ++h) {
+          float& sum = sums[a * actor_hands + h];
+          sum = sum * strategy_discount_ + child_reach[h];
+        }
+      }
+      traverse(mode, children[a], player, child_reach, child_values, arena);
       for (std::size_t h = 0; h < my_hands; ++h) out[h] += child_values[h];
     }
   }
+
+  arena.release(mark);
+}
+
+void Solver::traverse_chance(Mode mode, std::uint32_t node_index, int player,
+                             const float* opponent_reach, float* out, Arena& arena) const {
+  const GameTree& tree = game_.tree;
+  const Node& node = tree.nodes[node_index];
+  const auto children = tree.children_of(node_index);
+  const auto iso = tree.iso_of(node_index);
+  const auto p = static_cast<std::size_t>(player);
+  const auto& my_hands = game_.hands[p];
+  const auto& opponent_hands = game_.hands[1 - p];
+  const std::size_t my_count = my_hands.size();
+  const std::size_t opponent_count = opponent_hands.size();
+
+  const std::size_t mark = arena.mark();
+  float* values = arena.alloc(children.size() * my_count);
+
+  // One card: remove the hands it blocks, value the rest.
+  const auto deal = [&](std::size_t i, Arena& scratch) {
+    const std::size_t inner = scratch.mark();
+    float* reach = scratch.alloc(opponent_count);
+    const std::uint64_t card = std::uint64_t{1} << tree.nodes[children[i]].card;
+    for (std::size_t h = 0; h < opponent_count; ++h) {
+      reach[h] = (opponent_hands[h].mask & card) != 0 ? 0.0f : opponent_reach[h];
+    }
+    float* result = values + i * my_count;
+    traverse(mode, children[i], player, reach, result, scratch);
+    for (std::size_t h = 0; h < my_count; ++h) {
+      if ((my_hands[h].mask & card) != 0) result[h] = 0.0f;
+    }
+    scratch.release(inner);
+  };
+
+  if (top_level_chance_[node.aux] && pool_.size() > 1 && children.size() > 1) {
+    // The subtrees below different cards share no storage.
+    pool_.parallel_for(children.size(), [&](std::size_t i, unsigned worker) {
+      deal(i, worker_arenas_[worker]);
+    });
+  } else {
+    for (std::size_t i = 0; i < children.size(); ++i) deal(i, arena);
+  }
+
+  std::fill(out, out + my_count, 0.0f);
+  for (std::size_t i = 0; i < children.size(); ++i) {
+    const float* result = values + i * my_count;
+    for (std::size_t h = 0; h < my_count; ++h) out[h] += result[h];
+  }
+  // An interchangeable card is worth to a hand what its representative is
+  // worth to the hand with the two suits swapped.
+  for (const IsoDeal& deal_iso : iso) {
+    const float* result = values + deal_iso.child * my_count;
+    const auto& swapped = swap_hands_[deal_iso.swap][p];
+    for (std::size_t h = 0; h < my_count; ++h) out[h] += result[swapped[h]];
+  }
+
+  // Every card that neither player holds is equally likely.
+  const std::size_t unseen =
+      children.size() + iso.size() - 2 * static_cast<std::size_t>(terminal_.hole_cards());
+  const float probability = 1.0f / static_cast<float>(unseen);
+  for (std::size_t h = 0; h < my_count; ++h) out[h] *= probability;
 
   arena.release(mark);
 }
@@ -345,26 +416,26 @@ void Solver::iterate() {
   negative_discount_ = kNegativeDiscount;
   strategy_discount_ = static_cast<float>(std::pow(previous / iteration_, kGamma));
 
-  Arena arena(arena_size_);
   for (int player = 0; player < 2; ++player) {
     std::vector<float> values(num_hands(player));
-    cfr(GameTree::kRoot, player, initial_reach_[static_cast<std::size_t>(1 - player)].data(),
-        values.data(), arena);
+    traverse(Mode::Train, GameTree::kRoot, player,
+             initial_reach_[static_cast<std::size_t>(1 - player)].data(), values.data(),
+             main_arena_);
   }
 }
 
 Evaluation Solver::evaluate() const {
   Evaluation result;
-  Arena arena(arena_size_);
   for (int player = 0; player < 2; ++player) {
     const auto p = static_cast<std::size_t>(player);
     const float* opponent_reach = initial_reach_[1 - p].data();
     std::vector<float> values(num_hands(player));
 
-    evaluate_node(GameTree::kRoot, player, opponent_reach, values.data(), false, arena);
+    traverse(Mode::Average, GameTree::kRoot, player, opponent_reach, values.data(), main_arena_);
     result.ev[p] = root_value(player, values.data());
 
-    evaluate_node(GameTree::kRoot, player, opponent_reach, values.data(), true, arena);
+    traverse(Mode::BestResponse, GameTree::kRoot, player, opponent_reach, values.data(),
+             main_arena_);
     result.best_response[p] = root_value(player, values.data());
   }
   result.exploitability =
@@ -397,28 +468,42 @@ SolveResult Solver::solve(const SolveOptions& options) {
   return result;
 }
 
-NodeReport Solver::report(std::uint32_t node_index) const {
-  const auto& nodes = game_.tree.nodes;
-  const Node& node = nodes[node_index];
+NodeReport Solver::report(const NodeRef& ref) const {
+  const GameTree& tree = game_.tree;
+  const auto& nodes = tree.nodes;
+  const Node& node = nodes[ref.node];
 
   NodeReport report;
   report.type = node.type;
   report.player = node.player;
-  report.actions = node.actions;
+  const auto actions = tree.actions_of(ref.node);
+  report.actions.assign(actions.begin(), actions.end());
   report.reach = initial_reach_;
 
-  // Walk down from the root, scaling each player's reach by their own choices.
+  // Walk down from the root: a player's own choices scale their reach, a
+  // dealt card removes the hands that contain it.
   std::vector<std::uint32_t> path;
-  for (std::uint32_t current = node_index; current != GameTree::kRoot;
+  for (std::uint32_t current = ref.node; current != GameTree::kRoot;
        current = nodes[current].parent) {
     path.push_back(current);
   }
   std::vector<float> strategy;
+  std::uint64_t dealt = 0;
   for (auto it = path.rbegin(); it != path.rend(); ++it) {
     const Node& child = nodes[*it];
     const Node& parent = nodes[child.parent];
+    if (parent.type == NodeType::Chance) {
+      const std::uint64_t card = std::uint64_t{1} << child.card;
+      dealt |= card;
+      for (std::size_t player = 0; player < 2; ++player) {
+        for (std::size_t h = 0; h < game_.hands[player].size(); ++h) {
+          if ((game_.hands[player][h].mask & card) != 0) report.reach[player][h] = 0.0f;
+        }
+      }
+      continue;
+    }
     const std::size_t hands = num_hands(parent.player);
-    strategy.resize(parent.actions.size() * hands);
+    strategy.resize(static_cast<std::size_t>(parent.num_children) * hands);
     average_strategy(child.parent, strategy.data());
     auto& reach = report.reach[parent.player];
     for (std::size_t h = 0; h < hands; ++h) {
@@ -428,10 +513,9 @@ NodeReport Solver::report(std::uint32_t node_index) const {
 
   if (node.type == NodeType::Action) {
     report.strategy.resize(block_size(game_, node));
-    average_strategy(node_index, report.strategy.data());
+    average_strategy(ref.node, report.strategy.data());
   }
 
-  Arena arena(arena_size_);
   for (int player = 0; player < 2; ++player) {
     const auto p = static_cast<std::size_t>(player);
     const float* opponent_reach = report.reach[1 - p].data();
@@ -440,9 +524,43 @@ NodeReport Solver::report(std::uint32_t node_index) const {
 
     auto& ev = report.ev[p];
     ev.resize(num_hands(player));
-    evaluate_node(node_index, player, opponent_reach, ev.data(), false, arena);
+    traverse(Mode::Average, ref.node, player, opponent_reach, ev.data(), main_arena_);
+    double value = 0, weight = 0;
     for (std::size_t h = 0; h < ev.size(); ++h) {
-      ev[h] = compatible[h] > 0 ? ev[h] / compatible[h] : 0.0f;
+      const bool possible = (game_.hands[p][h].mask & dealt) == 0;
+      if (possible) {
+        // Weighted by how often the hand is here against a hand it can face.
+        value += static_cast<double>(report.reach[p][h]) * ev[h];
+        weight += static_cast<double>(report.reach[p][h]) * compatible[h];
+      }
+      ev[h] = possible && compatible[h] > 0 ? ev[h] / compatible[h] : 0.0f;
+    }
+    report.range_ev[p] = weight > 0 ? value / weight : 0.0;
+  }
+
+  if (!ref.remapped) return report;
+
+  // The tree holds this line with suits swapped. Present it in the suits the
+  // caller asked for: their hand h is the stored hand with mapped cards.
+  for (std::size_t player = 0; player < 2; ++player) {
+    const auto& hands = game_.hands[player];
+    std::vector<std::uint32_t> stored(hands.size());
+    for (std::size_t h = 0; h < hands.size(); ++h) {
+      const auto it = hand_index_[player].find(mapped_mask(hands[h], ref.card_map));
+      stored[h] = it != hand_index_[player].end() ? it->second : static_cast<std::uint32_t>(h);
+    }
+    const auto permute = [&](std::vector<float>& values, std::size_t rows) {
+      const std::vector<float> original = values;
+      for (std::size_t row = 0; row < rows; ++row) {
+        for (std::size_t h = 0; h < hands.size(); ++h) {
+          values[row * hands.size() + h] = original[row * hands.size() + stored[h]];
+        }
+      }
+    };
+    permute(report.reach[player], 1);
+    permute(report.ev[player], 1);
+    if (node.type == NodeType::Action && node.player == player) {
+      permute(report.strategy, report.actions.size());
     }
   }
   return report;

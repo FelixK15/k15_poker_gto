@@ -1,0 +1,37 @@
+// Sizing up a spot before solving it.
+
+syntax = "proto3";
+
+package gto.v1;
+
+import "gto/v1/common.proto";
+
+service TreeService {
+  // Checks a spot and reports how large its tree is and how much memory a
+  // solve needs. Fails with INVALID_ARGUMENT if the spot cannot be solved at
+  // all (bad board, unreadable range, …).
+  rpc EstimateTree(EstimateTreeRequest) returns (EstimateTreeResponse);
+}
+
+message EstimateTreeRequest {
+  Spot spot = 1;
+}
+
+message EstimateTreeResponse {
+  uint64 nodes = 1;
+  uint64 decision_nodes = 2;
+  // Hands in each range that are possible on the board.
+  uint32 oop_hands = 3;
+  uint32 ip_hands = 4;
+  // Memory for regrets and strategies, and for the tree itself.
+  uint64 strategy_bytes = 5;
+  uint64 tree_bytes = 6;
+  // The tree exceeds the server's node limit. The numbers above are then
+  // lower bounds, counted up to the limit.
+  bool too_large = 7;
+  // Whether the server would accept the spot: within the node limit and
+  // within its memory budget.
+  bool can_solve = 8;
+  // The server's memory budget for one solve.
+  uint64 memory_budget_bytes = 9;
+}

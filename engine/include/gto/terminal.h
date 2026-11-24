@@ -19,9 +19,14 @@ namespace gto {
 ///
 /// Supports one or two hole cards per hand. Four (PLO) needs a longer
 /// inclusion-exclusion and is not implemented yet.
+///
+/// Thread-safe: all methods are const and keep their scratch data on the stack.
 class TerminalEvaluator {
  public:
-  explicit TerminalEvaluator(const HandSets& sets);
+  /// Keeps a reference to `hands`, which must outlive the evaluator.
+  explicit TerminalEvaluator(const Hands& hands);
+
+  int hole_cards() const noexcept { return hole_cards_; }
 
   /// out[h] = total reach of the opponent hands compatible with hand h.
   void compatible_reach(int player, const float* opponent_reach, float* out) const;
@@ -30,16 +35,12 @@ class TerminalEvaluator {
   void fold(int player, double payoff, const float* opponent_reach, float* out) const;
 
   /// Weaker opponent hands pay `win`, equal ones `tie`, stronger ones `lose`.
-  void showdown(int player, double win, double tie, double lose, const float* opponent_reach,
-                float* out) const;
+  void showdown(const ShowdownTable& table, int player, double win, double tie, double lose,
+                const float* opponent_reach, float* out) const;
 
  private:
-  static constexpr int kMaxCardIds = 64;
-
-  const HandSets* sets_;
+  const Hands* hands_;
   int hole_cards_ = 0;
-  /// Hand indices ordered by ascending strength.
-  std::array<std::vector<std::uint32_t>, 2> sorted_;
   /// Index of the identical hand in the opponent's set, or -1.
   std::array<std::vector<std::int32_t>, 2> same_hand_;
 };

@@ -1,11 +1,14 @@
 #pragma once
 
 #include <array>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iosfwd>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "gto/card.h"
@@ -13,6 +16,7 @@
 #include "gto/hands.h"
 #include "gto/range.h"
 #include "gto/terminal.h"
+#include "gto/thread_pool.h"
 
 namespace gto {
 
@@ -23,7 +27,9 @@ namespace gto {
 /// values add up to the starting pot.
 struct Game {
   GameTree tree;
-  HandSets hands;
+  Hands hands;
+  /// One table per entry of tree.runouts.
+  std::vector<ShowdownTable> showdowns;
   /// Fraction of the final pot taken as rake (0.05 = 5%).
   double rake_rate = 0;
   /// Largest rake in chips; 0 means no cap.
@@ -32,17 +38,35 @@ struct Game {
 
 /// A Hold'em spot as a user describes it.
 struct SpotConfig {
+  /// Three cards for a flop spot, four for a turn spot, five for a river spot.
   std::vector<Card> board;
   /// Indexed by player: [kOop], [kIp].
   std::array<Range, 2> ranges;
   TreeConfig tree;
   double rake_rate = 0;
   double rake_cap = 0;
+  /// Solve interchangeable turn and river cards only once. Exact, and only
+  /// ever worth turning off to test it.
+  bool use_isomorphism = true;
 };
 
-/// Turns a Hold'em spot into a solvable game. Only river spots (five board
-/// cards) are supported so far.
+/// Turns a Hold'em spot into a solvable game.
 std::optional<Game> make_game(const SpotConfig& config, std::string* error = nullptr);
+
+/// What solving a spot would take, measured without building it.
+struct SpotEstimate {
+  TreeStats tree;
+  /// Hands in each player's range that are possible on the board.
+  std::array<std::size_t, 2> hands{0, 0};
+  /// Memory for regrets and strategies.
+  std::uint64_t strategy_bytes = 0;
+
+  std::uint64_t total_bytes() const noexcept { return strategy_bytes + tree.tree_bytes(); }
+};
+
+/// Sizes up a spot. Counting stops at config.tree.max_nodes, in which case
+/// `tree.too_large` is set and the numbers are lower bounds.
+std::optional<SpotEstimate> estimate_spot(const SpotConfig& config, std::string* error = nullptr);
 
 /// How good the current average strategies are.
 struct Evaluation {
@@ -59,6 +83,11 @@ struct Evaluation {
 struct Progress {
   int iteration = 0;
   Evaluation evaluation;
+};
+
+struct SolverConfig {
+  /// Threads to use; 0 means one per hardware thread.
+  unsigned threads = 0;
 };
 
 struct SolveOptions {
@@ -83,12 +112,16 @@ struct NodeReport {
   int player = 0;
   std::vector<Action> actions;
   /// How much of each hand reaches this node: starting weight times the
-  /// probability that the player takes the actions leading here.
+  /// probability that the player takes the actions leading here. Zero for
+  /// hands that the cards dealt so far make impossible.
   std::array<std::vector<float>, 2> reach;
-  /// Acting player's strategy, [action * num_hands + hand]. Empty at terminals.
+  /// Acting player's strategy, [action * num_hands + hand]. Empty unless this
+  /// is an action node.
   std::vector<float> strategy;
   /// Expected value of each hand of each player, in chips.
   std::array<std::vector<float>, 2> ev;
+  /// Expected value of each player's whole range at this node, in chips.
+  std::array<double, 2> range_ev{0, 0};
 
   float frequency(std::size_t action, std::size_t hand) const {
     return strategy[action * reach[static_cast<std::size_t>(player)].size() + hand];
@@ -96,15 +129,19 @@ struct NodeReport {
 };
 
 /// Discounted CFR (Brown & Sandholm 2019) with alternating updates, computed
-/// over whole ranges at once.
+/// over whole ranges at once. The subtrees below the first dealt card run in
+/// parallel.
+///
+/// A Solver may be used from one thread at a time.
 class Solver {
  public:
-  explicit Solver(Game game);
+  explicit Solver(Game game, const SolverConfig& config = {});
   Solver(const Solver&) = delete;
   Solver& operator=(const Solver&) = delete;
 
   const Game& game() const noexcept { return game_; }
   int iterations() const noexcept { return iteration_; }
+  unsigned threads() const noexcept { return pool_.size(); }
 
   /// Runs one iteration: one update pass for each player.
   void iterate();
@@ -117,20 +154,54 @@ class Solver {
   Evaluation evaluate() const;
 
   /// Strategy, reach and values at a node under the average strategies.
-  NodeReport report(std::uint32_t node) const;
+  /// Hands are reported for the cards the user named, also where the tree
+  /// stores an isomorphic line.
+  NodeReport report(const NodeRef& ref) const;
+  NodeReport report(std::uint32_t node) const { return report(NodeRef{node}); }
 
   /// Memory held for regrets and strategies.
   std::size_t memory_bytes() const noexcept;
+
+  /// Writes everything learned so far. The game itself is not written: load()
+  /// must be called on a solver built from the same spot.
+  void save(std::ostream& out) const;
+
+  /// Restores a state written by save(). Fails, leaving the solver untouched,
+  /// if the data is damaged or belongs to a differently shaped game.
+  bool load(std::istream& in, std::string* error = nullptr);
 
   /// The same number before constructing a solver.
   static std::size_t estimate_memory_bytes(const Game& game) noexcept;
 
  private:
-  class Arena;
+  /// Bump allocator for the scratch vectors of one tree traversal, so that the
+  /// recursion does not touch the heap.
+  class Arena {
+   public:
+    void resize(std::size_t size) { buffer_.assign(size, 0.0f); }
+    float* alloc(std::size_t count) {
+      assert(top_ + count <= buffer_.size());
+      float* result = buffer_.data() + top_;
+      top_ += count;
+      return result;
+    }
+    std::size_t mark() const noexcept { return top_; }
+    void release(std::size_t mark) noexcept { top_ = mark; }
 
-  void cfr(std::uint32_t node, int player, const float* opponent_reach, float* out, Arena& arena);
-  void evaluate_node(std::uint32_t node, int player, const float* opponent_reach, float* out,
-                     bool best_response, Arena& arena) const;
+   private:
+    std::vector<float> buffer_;
+    std::size_t top_ = 0;
+  };
+
+  enum class Mode { Train, Average, BestResponse };
+
+  /// Values of `node` for every hand of `player` given the opponent's reach.
+  /// Train updates regrets and average strategies on the way; the other two
+  /// modes only read.
+  void traverse(Mode mode, std::uint32_t node, int player, const float* opponent_reach, float* out,
+                Arena& arena) const;
+  void traverse_chance(Mode mode, std::uint32_t node, int player, const float* opponent_reach,
+                       float* out, Arena& arena) const;
   bool terminal_values(const Node& node, int player, const float* opponent_reach,
                        float* out) const;
   /// The strategy to play right now, from regrets. The single place where a
@@ -139,20 +210,31 @@ class Solver {
   void average_strategy(std::uint32_t node, float* out) const;
   double rake(double final_pot) const noexcept;
   double root_value(int player, const float* values) const;
+  std::size_t scratch_need(std::uint32_t node) const;
   std::size_t num_hands(int player) const noexcept {
-    return game_.hands.hands[static_cast<std::size_t>(player)].size();
+    return game_.hands[static_cast<std::size_t>(player)].size();
   }
 
   Game game_;
   TerminalEvaluator terminal_;
+  mutable ThreadPool pool_;
+  mutable Arena main_arena_;
+  mutable std::vector<Arena> worker_arenas_;
+
   /// Start of each action node's block in regrets_ and strategy_sum_.
-  std::vector<std::size_t> offset_;
-  std::vector<float> regrets_;
-  std::vector<float> strategy_sum_;
+  std::vector<std::uint64_t> offset_;
+  // Written during Train traversals, which are logically non-const but share
+  // the traversal code with the read-only modes.
+  mutable std::vector<float> regrets_;
+  mutable std::vector<float> strategy_sum_;
+  /// Chance nodes without a chance node above them: their children run in parallel.
+  std::vector<bool> top_level_chance_;
+  /// For each tree swap and player: the hand each hand turns into.
+  std::vector<std::array<std::vector<std::uint32_t>, 2>> swap_hands_;
+  std::array<std::unordered_map<std::uint64_t, std::uint32_t>, 2> hand_index_;
   std::array<std::vector<float>, 2> initial_reach_;
   /// Total weight of all compatible hand pairs at the root.
   double pair_weight_ = 0;
-  std::size_t arena_size_ = 0;
 
   int iteration_ = 0;
   float positive_discount_ = 0;

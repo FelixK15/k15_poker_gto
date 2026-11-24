@@ -7,6 +7,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gto/solver.h"
@@ -18,12 +19,14 @@ namespace {
 void print_usage() {
   std::puts(
       "Usage:\n"
-      "  gto-cli solve <spot.json> [--node <path>]...\n"
+      "  gto-cli solve <spot.json> [--node <path>]... [--threads <n>]\n"
       "  gto-cli --version\n\n"
       "solve  Solves the spot described in the JSON file (see examples/) and\n"
       "       prints the strategy at the root.\n"
-      "  --node <path>  Also print the node reached by this action line, e.g.\n"
-      "                 --node check/bet50. May be given several times.");
+      "  --node <path>  Also print the node reached by this line of actions and\n"
+      "                 dealt cards, e.g. --node check/bet50/call/Ts. May be\n"
+      "                 given several times.\n"
+      "  --threads <n>  Threads to use (default: all).");
 }
 
 /// Sort key that lists hand classes from AA down: pairs and high cards first.
@@ -41,20 +44,26 @@ struct ClassRow {
   double ev_weight = 0;
 };
 
-void print_node(const gto::Solver& solver, std::uint32_t node_index) {
-  const gto::GameTree& tree = solver.game().tree;
-  const gto::NodeReport report = solver.report(node_index);
-  const std::string path = tree.path(node_index);
+void print_node(const gto::Solver& solver, const gto::NodeRef& ref, const std::string& path) {
+  const gto::NodeReport report = solver.report(ref);
 
   std::printf("\n=== %s ===\n", path.empty() ? "root" : path.c_str());
-  if (report.type != gto::NodeType::Action) {
-    std::puts(report.type == gto::NodeType::Fold ? "The hand ends with a fold."
-                                                 : "The hand goes to showdown.");
-    return;
+  switch (report.type) {
+    case gto::NodeType::Fold:
+      std::puts("The hand ends with a fold.");
+      return;
+    case gto::NodeType::Showdown:
+      std::puts("The hand goes to showdown.");
+      return;
+    case gto::NodeType::Chance:
+      std::puts("The next card is dealt here; add it to the line, e.g. .../Ts");
+      return;
+    case gto::NodeType::Action:
+      break;
   }
 
   const auto player = static_cast<std::size_t>(report.player);
-  const auto& hands = solver.game().hands.hands[player];
+  const auto& hands = solver.game().hands[player];
   const auto& reach = report.reach[player];
   const std::size_t actions = report.actions.size();
   std::printf("%s to act\n", report.player == gto::kOop ? "OOP" : "IP");
@@ -105,7 +114,8 @@ void print_node(const gto::Solver& solver, std::uint32_t node_index) {
   std::printf("\n");
 }
 
-int run_solve(const std::string& config_path, const std::vector<std::string>& node_paths) {
+int run_solve(const std::string& config_path, const std::vector<std::string>& node_paths,
+              unsigned threads) {
   std::string error;
   auto loaded = gto::cli::load_spot(config_path, &error);
   if (!loaded) {
@@ -119,22 +129,28 @@ int run_solve(const std::string& config_path, const std::vector<std::string>& no
   }
 
   // Resolve the requested nodes before spending time on the solve.
-  std::vector<std::uint32_t> nodes = {gto::GameTree::kRoot};
+  std::vector<std::pair<gto::NodeRef, std::string>> nodes = {{gto::NodeRef{}, ""}};
   for (const std::string& path : node_paths) {
     const auto node = game->tree.find(path, &error);
     if (!node) {
       std::fprintf(stderr, "error: --node %s: %s\n", path.c_str(), error.c_str());
       return EXIT_FAILURE;
     }
-    nodes.push_back(*node);
+    nodes.emplace_back(*node, path);
   }
 
-  std::printf("Tree: %zu nodes (%zu decisions), hands: OOP %zu, IP %zu, memory: %.2f MB\n",
-              game->tree.nodes.size(), game->tree.num_action_nodes(), game->hands.hands[0].size(),
-              game->hands.hands[1].size(),
-              static_cast<double>(gto::Solver::estimate_memory_bytes(*game)) / (1024.0 * 1024.0));
+  const double megabyte = 1024.0 * 1024.0;
+  std::printf("Tree: %zu nodes (%zu decisions), hands: OOP %zu, IP %zu\n",
+              game->tree.nodes.size(), game->tree.num_action_nodes(), game->hands[0].size(),
+              game->hands[1].size());
+  std::printf("Memory: %.1f MB for strategies, %.1f MB for the tree\n",
+              static_cast<double>(gto::Solver::estimate_memory_bytes(*game)) / megabyte,
+              static_cast<double>(game->tree.memory_bytes()) / megabyte);
 
-  gto::Solver solver(std::move(*game));
+  gto::SolverConfig solver_config;
+  solver_config.threads = threads;
+  gto::Solver solver(std::move(*game), solver_config);
+  std::printf("Threads: %u\n", solver.threads());
   loaded->solve.on_progress = [](const gto::Progress& progress) {
     std::printf("  iteration %5d   exploitability %.4f%% of pot\n", progress.iteration,
                 progress.evaluation.exploitability_pct);
@@ -151,7 +167,7 @@ int run_solve(const std::string& config_path, const std::vector<std::string>& no
   std::printf("EV: OOP %.3f, IP %.3f (pot %.3f)\n", result.evaluation.ev[0],
               result.evaluation.ev[1], solver.game().tree.pot);
 
-  for (const std::uint32_t node : nodes) print_node(solver, node);
+  for (const auto& [ref, path] : nodes) print_node(solver, ref, path);
   return EXIT_SUCCESS;
 }
 
@@ -171,7 +187,17 @@ int main(int argc, char** argv) {
   if (args[0] == "solve") {
     std::string config_path;
     std::vector<std::string> node_paths;
+    unsigned threads = 0;
     for (std::size_t i = 1; i < args.size(); ++i) {
+      if (args[i] == "--threads") {
+        const int value = i + 1 < args.size() ? std::atoi(args[++i].c_str()) : 0;
+        if (value < 1 || value > 1024) {
+          std::fputs("error: --threads needs a number from 1 to 1024\n", stderr);
+          return EXIT_FAILURE;
+        }
+        threads = static_cast<unsigned>(value);
+        continue;
+      }
       if (args[i] == "--node") {
         if (i + 1 >= args.size()) {
           std::fputs("error: --node needs an action line\n", stderr);
@@ -189,7 +215,7 @@ int main(int argc, char** argv) {
       std::fputs("error: solve needs a spot file\n", stderr);
       return EXIT_FAILURE;
     }
-    return run_solve(config_path, node_paths);
+    return run_solve(config_path, node_paths, threads);
   }
 
   std::fprintf(stderr, "error: unknown command '%s'\n", args[0].c_str());

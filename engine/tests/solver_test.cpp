@@ -17,13 +17,15 @@ Game kuhn_game() {
   config.sizing[kRiver][kIp].add_allin = true;
 
   Game game;
-  game.tree = *build_tree(config, Street::River);
+  game.tree = *build_tree(config);
+  std::array<std::vector<HandStrength>, 2> strength;
   for (std::size_t player = 0; player < 2; ++player) {
     for (int card = 0; card < 3; ++card) {
-      game.hands.hands[player].push_back(make_hand({card}, 1.0f));
-      game.hands.strength[player].push_back(static_cast<HandStrength>(card));
+      game.hands[player].push_back(make_hand({card}, 1.0f));
+      strength[player].push_back(static_cast<HandStrength>(card));
     }
   }
+  game.showdowns.push_back(make_showdown_table(std::move(strength)));
   return game;
 }
 
@@ -86,7 +88,7 @@ template <typename Filter>
 double frequency(const Solver& solver, const NodeReport& report, std::size_t action,
                  Filter filter) {
   const auto player = static_cast<std::size_t>(report.player);
-  const auto& hands = solver.game().hands.hands[player];
+  const auto& hands = solver.game().hands[player];
   double weighted = 0, total = 0;
   for (std::size_t h = 0; h < hands.size(); ++h) {
     if (!filter(hands[h])) continue;
@@ -104,8 +106,8 @@ TEST(Solver, PolarisedRiverMatchesTheory) {
   std::string error;
   auto game = make_game(polarised_river(), &error);
   ASSERT_TRUE(game.has_value()) << error;
-  EXPECT_EQ(game->hands.hands[kOop].size(), 3u);   // 8c8h, 8c8s, 8h8s
-  EXPECT_EQ(game->hands.hands[kIp].size(), 15u);   // 3 KK + 12 QJo
+  EXPECT_EQ(game->hands[kOop].size(), 3u);   // 8c8h, 8c8s, 8h8s
+  EXPECT_EQ(game->hands[kIp].size(), 15u);   // 3 KK + 12 QJo
 
   Solver solver(std::move(*game));
   SolveOptions options;
@@ -135,7 +137,7 @@ TEST(Solver, PolarisedRiverMatchesTheory) {
   // Per-hand values at IP's decision: kings win the pot plus half a bet,
   // bluffs are indifferent and worth nothing.
   for (std::size_t h = 0; h < ip.ev[kIp].size(); ++h) {
-    const bool kings = is_pocket_kings(solver.game().hands.hands[kIp][h]);
+    const bool kings = is_pocket_kings(solver.game().hands[kIp][h]);
     EXPECT_NEAR(ip.ev[kIp][h], kings ? 150.0 : 0.0, 1.0) << h;
   }
 }
@@ -201,7 +203,7 @@ TEST(Solver, ReachesAtChildrenSumToTheParent) {
   const NodeReport root = solver.report(GameTree::kRoot);
   const std::size_t hands = root.reach[kOop].size();
   std::vector<double> total(hands, 0.0);
-  for (const std::uint32_t child : tree.nodes[GameTree::kRoot].children) {
+  for (const std::uint32_t child : tree.children_of(GameTree::kRoot)) {
     const NodeReport report = solver.report(child);
     for (std::size_t h = 0; h < hands; ++h) total[h] += report.reach[kOop][h];
     // The other player has not acted yet.
@@ -241,10 +243,10 @@ TEST(Solver, RakeComesOutOfThePot) {
 TEST(MakeGame, RejectsImpossibleSpots) {
   std::string error;
 
-  SpotConfig flop = polarised_river();
-  flop.board = *parse_cards("Kc8d5h");
-  EXPECT_FALSE(make_game(flop, &error).has_value());
-  EXPECT_NE(error.find("river"), std::string::npos) << error;
+  SpotConfig preflop = polarised_river();
+  preflop.board = *parse_cards("Kc8d");
+  EXPECT_FALSE(make_game(preflop, &error).has_value());
+  EXPECT_NE(error.find("three"), std::string::npos) << error;
 
   SpotConfig duplicate = polarised_river();
   duplicate.board[4] = duplicate.board[0];
