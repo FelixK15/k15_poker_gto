@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "gto/cpu.h"
 #include "gto/solver.h"
 #include "gto/version.h"
 #include "spot_config.h"
@@ -174,6 +175,11 @@ int run_solve(const std::string& config_path, const std::vector<std::string>& no
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (!gto::cpu_is_supported()) {
+    std::fprintf(stderr, "error: %s\n", gto::cpu_requirement_message());
+    return EXIT_FAILURE;
+  }
+
   const std::vector<std::string> args(argv + 1, argv + argc);
   if (args.empty() || args[0] == "--help" || args[0] == "-h") {
     print_usage();

@@ -72,13 +72,33 @@ server can reject or queue a job that does not fit.
 
 ### 3.3 Performance and memory
 - Flat arrays for regrets and strategy sums, one block per node, no per-node heap allocation.
-- 32-bit floats first; **16-bit compressed storage** as an option (halves memory, standard in
-  commercial solvers).
-- Multithreading by subtree (flop → one task per turn card). Thread pool, no locks on the hot path.
-- AVX2 vector kernels with a scalar fallback, selected at runtime.
+- 32-bit floats. **16-bit compressed storage** (halves memory, standard in commercial solvers) is
+  still to do.
+- Multithreading: every first-dealt card of a pass (flop → turn cards, or turn → river cards) is
+  one task, and all of them run as a single parallel batch. Thread pool, no locks on the hot path.
+- Built for AVX2 by default (`GTO_ENABLE_AVX2`); the programs refuse to start on a processor
+  without it. The per-hand loops are written so that the compiler vectorises them; there are no
+  hand-written SIMD kernels and no runtime dispatch yet.
+- Showdowns, which are most of the work, run from a list of steps prepared once per board, so the
+  inner loop has no data-dependent branches.
 - 300BB trees grow fast because more raises fit before all-in. The raise cap, all-in threshold
   and the memory estimate are what keep these solvable; default tree presets per stack depth will
   be tuned for this.
+
+Measured on an i9-14900K (8 fast and 16 slow cores, 32 threads), best of three, single-thread runs
+pinned to a fast core:
+
+| Spot | Before M8 | After M8 |
+|---|---|---|
+| `examples/turn_srp.json`, 1 thread | 7.5 s | 4.4 s |
+| `examples/turn_srp.json`, 32 threads | 0.78 s | 0.30 s |
+| `examples/flop_3bet.json`, 1 thread | 15.4 s | 9.3 s |
+| `examples/flop_3bet.json`, 32 threads | 1.41 s | 0.68 s |
+
+Where the time goes now, single-threaded: about 60% showdowns, 15% folds, 13% computing
+strategies, the rest in the action nodes. The showdown loop is the place to look next. These
+figures come from temporary timing counters, not from a profiler: the Superluminal command-line
+tool at hand only records captures for its GUI and needs administrator rights.
 
 ### 3.4 Correctness
 1. CFR core verified on Kuhn and Leduc poker, where exact equilibria are known.
@@ -233,7 +253,7 @@ Durations are rough guesses for one focused developer, not commitments.
 | M5 | Range library | **Done.** Preflop line picker for 6-max and 9-max at 100/200/300BB (single-raised, 3-bet and 4-bet pots) that fills in ranges, pot and stacks; range editor on the 13×13 grid with weights, text import (PioSOLVER and GTO+ forms) and saved ranges; tree presets; board picker. The ranges are rule-based approximations, see section 6. Not done: editing single suit combinations on the grid (they can be typed) | 2–3 weeks |
 | M6 | Node locking | **Done.** Per-hand locks in the engine; a re-solve is a new job that starts from the parent's solution with the locks in force; lock dialog (whole range or one hand class), lock list, and a comparison with the parent in the client. Not done: painting different frequencies per hand in one go, and a side-by-side compare view | 3–4 weeks |
 | M7 | Android + polish | **Done in part.** TLS on server and client; equity per hand and range; EV and equity views of the grid; runout report at deals; the app returns to the connect screen when its own solver stops; the solver ships inside the Windows app; packaging script; Android debug build. Not done: running on an Android device, an installer (zip only), building the Docker image (written, untested), compression of saved solutions | 3–4 weeks |
-| M8 | Performance | AVX2 kernels, 16-bit storage, tuning against benchmarks | ongoing |
+| M8 | Performance | **First round done.** Single-pass showdown from steps prepared per board; flat, branch-free fold evaluation; vectorisable strategy loops; AVX2 build; all first-card deals of a pass run as one parallel batch. Not done: 16-bit storage, hand-written SIMD kernels, profiler-guided tuning (see section 3.3) | ongoing |
 
 The lock hook in the CFR traversal and the un-merge support in the tree builder are designed in
 during M1–M2, so M6 adds the feature without reworking the engine.

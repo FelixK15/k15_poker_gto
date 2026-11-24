@@ -70,8 +70,20 @@ std::vector<float> random_reach(std::mt19937& rng, std::size_t size) {
   return result;
 }
 
+void expect_matches_naive(const Sets& sets, std::mt19937& rng, bool prepared);
+
+/// Checks both ways of evaluating a showdown: worked out on the spot, and
+/// from the steps prepared in advance.
 void expect_matches_naive(const Sets& sets, std::mt19937& rng) {
+  expect_matches_naive(sets, rng, false);
+  expect_matches_naive(sets, rng, true);
+}
+
+void expect_matches_naive(const Sets& given, std::mt19937& rng, bool prepared) {
+  SCOPED_TRACE(prepared ? "prepared" : "general");
+  Sets sets = given;
   const TerminalEvaluator evaluator(sets.hands);
+  if (prepared) evaluator.prepare(sets.table);
   for (int player = 0; player < 2; ++player) {
     const auto p = static_cast<std::size_t>(player);
     const auto reach = random_reach(rng, sets.hands[1 - p].size());
@@ -81,6 +93,14 @@ void expect_matches_naive(const Sets& sets, std::mt19937& rng) {
     const auto slow = naive_showdown(sets, player, 130.0, 40.0, -50.0, reach);
     for (std::size_t i = 0; i < fast.size(); ++i) {
       ASSERT_NEAR(fast[i], slow[i], 1e-2 + 1e-4 * std::abs(slow[i])) << "showdown hand " << i;
+    }
+
+    // Nothing lost on a loss: the pass that adds it is skipped.
+    evaluator.showdown(sets.table, player, 60.0, 30.0, 0.0, reach.data(), fast.data());
+    const auto slow_free = naive_showdown(sets, player, 60.0, 30.0, 0.0, reach);
+    for (std::size_t i = 0; i < fast.size(); ++i) {
+      ASSERT_NEAR(fast[i], slow_free[i], 1e-2 + 1e-4 * std::abs(slow_free[i]))
+          << "free showdown hand " << i;
     }
 
     evaluator.fold(player, 75.0, reach.data(), fast.data());

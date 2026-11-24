@@ -236,12 +236,25 @@ class Solver {
                 Arena& arena) const;
   void traverse_chance(Mode mode, std::uint32_t node, int player, const float* opponent_reach,
                        float* out, Arena& arena) const;
+  /// A whole pass from the root. With several threads it first finds every
+  /// first-dealt card of the tree, values all of them in one parallel batch,
+  /// and only then walks the top of the tree, which finds its cards done.
+  void traverse_root(Mode mode, int player, float* out) const;
+  /// Walks the top of the tree as traverse() would, without changing
+  /// anything, and notes each first chance node with the reach it gets.
+  void collect_deals(Mode mode, std::uint32_t node, int player, const float* opponent_reach,
+                     Arena& arena) const;
+  /// Values one card of a chance node: removes the hands it blocks from
+  /// both sides and traverses what follows.
+  void deal(Mode mode, std::uint32_t child, int player, const float* opponent_reach, float* result,
+            Arena& scratch) const;
   bool terminal_values(const Node& node, int player, const float* opponent_reach,
                        float* out) const;
   /// The strategy to play right now, from regrets. The single place where a
   /// node lock will override the solver's own choice.
-  void current_strategy(std::uint32_t node, float* out) const;
-  void average_strategy(std::uint32_t node, float* out) const;
+  /// `scratch` is room for one value per hand of the acting player.
+  void current_strategy(std::uint32_t node, float* out, float* scratch) const;
+  void average_strategy(std::uint32_t node, float* out, float* scratch) const;
 
   struct NodeLock {
     std::vector<std::uint8_t> locked;  // per hand
@@ -267,6 +280,25 @@ class Solver {
   mutable ThreadPool pool_;
   mutable Arena main_arena_;
   mutable std::vector<Arena> worker_arenas_;
+
+  /// A first chance node of the current pass: the reach it was entered with
+  /// and, once the batch has run, the values of each of its cards.
+  struct DealBatch {
+    std::uint32_t node = 0;
+    std::vector<float> reach;
+    std::vector<float> values;
+  };
+  struct DealTask {
+    std::uint32_t batch = 0;
+    std::uint32_t child = 0;
+  };
+  // Only touched by the thread that runs the pass, outside the parallel part.
+  mutable std::vector<DealBatch> batches_;
+  mutable std::size_t batch_count_ = 0;
+  mutable std::vector<DealTask> deal_tasks_;
+  /// Next batch the walk of the top of the tree will meet; SIZE_MAX while
+  /// cards are valued where they are met.
+  mutable std::size_t batch_cursor_ = SIZE_MAX;
 
   /// Start of each action node's block in regrets_ and strategy_sum_.
   std::vector<std::uint64_t> offset_;

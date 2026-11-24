@@ -11,6 +11,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # which still links the CRT dynamically (/MD), matching CMake's default.
 
 option(GTO_BUILD_TESTS "Build unit tests" ON)
+option(GTO_ENABLE_AVX2
+  "Build for CPUs with AVX2 and FMA (Intel since 2013, AMD since 2015). Roughly a third faster."
+  ON)
 
 if(MSVC)
   # Headers included with <> (the standard library, gRPC, …) are not ours to lint.
@@ -18,6 +21,15 @@ if(MSVC)
   add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
 else()
   add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+if(GTO_ENABLE_AVX2)
+  if(MSVC)
+    add_compile_options(/arch:AVX2)
+  else()
+    add_compile_options(-mavx2 -mfma)
+  endif()
+  add_compile_definitions(GTO_REQUIRES_AVX2)
 endif()
 
 find_package(Protobuf CONFIG REQUIRED)
