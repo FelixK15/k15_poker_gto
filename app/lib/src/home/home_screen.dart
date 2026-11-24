@@ -5,6 +5,7 @@ import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../connection/server_connection.dart';
 import '../jobs/jobs_screen.dart';
+import '../range/range_store.dart';
 import '../solution/solution_screen.dart';
 import '../spot/spot_setup_screen.dart';
 
@@ -45,6 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         SpotSetupScreen(
           api: api,
+          store: ref.watch(rangeStoreProvider),
           // Show the new job where its progress is visible.
           onSubmitted: (_) => setState(() => _index = 1),
         ),

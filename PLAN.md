@@ -132,7 +132,7 @@ These cost little now and are expensive to retrofit:
 | `Jobs` | `Submit`, `List`, `Get`, `Pause`, `Resume`, `Cancel`, `Watch` (stream: iteration, exploitability, ETA) |
 | `Solutions` | `List`, `Delete`, `GetNode` (path → actions, per-hand strategy, EV, equity for both players), `GetRunoutReport`, `Export` |
 | `Locks` | `SetLock` (solution, node path, per-hand frequencies), `ClearLock`, `ListLocks`, `Resolve` (→ new job, warm-started, child solution) |
-| `Ranges` | `ListLibrary`, `GetScenario`, `SaveRange` |
+| `Ranges` | Not built: the range library and saved ranges live in the client instead (see section 6), so they work the same against any server |
 
 `GetNode` is addressed by the action path from the root (e.g. `bet33 / call / Ts / check`), which
 keeps the client stateless and makes deep links and "copy line" trivial.
@@ -186,10 +186,16 @@ preflop line between two players (single-raised, 3-bet, 4-bet pots per position 
 scenario stores both ranges plus the resulting pot and effective stack. Stored as plain text files
 so users can edit and share them.
 
-**Open point — where the default ranges come from.** Ranges from commercial products cannot be
-redistributed. Options, in order of preference:
-1. Ship the library structure with self-authored baseline ranges, and make import easy.
-2. Replace the baseline with ranges from our own preflop solver once it exists (section 8).
+**Where the default ranges come from.** Ranges from commercial products cannot be redistributed,
+so the library generates its own in the client (`app/lib/src/range/preflop_library.dart`): hands
+are ranked by the Chen formula, each seat opens the top slice of that ranking, and calling,
+3-betting and 4-betting ranges are cut from it by rules of thumb, with the very top of the 4-bet
+ranges spelled out per stack depth. They are **rough starting points, not solver output**, and the
+app says so. Known weak spots: no mixed frequencies, opening ranges do not change with stack depth,
+and the big blind's calling range is too thin in strong pairs. They are to be replaced by ranges
+from our own preflop solver once it exists (section 8).
+
+Saved ranges are kept by the client in a JSON file in its support directory, not on the server.
 
 ## 7. Repository and tooling
 
@@ -222,7 +228,7 @@ Durations are rough guesses for one focused developer, not commitments.
 | M2 | Full postflop | **Done, except the cross-check.** Chance nodes, so turn and flop spots solve; suit isomorphism; multithreading; Leduc poker reaches its known value; check-down EVs match brute-force equity. Still open: comparing full spots against TexasSolver / postflop-solver | 4–6 weeks |
 | M3 | Server | **Done, except TLS and compression.** Jobs with a queue, pause, resume, cancel and delete; progress stream; solutions kept on disk and browsable node by node, also while solving; size estimate; access token. Still open: TLS (planned with the client in M4) and compressing saved solutions | 3 weeks |
 | M4 | Client MVP | **Done on Windows, except TLS.** Connect screen that starts the solver on this computer or connects to a server with a token; spot setup with a live size estimate; jobs list with pause, resume, cancel, delete; solution browser with the strategy matrix, breadcrumb, card picker and per-hand details. Still open: TLS on both sides, and shipping the server next to the app (M7) | 4–5 weeks |
-| M5 | Range library | 6-max/9-max × 100/200/300BB scenarios, range editor, import/export, tree presets | 2–3 weeks |
+| M5 | Range library | **Done.** Preflop line picker for 6-max and 9-max at 100/200/300BB (single-raised, 3-bet and 4-bet pots) that fills in ranges, pot and stacks; range editor on the 13×13 grid with weights, text import (PioSOLVER and GTO+ forms) and saved ranges; tree presets; board picker. The ranges are rule-based approximations, see section 6. Not done: editing single suit combinations on the grid (they can be typed) | 2–3 weeks |
 | M6 | Node locking | Per-hand locks in the engine with warm-started re-solve; `Locks` API; lock editor and compare view in the client | 3–4 weeks |
 | M7 | Android + polish | Phone layouts, reconnect handling, runout reports, EV/equity views, installers, Docker image | 3–4 weeks |
 | M8 | Performance | AVX2 kernels, 16-bit storage, tuning against benchmarks | ongoing |
