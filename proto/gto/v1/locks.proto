@@ -1,0 +1,30 @@
+// Node locking: fix a player's strategy somewhere in a solved tree and solve
+// again around it.
+//
+// A solution's locks never change. Re-solving makes a new job, the child,
+// that starts from the parent's solution with the given locks in force. The
+// parent stays as it was, so the two can be compared.
+
+syntax = "proto3";
+
+package gto.v1;
+
+import "gto/v1/common.proto";
+import "gto/v1/jobs.proto";
+
+service LockService {
+  // Queues a re-solve of `parent_job_id` under `locks`. The parent must have
+  // a solution and must not be solving at the moment.
+  rpc Resolve(ResolveRequest) returns (Job);
+}
+
+message ResolveRequest {
+  string parent_job_id = 1;
+  // All locks the child is to have. To keep the parent's own locks, send
+  // them again together with the new ones.
+  repeated NodeLock locks = 2;
+  // max_iterations counts iterations on top of the parent's.
+  SolveSettings settings = 3;
+  // Label for the new job; defaults to the parent's name with " (locked)".
+  string name = 4;
+}

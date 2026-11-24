@@ -170,6 +170,7 @@ int main(int argc, char** argv) {
   gto::server::TreeServiceImpl tree_service(auth, jobs);
   gto::server::JobServiceImpl job_service(auth, jobs);
   gto::server::SolutionServiceImpl solution_service(auth, jobs);
+  gto::server::LockServiceImpl lock_service(auth, jobs);
 
   int bound_port = 0;
   grpc::ServerBuilder builder;
@@ -179,6 +180,7 @@ int main(int argc, char** argv) {
   builder.RegisterService(&tree_service);
   builder.RegisterService(&job_service);
   builder.RegisterService(&solution_service);
+  builder.RegisterService(&lock_service);
 
   std::unique_ptr<grpc::Server> server = builder.BuildAndStart();
   if (!server || bound_port == 0) {

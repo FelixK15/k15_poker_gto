@@ -6,6 +6,7 @@ import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../jobs/jobs_screen.dart';
 import 'action_style.dart';
+import 'lock_dialog.dart';
 import 'matrix_model.dart';
 import 'strategy_matrix.dart';
 
@@ -17,6 +18,7 @@ class SolutionScreen extends StatefulWidget {
     required this.api,
     required this.job,
     this.refreshInterval = const Duration(seconds: 3),
+    this.onResolved,
   });
 
   final GtoApi api;
@@ -24,6 +26,9 @@ class SolutionScreen extends StatefulWidget {
 
   /// How often a solve that is still running is read again.
   final Duration refreshInterval;
+
+  /// Called with the new job when a re-solve under locks was queued.
+  final ValueChanged<Job>? onResolved;
 
   @override
   State<SolutionScreen> createState() => _SolutionScreenState();
@@ -41,6 +46,13 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// player to act.
   int? _selected;
   Player? _view;
+
+  /// The locks to re-solve with: this solve's own, plus what the user adds.
+  late List<NodeLock> _locks = [...widget.job.locks];
+  bool _resolving = false;
+
+  /// The same node in the solve this one started from, for comparison.
+  GetNodeResponse? _parentNode;
 
   Timer? _timer;
 
@@ -82,10 +94,20 @@ class _SolutionScreenState extends State<SolutionScreen> {
       if (!quiet) _error = null;
     });
     try {
-      final node = await widget.api.getNode(_job.id, _path.join('/'));
+      final path = _path.join('/');
+      final node = await widget.api.getNode(_job.id, path);
+      GetNodeResponse? parentNode;
+      if (_job.parentId.isNotEmpty) {
+        try {
+          parentNode = await widget.api.getNode(_job.parentId, path);
+        } catch (_) {
+          // The parent may have been deleted; then there is nothing to compare.
+        }
+      }
       if (!mounted || request != _request) return;
       setState(() {
         _node = node;
+        _parentNode = parentNode;
         _error = null;
         _loading = false;
       });
@@ -107,6 +129,166 @@ class _SolutionScreenState extends State<SolutionScreen> {
       _view = null;
     });
     _load();
+  }
+
+  Future<void> _addLock(GetNodeResponse node) async {
+    final actor = node.player == Player.PLAYER_OOP ? node.oop : node.ip;
+    final model = MatrixModel.fromRange(
+      actor,
+      strategy: node.strategy,
+      actionCount: node.actions.length,
+      locked: node.locked,
+    );
+    // A class picked in the grid counts only if the grid shows the actor.
+    final selected = _selected != null && _viewedPlayer(node) == node.player
+        ? model.cells[_selected!]
+        : null;
+    final lock = await showLockDialog(
+      context,
+      node: node,
+      model: model,
+      selected: selected,
+    );
+    if (lock == null || !mounted) return;
+    setState(() => _locks = mergeLock(_locks, lock));
+  }
+
+  Future<void> _resolve() async {
+    setState(() => _resolving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final job = await widget.api.resolve(
+        _job.id,
+        _locks,
+        SolveSettings(
+          maxIterations: 300,
+          targetExploitabilityPct: _job.settings.targetExploitabilityPct,
+        ),
+      );
+      if (!mounted) return;
+      widget.onResolved?.call(job);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Re-solve queued as "${job.name}".')),
+      );
+      await Navigator.of(context).maybePop();
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(describeError(error))));
+    } finally {
+      if (mounted) setState(() => _resolving = false);
+    }
+  }
+
+  Widget _locksCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final changed = !sameLocks(_locks, widget.job.locks);
+    return Card(
+      key: const Key('locks-card'),
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Locks', style: theme.textTheme.titleSmall),
+            for (final lock in _locks)
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => _go(
+                        lock.path.isEmpty ? const [] : lock.path.split('/'),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          '${lock.path.isEmpty ? 'Start' : lock.path.split('/').map(pathStepTitle).join(' › ')}'
+                          ' · ${lock.hands.length} hands',
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    key: Key('remove-lock-${lock.path}'),
+                    tooltip: 'Remove',
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => setState(
+                      () => _locks = [
+                        for (final other in _locks)
+                          if (!identical(other, lock)) other,
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 4),
+            if (!changed)
+              Text(
+                'These locks are in force in this solve.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              )
+            else ...[
+              FilledButton.icon(
+                key: const Key('resolve-button'),
+                onPressed: _running || _resolving ? null : _resolve,
+                icon: const Icon(Icons.lock, size: 18),
+                label: const Text('Re-solve with these locks'),
+              ),
+              if (_running)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Pause this solve first, or wait until it is done.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// How this node differs from the same node in the parent solve.
+  Widget _compareCard(BuildContext context, GetNodeResponse node) {
+    final parent = _parentNode!;
+    final theme = Theme.of(context);
+    String signed(double value) =>
+        '${value >= 0 ? '+' : '−'}${value.abs().toStringAsFixed(2)}';
+    final parentFrequency = {
+      for (final action in parent.actions) action.label: action.frequency,
+    };
+    return Card(
+      key: const Key('compare-card'),
+      margin: const EdgeInsets.only(top: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Compared with the solve it started from',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'EV: OOP ${signed(node.oop.rangeEv - parent.oop.rangeEv)} · '
+              'IP ${signed(node.ip.rangeEv - parent.ip.rangeEv)}',
+              key: const Key('compare-ev'),
+            ),
+            for (final action in node.actions)
+              if (parentFrequency.containsKey(action.label))
+                Text(
+                  '${actionTitle(action)}: '
+                  '${formatPercent(parentFrequency[action.label]!)} → '
+                  '${formatPercent(action.frequency)}',
+                ),
+          ],
+        ),
+      ),
+    );
   }
 
   Player _viewedPlayer(GetNodeResponse node) =>
@@ -163,8 +345,10 @@ class _SolutionScreenState extends State<SolutionScreen> {
       range,
       strategy: acting ? node.strategy : const [],
       actionCount: acting ? node.actions.length : 0,
+      locked: acting ? node.locked : const [],
     );
     final colors = actionColors(node.actions);
+    final lockedHere = node.locked.where((flag) => flag).length;
 
     final header = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -179,6 +363,27 @@ class _SolutionScreenState extends State<SolutionScreen> {
           colors: colors,
           onStep: (step) => _go([..._path, step]),
         ),
+        if (node.type == NodeType.NODE_TYPE_ACTION) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 12,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                key: const Key('lock-button'),
+                onPressed: () => _addLock(node),
+                icon: const Icon(Icons.lock_outline, size: 18),
+                label: const Text('Lock this decision…'),
+              ),
+              if (lockedHere > 0)
+                Text(
+                  '$lockedHere of ${node.locked.length} hands are locked here',
+                  key: const Key('locked-here'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+        ],
       ],
     );
     final matrix = StrategyMatrix(
@@ -189,16 +394,24 @@ class _SolutionScreenState extends State<SolutionScreen> {
       onSelected: (index) =>
           setState(() => _selected = _selected == index ? null : index),
     );
-    final details = _Details(
-      node: node,
-      viewed: viewed,
-      model: model,
-      colors: colors,
-      selected: _selected,
-      onView: (player) => setState(() {
-        _view = player;
-        _selected = null;
-      }),
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Details(
+          node: node,
+          viewed: viewed,
+          model: model,
+          colors: colors,
+          selected: _selected,
+          onView: (player) => setState(() {
+            _view = player;
+            _selected = null;
+          }),
+        ),
+        if (_locks.isNotEmpty) _locksCard(context),
+        if (_parentNode != null && node.type == NodeType.NODE_TYPE_ACTION)
+          _compareCard(context, node),
+      ],
     );
 
     return LayoutBuilder(
@@ -607,6 +820,7 @@ class _CellDetails extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
+                  '${hand.locked ? 'Locked · ' : ''}'
                   'EV ${hand.ev.toStringAsFixed(2)}'
                   '${hand.reach < 0.995 ? ' · ${formatPercent(hand.reach, digits: 0)} here' : ''}',
                   style: Theme.of(context).textTheme.bodySmall,

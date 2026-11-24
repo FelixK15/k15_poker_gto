@@ -22,12 +22,14 @@ class ServicesTest : public ::testing::Test {
         server_service_(auth_, "test"),
         tree_service_(auth_, jobs_),
         job_service_(auth_, jobs_),
-        solution_service_(auth_, jobs_) {
+        solution_service_(auth_, jobs_),
+        lock_service_(auth_, jobs_) {
     grpc::ServerBuilder builder;
     builder.RegisterService(&server_service_);
     builder.RegisterService(&tree_service_);
     builder.RegisterService(&job_service_);
     builder.RegisterService(&solution_service_);
+    builder.RegisterService(&lock_service_);
     server_ = builder.BuildAndStart();
     channel_ = server_->InProcessChannel(grpc::ChannelArguments());
   }
@@ -57,6 +59,7 @@ class ServicesTest : public ::testing::Test {
   TreeServiceImpl tree_service_;
   JobServiceImpl job_service_;
   SolutionServiceImpl solution_service_;
+  LockServiceImpl lock_service_;
   std::unique_ptr<grpc::Server> server_;
   std::shared_ptr<grpc::Channel> channel_;
 };
@@ -172,6 +175,7 @@ TEST_F(AuthenticatedServicesTest, RejectsCallsWithoutTheToken) {
   auto jobs = v1::JobService::NewStub(channel_);
   auto trees = v1::TreeService::NewStub(channel_);
   auto solutions = v1::SolutionService::NewStub(channel_);
+  auto locks = v1::LockService::NewStub(channel_);
   const auto unauthenticated = grpc::StatusCode::UNAUTHENTICATED;
 
   // Every service, with no token, a wrong one, a prefix of the right one,
@@ -218,6 +222,8 @@ TEST_F(AuthenticatedServicesTest, RejectsCallsWithoutTheToken) {
     EXPECT_EQ(
         solutions->GetNode(context(token).get(), v1::GetNodeRequest(), &node).error_code(),
         unauthenticated);
+    EXPECT_EQ(locks->Resolve(context(token).get(), v1::ResolveRequest(), &job).error_code(),
+              unauthenticated);
   }
 
   // Right token, wrong scheme.

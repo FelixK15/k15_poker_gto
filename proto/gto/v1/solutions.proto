@@ -98,4 +98,8 @@ message GetNodeResponse {
 
   // The job's iteration count when this was read.
   uint32 iteration = 12;
+
+  // Action nodes: for each hand of the acting player, whether its strategy
+  // here is locked.
+  repeated bool locked = 13;
 }

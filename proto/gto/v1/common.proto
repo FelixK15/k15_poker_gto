@@ -47,6 +47,22 @@ message Spot {
   TreeSettings tree = 8;
 }
 
+// A player's strategy fixed for some hands at one decision.
+message NodeLock {
+  // Line to the decision, as in GetNodeRequest.path.
+  string path = 1;
+  // The hands to lock. Other hands at the node stay free.
+  repeated HandLock hands = 2;
+}
+
+message HandLock {
+  // The hand as GetNode names it, e.g. "AhKd".
+  string hand = 1;
+  // How often it takes each action, in the order of the node's actions.
+  // Scaled to add up to one.
+  repeated float frequencies = 2;
+}
+
 message SolveSettings {
   // Stop after this many iterations. Default 1000.
   uint32 max_iterations = 1;

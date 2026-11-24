@@ -14,6 +14,7 @@
 
 #include "gto/solver.h"
 #include "gto/v1/jobs.pb.h"
+#include "gto/v1/locks.pb.h"
 #include "gto/v1/solutions.pb.h"
 #include "gto/v1/trees.pb.h"
 
@@ -80,6 +81,10 @@ class JobManager {
 
   Error node(const std::string& id, const std::string& path, v1::GetNodeResponse* out);
 
+  /// Queues a re-solve of a job under locks, as a new job that starts from
+  /// the parent's solution.
+  Error resolve(const v1::ResolveRequest& request, v1::Job* out);
+
   /// Waits until the job differs from the state identified by `version`
   /// (start with 0 to get it at once), or until the timeout. On a change,
   /// fills `out`, updates `version` and returns true. Sets `gone` when the
@@ -108,12 +113,17 @@ class JobManager {
     /// What the running job should do at its next iteration.
     Request request = Request::None;
     std::uint64_t last_used = 0;
+    /// Without a data directory: the parent's state a re-solve starts from,
+    /// held until the job has been loaded.
+    std::string initial_state;
   };
 
   void worker_loop();
   void run_job(const std::string& id);
   /// Builds the job's solver and restores its saved state, if any.
-  std::shared_ptr<Solution> load_solution(const v1::Job& job, std::string* error) const;
+  /// `initial_state`, if not empty, is used instead of the job's state file.
+  std::shared_ptr<Solution> load_solution(const v1::Job& job, const std::string& initial_state,
+                                          std::string* error) const;
   /// Returns the job's solution, reading it from disk if needed.
   Error acquire_solution(const std::string& id, std::shared_ptr<Solution>* out);
 

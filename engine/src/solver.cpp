@@ -140,6 +140,122 @@ constexpr std::uint32_t kStateVersion = 1;
 
 }  // namespace
 
+std::vector<std::uint32_t> Solver::stored_hands(int player, const CardMap& map) const {
+  const auto p = static_cast<std::size_t>(player);
+  const auto& hands = game_.hands[p];
+  std::vector<std::uint32_t> stored(hands.size());
+  for (std::size_t h = 0; h < hands.size(); ++h) {
+    const auto it = hand_index_[p].find(mapped_mask(hands[h], map));
+    stored[h] = it != hand_index_[p].end() ? it->second : static_cast<std::uint32_t>(h);
+  }
+  return stored;
+}
+
+bool Solver::set_lock(const NodeRef& ref, std::span<const std::uint8_t> locked,
+                      std::span<const float> strategy, std::string* error) {
+  const auto fail = [&](const char* message) {
+    if (error) *error = message;
+    return false;
+  };
+  const GameTree& tree = game_.tree;
+  const Node& node = tree.nodes[ref.node];
+  if (node.type != NodeType::Action) return fail("only a decision can be locked");
+
+  const std::size_t hands = num_hands(node.player);
+  const std::size_t actions = node.num_children;
+  if (locked.size() != hands || strategy.size() != actions * hands) {
+    return fail("the lock does not match the node's hands and actions");
+  }
+
+  NodeLock lock;
+  lock.locked.assign(hands, 0);
+  lock.strategy.assign(actions * hands, 0.0f);
+  const std::vector<std::uint32_t> stored = stored_hands(node.player, ref.card_map);
+  bool any = false;
+  for (std::size_t h = 0; h < hands; ++h) {
+    if (!locked[h]) continue;
+    float sum = 0;
+    for (std::size_t a = 0; a < actions; ++a) {
+      const float value = strategy[a * hands + h];
+      if (!(value >= 0)) return fail("lock frequencies cannot be negative");
+      sum += value;
+    }
+    if (!(sum > 0)) return fail("the frequencies of a locked hand add up to zero");
+    const std::size_t s = stored[h];
+    lock.locked[s] = 1;
+    for (std::size_t a = 0; a < actions; ++a) {
+      lock.strategy[a * hands + s] = strategy[a * hands + h] / sum;
+    }
+    any = true;
+  }
+  if (!any) return fail("the lock names no hands");
+
+  // Suit swaps that merge cards somewhere below this node.
+  std::vector<bool> swap_used(tree.swaps.size(), false);
+  {
+    std::vector<std::uint32_t> stack = {ref.node};
+    while (!stack.empty()) {
+      const std::uint32_t index = stack.back();
+      stack.pop_back();
+      const Node& current = tree.nodes[index];
+      if (current.type == NodeType::Chance) {
+        for (const IsoDeal& iso : tree.iso_of(index)) swap_used[iso.swap] = true;
+      }
+      for (const std::uint32_t child : tree.children_of(index)) stack.push_back(child);
+    }
+  }
+
+  // Group the hands those swaps turn into one another, and give each group
+  // with a locked hand the average of its locked hands.
+  std::vector<std::uint32_t> group(hands);
+  for (std::size_t h = 0; h < hands; ++h) group[h] = static_cast<std::uint32_t>(h);
+  const auto find = [&](std::uint32_t h) {
+    while (group[h] != h) h = group[h] = group[group[h]];
+    return h;
+  };
+  for (std::size_t swap = 0; swap < swap_used.size(); ++swap) {
+    if (!swap_used[swap]) continue;
+    const auto& swapped = swap_hands_[swap][node.player];
+    for (std::size_t h = 0; h < hands; ++h) {
+      const std::uint32_t a = find(static_cast<std::uint32_t>(h));
+      const std::uint32_t b = find(swapped[h]);
+      if (a != b) group[a] = b;
+    }
+  }
+  std::vector<float> total(actions * hands, 0.0f);
+  std::vector<int> count(hands, 0);
+  for (std::size_t h = 0; h < hands; ++h) {
+    if (!lock.locked[h]) continue;
+    const std::uint32_t g = find(static_cast<std::uint32_t>(h));
+    ++count[g];
+    for (std::size_t a = 0; a < actions; ++a) total[a * hands + g] += lock.strategy[a * hands + h];
+  }
+  for (std::size_t h = 0; h < hands; ++h) {
+    const std::uint32_t g = find(static_cast<std::uint32_t>(h));
+    if (count[g] == 0) continue;
+    lock.locked[h] = 1;
+    for (std::size_t a = 0; a < actions; ++a) {
+      lock.strategy[a * hands + h] = total[a * hands + g] / static_cast<float>(count[g]);
+    }
+  }
+
+  if (lock_slot_.empty()) lock_slot_.assign(tree.nodes.size(), 0);
+  if (const std::uint32_t slot = lock_slot_[ref.node]; slot != 0) {
+    locks_[slot - 1] = std::move(lock);
+  } else {
+    locks_.push_back(std::move(lock));
+    lock_slot_[ref.node] = static_cast<std::uint32_t>(locks_.size());
+  }
+  return true;
+}
+
+void Solver::clear_locks() {
+  locks_.clear();
+  lock_slot_.clear();
+}
+
+void Solver::warm_restart() { std::fill(strategy_sum_.begin(), strategy_sum_.end(), 0.0f); }
+
 void Solver::save(std::ostream& out) const {
   StateHeader header{};
   std::memcpy(header.magic, kStateMagic, sizeof(kStateMagic));
@@ -235,6 +351,13 @@ void Solver::current_strategy(std::uint32_t node_index, float* out) const {
       out[a * hands + h] = sum > 0 ? std::max(regrets[a * hands + h], 0.0f) / sum : uniform;
     }
   }
+
+  if (const NodeLock* lock = lock_at(node_index)) {
+    for (std::size_t h = 0; h < hands; ++h) {
+      if (!lock->locked[h]) continue;
+      for (std::size_t a = 0; a < actions; ++a) out[a * hands + h] = lock->strategy[a * hands + h];
+    }
+  }
 }
 
 void Solver::average_strategy(std::uint32_t node_index, float* out) const {
@@ -249,6 +372,14 @@ void Solver::average_strategy(std::uint32_t node_index, float* out) const {
     for (std::size_t a = 0; a < actions; ++a) sum += sums[a * hands + h];
     for (std::size_t a = 0; a < actions; ++a) {
       out[a * hands + h] = sum > 0 ? sums[a * hands + h] / sum : uniform;
+    }
+  }
+
+  // A locked hand's average is the lock itself, exactly.
+  if (const NodeLock* lock = lock_at(node_index)) {
+    for (std::size_t h = 0; h < hands; ++h) {
+      if (!lock->locked[h]) continue;
+      for (std::size_t a = 0; a < actions; ++a) out[a * hands + h] = lock->strategy[a * hands + h];
     }
   }
 }
@@ -289,6 +420,17 @@ void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const flo
           out[h] = std::max(out[h], action_values[a * my_hands + h]);
         }
       }
+      // A locked hand cannot deviate: its best response is the lock.
+      if (const NodeLock* lock = lock_at(node_index)) {
+        for (std::size_t h = 0; h < my_hands; ++h) {
+          if (!lock->locked[h]) continue;
+          float value = 0;
+          for (std::size_t a = 0; a < actions; ++a) {
+            value += strategy[a * my_hands + h] * action_values[a * my_hands + h];
+          }
+          out[h] = value;
+        }
+      }
     } else {
       std::fill(out, out + my_hands, 0.0f);
       for (std::size_t a = 0; a < actions; ++a) {
@@ -301,8 +443,11 @@ void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const flo
     if (mode == Mode::Train) {
       // Move regrets towards the actions that did better than the mix.
       float* regrets = regrets_.data() + offset_[node_index];
+      const NodeLock* lock = lock_at(node_index);
       for (std::size_t a = 0; a < actions; ++a) {
         for (std::size_t h = 0; h < my_hands; ++h) {
+          // Locked hands have nothing to learn here.
+          if (lock != nullptr && lock->locked[h]) continue;
           float& regret = regrets[a * my_hands + h];
           regret = regret * (regret > 0 ? positive_discount_ : negative_discount_) +
                    action_values[a * my_hands + h] - out[h];
@@ -514,6 +659,8 @@ NodeReport Solver::report(const NodeRef& ref) const {
   if (node.type == NodeType::Action) {
     report.strategy.resize(block_size(game_, node));
     average_strategy(ref.node, report.strategy.data());
+    report.locked.assign(num_hands(node.player), 0);
+    if (const NodeLock* lock = lock_at(ref.node)) report.locked = lock->locked;
   }
 
   for (int player = 0; player < 2; ++player) {
@@ -561,6 +708,8 @@ NodeReport Solver::report(const NodeRef& ref) const {
     permute(report.ev[player], 1);
     if (node.type == NodeType::Action && node.player == player) {
       permute(report.strategy, report.actions.size());
+      const std::vector<std::uint8_t> original = report.locked;
+      for (std::size_t h = 0; h < hands.size(); ++h) report.locked[h] = original[stored[h]];
     }
   }
   return report;

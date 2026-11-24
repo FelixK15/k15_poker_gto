@@ -7,6 +7,7 @@
 #include <functional>
 #include <iosfwd>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -122,6 +123,9 @@ struct NodeReport {
   std::array<std::vector<float>, 2> ev;
   /// Expected value of each player's whole range at this node, in chips.
   std::array<double, 2> range_ev{0, 0};
+  /// For each hand of the acting player, whether its strategy here is locked.
+  /// Empty unless this is an action node.
+  std::vector<std::uint8_t> locked;
 
   float frequency(std::size_t action, std::size_t hand) const {
     return strategy[action * reach[static_cast<std::size_t>(player)].size() + hand];
@@ -158,6 +162,28 @@ class Solver {
   /// stores an isomorphic line.
   NodeReport report(const NodeRef& ref) const;
   NodeReport report(std::uint32_t node) const { return report(NodeRef{node}); }
+
+  /// Fixes the acting player's strategy at an action node for some hands.
+  /// `locked[h]` selects the hands and `strategy[action * hands + h]` gives
+  /// their frequencies, which are scaled to add up to one. Everything else
+  /// keeps adapting: the opponent to exploit the lock, and the locked player
+  /// elsewhere in the tree.
+  ///
+  /// Hands are in the suits `ref` was found with. Where the tree stores
+  /// interchangeable cards only once below this node, a lock must not tell
+  /// those suits apart; it is made symmetric by giving every hand of such a
+  /// group the group's average.
+  ///
+  /// Replaces an earlier lock on the same node.
+  bool set_lock(const NodeRef& ref, std::span<const std::uint8_t> locked,
+                std::span<const float> strategy, std::string* error = nullptr);
+  void clear_locks();
+  bool has_locks() const noexcept { return !locks_.empty(); }
+
+  /// Forgets the average strategies but keeps the regrets, so that solving
+  /// continues from the current strategies instead of from scratch. For
+  /// re-solving after locks changed: the old average belongs to another game.
+  void warm_restart();
 
   /// Memory held for regrets and strategies.
   std::size_t memory_bytes() const noexcept;
@@ -208,6 +234,19 @@ class Solver {
   /// node lock will override the solver's own choice.
   void current_strategy(std::uint32_t node, float* out) const;
   void average_strategy(std::uint32_t node, float* out) const;
+
+  struct NodeLock {
+    std::vector<std::uint8_t> locked;  // per hand
+    std::vector<float> strategy;       // [action * hands + hand]
+  };
+  const NodeLock* lock_at(std::uint32_t node) const noexcept {
+    if (lock_slot_.empty()) return nullptr;
+    const std::uint32_t slot = lock_slot_[node];
+    return slot == 0 ? nullptr : &locks_[slot - 1];
+  }
+  /// For each hand of `player` as the caller names it, the hand the tree
+  /// stores it as under `map`.
+  std::vector<std::uint32_t> stored_hands(int player, const CardMap& map) const;
   double rake(double final_pot) const noexcept;
   double root_value(int player, const float* values) const;
   std::size_t scratch_need(std::uint32_t node) const;
@@ -229,6 +268,10 @@ class Solver {
   mutable std::vector<float> strategy_sum_;
   /// Chance nodes without a chance node above them: their children run in parallel.
   std::vector<bool> top_level_chance_;
+  std::vector<NodeLock> locks_;
+  /// Per node: 0, or one more than the node's index in locks_. Empty while
+  /// there are no locks, so that solving without them costs nothing.
+  std::vector<std::uint32_t> lock_slot_;
   /// For each tree swap and player: the hand each hand turns into.
   std::vector<std::array<std::vector<std::uint32_t>, 2>> swap_hands_;
   std::array<std::unordered_map<std::uint64_t, std::uint32_t>, 2> hand_index_;

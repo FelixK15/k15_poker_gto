@@ -76,6 +76,22 @@ const Job$json = {
     {'1': 'solve_seconds', '3': 14, '4': 1, '5': 1, '10': 'solveSeconds'},
     {'1': 'memory_bytes', '3': 15, '4': 1, '5': 4, '10': 'memoryBytes'},
     {'1': 'has_solution', '3': 16, '4': 1, '5': 8, '10': 'hasSolution'},
+    {'1': 'parent_id', '3': 17, '4': 1, '5': 9, '10': 'parentId'},
+    {
+      '1': 'locks',
+      '3': 18,
+      '4': 3,
+      '5': 11,
+      '6': '.gto.v1.NodeLock',
+      '10': 'locks'
+    },
+    {
+      '1': 'warm_start_pending',
+      '3': 19,
+      '4': 1,
+      '5': 8,
+      '10': 'warmStartPending'
+    },
   ],
 };
 
@@ -90,7 +106,9 @@ final $typed_data.Uint8List jobDescriptor = $convert.base64Decode(
     'cnJvchIdCgpjcmVhdGVkX21zGAwgASgDUgljcmVhdGVkTXMSHwoLZmluaXNoZWRfbXMYDSABKA'
     'NSCmZpbmlzaGVkTXMSIwoNc29sdmVfc2Vjb25kcxgOIAEoAVIMc29sdmVTZWNvbmRzEiEKDG1l'
     'bW9yeV9ieXRlcxgPIAEoBFILbWVtb3J5Qnl0ZXMSIQoMaGFzX3NvbHV0aW9uGBAgASgIUgtoYX'
-    'NTb2x1dGlvbg==');
+    'NTb2x1dGlvbhIbCglwYXJlbnRfaWQYESABKAlSCHBhcmVudElkEiYKBWxvY2tzGBIgAygLMhAu'
+    'Z3RvLnYxLk5vZGVMb2NrUgVsb2NrcxIsChJ3YXJtX3N0YXJ0X3BlbmRpbmcYEyABKAhSEHdhcm'
+    '1TdGFydFBlbmRpbmc=');
 
 @$core.Deprecated('Use submitJobRequestDescriptor instead')
 const SubmitJobRequest$json = {

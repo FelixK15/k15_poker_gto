@@ -25,10 +25,17 @@ class FakeApi implements GtoApi {
 
   final List<Job> jobs = [];
   final Map<String, GetNodeResponse> nodes = {};
+
+  /// Nodes of jobs that have a parent, where they differ from [nodes].
+  final Map<String, GetNodeResponse> childNodes = {};
+  final List<String> nodeRequestsByJob = [];
   final List<String> calls = [];
   final List<Spot> estimated = [];
   final List<({Spot spot, SolveSettings settings, String name})> submitted = [];
   final List<String> nodeRequests = [];
+  final List<({String parentId, List<NodeLock> locks, SolveSettings settings})>
+  resolved = [];
+  Object? resolveError;
 
   EstimateTreeResponse estimateResult = EstimateTreeResponse(
     nodes: Int64(15774),
@@ -113,11 +120,37 @@ class FakeApi implements GtoApi {
   @override
   Future<GetNodeResponse> getNode(String jobId, String path) async {
     nodeRequests.add(path);
-    final node = nodes[path];
+    nodeRequestsByJob.add('$jobId:$path');
+    final isChild = jobs.any(
+      (job) => job.id == jobId && job.parentId.isNotEmpty,
+    );
+    final node = (isChild ? childNodes[path] : null) ?? nodes[path];
     if (node == null) {
       throw GrpcError.notFound("path '$path': no such line");
     }
     return node;
+  }
+
+  @override
+  Future<Job> resolve(
+    String parentId,
+    List<NodeLock> locks,
+    SolveSettings settings,
+  ) async {
+    if (resolveError != null) throw resolveError!;
+    resolved.add((parentId: parentId, locks: locks, settings: settings));
+    final parent = _job(parentId);
+    final job = Job(
+      id: 'job${jobs.length + 1}',
+      name: '${parent.name} (locked)',
+      state: JobState.JOB_STATE_QUEUED,
+      spot: parent.spot,
+      settings: settings,
+      parentId: parentId,
+      locks: locks,
+    );
+    jobs.insert(0, job);
+    return job;
   }
 
   @override

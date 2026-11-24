@@ -2,12 +2,14 @@ import 'package:grpc/grpc.dart';
 
 import '../gen/gto/v1/common.pb.dart';
 import '../gen/gto/v1/jobs.pbgrpc.dart';
+import '../gen/gto/v1/locks.pbgrpc.dart';
 import '../gen/gto/v1/server.pbgrpc.dart';
 import '../gen/gto/v1/solutions.pbgrpc.dart';
 import '../gen/gto/v1/trees.pbgrpc.dart';
 
 export '../gen/gto/v1/common.pb.dart';
 export '../gen/gto/v1/jobs.pb.dart';
+export '../gen/gto/v1/locks.pb.dart';
 export '../gen/gto/v1/server.pb.dart';
 export '../gen/gto/v1/solutions.pb.dart';
 export '../gen/gto/v1/trees.pb.dart';
@@ -42,6 +44,14 @@ abstract class GtoApi {
 
   Future<GetNodeResponse> getNode(String jobId, String path);
 
+  /// Queues a re-solve of [parentId] with [locks] in force, as a new job.
+  /// [settings] counts iterations on top of the parent's.
+  Future<Job> resolve(
+    String parentId,
+    List<NodeLock> locks,
+    SolveSettings settings,
+  );
+
   /// Ends the connection. A server the app started is shut down.
   Future<void> close();
 }
@@ -68,7 +78,8 @@ class GrpcGtoApi implements GtoApi {
   ) : _server = ServerServiceClient(_channel),
       _trees = TreeServiceClient(_channel),
       _jobs = JobServiceClient(_channel),
-      _solutions = SolutionServiceClient(_channel);
+      _solutions = SolutionServiceClient(_channel),
+      _locks = LockServiceClient(_channel);
 
   /// Opens a channel and checks that a compatible server answers with this
   /// token. [onClose] runs after the channel is shut down.
@@ -118,6 +129,7 @@ class GrpcGtoApi implements GtoApi {
   final TreeServiceClient _trees;
   final JobServiceClient _jobs;
   final SolutionServiceClient _solutions;
+  final LockServiceClient _locks;
 
   @override
   final String label;
@@ -182,6 +194,16 @@ class GrpcGtoApi implements GtoApi {
         GetNodeRequest(jobId: jobId, path: path),
         options: _options(const Duration(minutes: 5)),
       );
+
+  @override
+  Future<Job> resolve(
+    String parentId,
+    List<NodeLock> locks,
+    SolveSettings settings,
+  ) => _locks.resolve(
+    ResolveRequest(parentJobId: parentId, locks: locks, settings: settings),
+    options: _options(const Duration(minutes: 5)),
+  );
 
   @override
   Future<void> close() async {
