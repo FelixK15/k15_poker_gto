@@ -6,6 +6,11 @@ configure_file(
 
 add_library(solver STATIC
   src/card.cpp
+  src/game_tree.cpp
+  src/hand_evaluator.cpp
+  src/range.cpp
+  src/solver.cpp
+  src/terminal.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/version.cpp
 )
 add_library(gto::solver ALIAS solver)

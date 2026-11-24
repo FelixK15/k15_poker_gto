@@ -1,0 +1,27 @@
+// Textbook river spot with a known answer.
+//
+// IP holds the nuts (KK, three combos) or air (QJo, twelve combos); OOP holds
+// only bluff-catchers (88). OOP can only check, IP can check or bet pot.
+//
+// Expected: IP bets every KK and bluffs 1.5 of the 12 QJo combos (12.5%),
+// OOP calls half the time, and the EVs are OOP 70, IP 30.
+{
+  "board": "Kc 8d 5h 3s 2d",
+  "pot": 100,
+  "effective_stack": 100,
+  "ranges": {
+    "oop": "88",
+    "ip": "KK, QJo"
+  },
+  "tree": {
+    "river": {
+      "oop": {},
+      "ip": { "bet_pct": [100] }
+    }
+  },
+  "solve": {
+    "max_iterations": 2000,
+    "target_exploitability_pct": 0.01,
+    "check_interval": 100
+  }
+}

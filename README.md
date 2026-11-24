@@ -12,6 +12,7 @@ client (Windows, Android). See [PLAN.md](PLAN.md) for the design and milestones.
 | `server/` | `gto-server`, the gRPC server |
 | `cli/` | `gto-cli`, runs the engine without a server |
 | `app/` | Flutter client |
+| `examples/` | Spot files for `gto-cli` |
 | `tools/` | Code generation scripts |
 
 ## Building the server
@@ -46,6 +47,19 @@ build\windows\server\Release\gto-server.exe --port 50051
 
 The server listens on `127.0.0.1` unless `--host` says otherwise. There is no authentication or
 TLS yet, so do not expose it to an untrusted network.
+
+## Solving a spot from the command line
+
+`gto-cli` runs the engine without a server. A spot is a JSON file with the board, both ranges,
+pot, stack and bet sizes; see [examples/](examples/). Only river spots work so far.
+
+```powershell
+build\windows\cli\Release\gto-cli.exe solve examples\river_srp.json --node check --node check/bet6.6
+```
+
+It prints the tree size, the convergence, both players' EV and a strategy table per hand class for
+the root and for each `--node` action line. If an action line does not exist, the error lists the
+actions available at that point.
 
 ## Running the app
 
