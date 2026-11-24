@@ -21,6 +21,9 @@ Needs CMake 3.25+, a C++20 compiler (Visual Studio 2022 or GCC/Clang) and a curr
 [vcpkg](https://github.com/microsoft/vcpkg) checkout. The vcpkg bundled with Visual Studio is too
 old. The first configure builds gRPC and takes a while; later ones reuse vcpkg's binary cache.
 
+The build targets processors with AVX2 (Intel from 2013, AMD from 2015). Add
+`-DGTO_ENABLE_AVX2=OFF` to the configure step for older ones, at some cost in speed.
+
 Windows (PowerShell):
 
 ```powershell

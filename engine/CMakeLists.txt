@@ -6,6 +6,7 @@ configure_file(
 
 add_library(solver STATIC
   src/card.cpp
+  src/cpu.cpp
   src/game_tree.cpp
   src/hand_evaluator.cpp
   src/range.cpp

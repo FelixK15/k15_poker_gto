@@ -17,6 +17,7 @@
 #include <spdlog/spdlog.h>
 
 #include "auth.h"
+#include "gto/cpu.h"
 #include "gto/version.h"
 #include "job_manager.h"
 #include "services.h"
@@ -167,6 +168,11 @@ void on_signal(int) { g_stop = true; }
 }  // namespace
 
 int main(int argc, char** argv) {
+  if (!gto::cpu_is_supported()) {
+    std::fprintf(stderr, "error: %s\n", gto::cpu_requirement_message());
+    return EXIT_FAILURE;
+  }
+
   Options options;
   int exit_code = EXIT_SUCCESS;
   if (!parse_args(argc, argv, options, exit_code)) return exit_code;

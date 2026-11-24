@@ -28,6 +28,10 @@ class TerminalEvaluator {
 
   int hole_cards() const noexcept { return hole_cards_; }
 
+  /// Works out a board's showdown steps once, which makes every later
+  /// showdown() on it several times faster. Optional; two-card games only.
+  void prepare(ShowdownTable& table) const;
+
   /// out[h] = total reach of the opponent hands compatible with hand h.
   void compatible_reach(int player, const float* opponent_reach, float* out) const;
 
@@ -39,10 +43,24 @@ class TerminalEvaluator {
                 const float* opponent_reach, float* out) const;
 
  private:
+  static constexpr std::uint8_t kSpareCard = 63;
+
+  void scaled_compatible_reach(int player, double scale, const float* opponent_reach,
+                               float* out) const;
+  void showdown_general(const ShowdownTable& table, int player, double beat, double beat_or_tie,
+                        double lose, const float* opponent_reach, float* out) const;
+
   const Hands* hands_;
   int hole_cards_ = 0;
   /// Index of the identical hand in the opponent's set, or -1.
   std::array<std::vector<std::int32_t>, 2> same_hand_;
+  // The same facts laid out flat for the inner loops: each hand's two cards,
+  // and its identical opponent hand as an index (0 if none) with a weight of
+  // 1 or 0 that switches it on or off without a branch.
+  std::array<std::vector<std::uint8_t>, 2> card1_;
+  std::array<std::vector<std::uint8_t>, 2> card2_;
+  std::array<std::vector<std::uint32_t>, 2> same_index_;
+  std::array<std::vector<float>, 2> same_weight_;
 };
 
 }  // namespace gto
