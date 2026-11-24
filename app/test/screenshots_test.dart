@@ -123,6 +123,35 @@ void main() {
     );
   }, skip: skip);
 
+  testWidgets('solution, EV view with locks', (tester) async {
+    final api = sample();
+    final root = api.nodes['']!;
+    root.locked.addAll([
+      for (final hand in root.oop.hands) hand.startsWith('A') && hand[2] == 'K',
+    ]);
+    await shoot(
+      tester,
+      'solution_ev',
+      SolutionScreen(
+        api: api,
+        job: sampleJob()
+          ..locks.add(
+            NodeLock(
+              path: '',
+              hands: [
+                HandLock(hand: 'AhKh', frequencies: [1, 0, 0]),
+              ],
+            ),
+          ),
+      ),
+      then: () async {
+        await tester.tap(find.text('EV'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      },
+    );
+  }, skip: skip);
+
   testWidgets('solution, phone', (tester) async {
     await shoot(
       tester,

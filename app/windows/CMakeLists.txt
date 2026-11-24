@@ -75,6 +75,17 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
+# The solver, so that "This computer" works without a separate install. It is
+# taken from the C++ build of this checkout; build that first.
+set(GTO_SERVER_EXE
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../build/windows/server/Release/gto-server.exe")
+if(EXISTS "${GTO_SERVER_EXE}")
+  install(FILES "${GTO_SERVER_EXE}" DESTINATION "${CMAKE_INSTALL_PREFIX}"
+    COMPONENT Runtime)
+else()
+  message(STATUS "gto-server.exe not found: building the app without a local solver")
+endif()
+
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 

@@ -1,6 +1,7 @@
 #include "job_manager.h"
 
 #include <atomic>
+#include <cmath>
 #include <filesystem>
 #include <numeric>
 
@@ -703,6 +704,58 @@ TEST(JobManager, KeepsLocksAcrossRestarts) {
   const v1::Job finished = job_of(jobs, waiting_id);
   EXPECT_EQ(finished.iteration(), 800u);
   EXPECT_NEAR(finished.ip_ev(), 40.0, 0.5);
+}
+
+TEST(JobManager, ReportsEquityAndRunouts) {
+  JobManager jobs(memory_config());
+  v1::Job job;
+  ASSERT_FALSE(jobs.submit(request_for(slow_spot(), 20, 0), &job));
+  ASSERT_TRUE(wait_for_state(jobs, job.id(), v1::JOB_STATE_DONE));
+
+  v1::GetNodeResponse root;
+  ASSERT_FALSE(jobs.node(job.id(), "", &root));
+  EXPECT_EQ(root.oop().equity_size(), root.oop().hands_size());
+  EXPECT_EQ(root.ip().equity_size(), root.ip().hands_size());
+  EXPECT_GT(root.oop().range_equity(), 0.2);
+  EXPECT_LT(root.oop().range_equity(), 0.8);
+  EXPECT_NEAR(root.oop().range_equity() + root.ip().range_equity(), 1.0, 1e-4);
+
+  v1::GetRunoutReportResponse report;
+  ASSERT_FALSE(jobs.runouts(job.id(), "check/check", &report));
+  // One entry per river card, merged ones included.
+  ASSERT_EQ(report.runouts_size(), 48);
+  const v1::Runout* seven_clubs = nullptr;
+  const v1::Runout* seven_diamonds = nullptr;
+  for (const v1::Runout& runout : report.runouts()) {
+    SCOPED_TRACE(runout.card());
+    EXPECT_EQ(runout.type(), v1::NODE_TYPE_ACTION);
+    EXPECT_EQ(runout.player(), v1::PLAYER_OOP);
+    ASSERT_GT(runout.actions_size(), 1);
+    double total = 0;
+    for (const v1::NodeAction& action : runout.actions()) total += action.frequency();
+    EXPECT_NEAR(total, 1.0, 1e-4);
+    // Nothing went in on the turn, so the two values share the starting pot.
+    EXPECT_NEAR(runout.oop_ev() + runout.ip_ev(), 100.0, 0.05);
+    EXPECT_NEAR(runout.oop_equity() + runout.ip_equity(), 1.0, 1e-4);
+    if (runout.card() == "7c") seven_clubs = &runout;
+    if (runout.card() == "7d") seven_diamonds = &runout;
+  }
+  // Interchangeable cards read the same.
+  ASSERT_NE(seven_clubs, nullptr);
+  ASSERT_NE(seven_diamonds, nullptr);
+  EXPECT_NEAR(seven_clubs->oop_ev(), seven_diamonds->oop_ev(), 1e-3);
+  EXPECT_NEAR(seven_clubs->oop_equity(), seven_diamonds->oop_equity(), 1e-5);
+  // Different cards do not.
+  bool differs = false;
+  for (const v1::Runout& runout : report.runouts()) {
+    if (std::abs(runout.oop_equity() - seven_clubs->oop_equity()) > 0.01) differs = true;
+  }
+  EXPECT_TRUE(differs);
+
+  v1::GetRunoutReportResponse unused;
+  EXPECT_EQ(jobs.runouts(job.id(), "", &unused).kind, ErrorKind::InvalidArgument);
+  EXPECT_EQ(jobs.runouts(job.id(), "check/nope", &unused).kind, ErrorKind::NotFound);
+  EXPECT_EQ(jobs.runouts("nope", "check/check", &unused).kind, ErrorKind::NotFound);
 }
 
 }  // namespace

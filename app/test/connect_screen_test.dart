@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui' show Size;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +17,10 @@ Future<void> pumpApp(
   RemoteConnector? remote,
   LocalConnector? local,
 }) {
+  // Tall enough that the connect button stays on screen with every field shown.
+  tester.view.physicalSize = const Size(900, 1300);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -171,6 +178,93 @@ void main() {
       expect(find.byKey(const Key('connect-error')), findsNothing);
       debugDefaultTargetPlatformOverride = null;
     });
+  });
+
+  testWidgets('asks for an encrypted connection with a certificate file', (
+    tester,
+  ) async {
+    RemoteTarget? target;
+    await pumpApp(
+      tester,
+      remote: (t) async {
+        target = t;
+        return FakeApi();
+      },
+    );
+    expect(find.byKey(const Key('certificate-field')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('tls-switch')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('certificate-field')),
+      ' C:/certs/server.pem ',
+    );
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+
+    expect(target!.tls, isTrue);
+    expect(target!.certificatePath, 'C:/certs/server.pem');
+  });
+
+  testWidgets('connects in the clear unless asked otherwise', (tester) async {
+    RemoteTarget? target;
+    await pumpApp(
+      tester,
+      remote: (t) async {
+        target = t;
+        return FakeApi();
+      },
+    );
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+    expect(target!.tls, isFalse);
+    expect(target!.certificatePath, isEmpty);
+  });
+
+  testWidgets('explains certificate problems', (tester) async {
+    Object error = CertificateFileException('C:/nope.pem');
+    await pumpApp(tester, remote: (_) async => throw error);
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The certificate file "C:/nope.pem" cannot be read.'),
+      findsOneWidget,
+    );
+
+    error = const GrpcError.unavailable('Error connecting: HandshakeException');
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('The server\'s certificate was not accepted.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('returns to the connect screen when the solver stops', (
+    tester,
+  ) async {
+    final stopped = Completer<String>();
+    final api = FakeApi(label: 'This computer', isLocal: true)
+      ..lost = stopped.future;
+    await pumpApp(tester, remote: (_) async => api);
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('server-label')), findsOneWidget);
+
+    stopped.complete('The solver on this computer stopped unexpectedly.');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('connect-button')), findsOneWidget);
+    expect(
+      find.text('The solver on this computer stopped unexpectedly.'),
+      findsOneWidget,
+    );
+
+    // Connecting again clears the notice.
+    final again = FakeApi();
+    await pumpApp(tester, remote: (_) async => again);
+    await tester.tap(find.byKey(const Key('connect-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('connection-lost')), findsNothing);
   });
 
   test('describes server-worded errors as sentences', () {

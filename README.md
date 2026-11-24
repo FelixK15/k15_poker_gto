@@ -56,8 +56,18 @@ $env:GTO_SERVER_TOKEN = "choose-a-long-random-string"
 build\windows\server\Release\gto-server.exe --host 0.0.0.0 --port 50051
 ```
 
-Connections are not encrypted yet. On a network you do not trust, reach the server through a VPN
-or an SSH tunnel.
+To encrypt connections, give the server a certificate and its key; clients then switch on
+"Encrypted connection (TLS)":
+
+```powershell
+build\windows\server\Release\gto-server.exe --host 0.0.0.0 --tls-cert server.pem --tls-key server.key
+```
+
+With a certificate you made yourself (self-signed), the client also needs that `.pem` file and asks
+for its path. The certificate must be for the name or address clients connect to. Without TLS,
+reach a server on a network you do not trust through a VPN or an SSH tunnel.
+
+`docker/Dockerfile` builds the server for Linux. It has not been built yet.
 
 The API is defined in `proto/gto/v1/`: `TreeService` (size estimate), `JobService` (submit, list,
 pause, resume, cancel, delete, watch), `SolutionService` (browse a solution node by node) and
@@ -108,6 +118,17 @@ the new one shows what changed against it.
 
 Tests that need a real server are skipped by default; `app/test/live_server_test.dart` says how to
 run them. `app/test/screenshots_test.dart` renders the main screens to PNG files.
+
+## Packaging
+
+```powershell
+$env:VCPKG_ROOT = "D:\repos\vcpkg"
+tools\package_windows.ps1
+```
+
+builds and tests everything and writes two zip files to `dist\`: the app with the solver inside,
+and the solver alone for use as a server. For Android, `flutter build apk` in `app` builds the
+client; it connects to a server and cannot solve by itself.
 
 ## Changing the API
 

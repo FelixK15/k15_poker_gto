@@ -40,6 +40,15 @@ class SolutionServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getNode, request, options: options);
   }
 
+  /// Where a card is dealt: how each possible card changes the spot. Fails
+  /// with INVALID_ARGUMENT if no card is dealt at the path.
+  $grpc.ResponseFuture<$0.GetRunoutReportResponse> getRunoutReport(
+    $0.GetRunoutReportRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getRunoutReport, request, options: options);
+  }
+
   // method descriptors
 
   static final _$getNode =
@@ -47,6 +56,11 @@ class SolutionServiceClient extends $grpc.Client {
           '/gto.v1.SolutionService/GetNode',
           ($0.GetNodeRequest value) => value.writeToBuffer(),
           $0.GetNodeResponse.fromBuffer);
+  static final _$getRunoutReport =
+      $grpc.ClientMethod<$0.GetRunoutReportRequest, $0.GetRunoutReportResponse>(
+          '/gto.v1.SolutionService/GetRunoutReport',
+          ($0.GetRunoutReportRequest value) => value.writeToBuffer(),
+          $0.GetRunoutReportResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('gto.v1.SolutionService')
@@ -61,6 +75,15 @@ abstract class SolutionServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.GetNodeRequest.fromBuffer(value),
         ($0.GetNodeResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetRunoutReportRequest,
+            $0.GetRunoutReportResponse>(
+        'GetRunoutReport',
+        getRunoutReport_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetRunoutReportRequest.fromBuffer(value),
+        ($0.GetRunoutReportResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.GetNodeResponse> getNode_Pre($grpc.ServiceCall $call,
@@ -70,4 +93,13 @@ abstract class SolutionServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetNodeResponse> getNode(
       $grpc.ServiceCall call, $0.GetNodeRequest request);
+
+  $async.Future<$0.GetRunoutReportResponse> getRunoutReport_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetRunoutReportRequest> $request) async {
+    return getRunoutReport($call, await $request);
+  }
+
+  $async.Future<$0.GetRunoutReportResponse> getRunoutReport(
+      $grpc.ServiceCall call, $0.GetRunoutReportRequest request);
 }

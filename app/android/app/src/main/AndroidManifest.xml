@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The app talks to a solver server over the network. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="k15_gto"
+        android:label="K15 GTO"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

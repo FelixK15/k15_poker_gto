@@ -44,6 +44,14 @@ abstract class GtoApi {
 
   Future<GetNodeResponse> getNode(String jobId, String path);
 
+  /// How each card that can come at the chance node [path] changes the spot.
+  Future<List<Runout>> getRunouts(String jobId, String path);
+
+  /// Completes with a message if the connection ends on its own, which so
+  /// far only a server the app started can report. Null if that cannot be
+  /// noticed.
+  Future<String>? get lost;
+
   /// Queues a re-solve of [parentId] with [locks] in force, as a new job.
   /// [settings] counts iterations on top of the parent's.
   Future<Job> resolve(
@@ -75,6 +83,7 @@ class GrpcGtoApi implements GtoApi {
     this.label,
     this.isLocal,
     this._onClose,
+    this.lost,
   ) : _server = ServerServiceClient(_channel),
       _trees = TreeServiceClient(_channel),
       _jobs = JobServiceClient(_channel),
@@ -89,14 +98,21 @@ class GrpcGtoApi implements GtoApi {
     String token = '',
     String? label,
     bool isLocal = false,
+    bool tls = false,
+    List<int>? trustedCertificate,
     Future<void> Function()? onClose,
+    Future<String>? lost,
   }) async {
     final channel = ClientChannel(
       host,
       port: port,
-      options: const ChannelOptions(
-        credentials: ChannelCredentials.insecure(),
-        connectTimeout: Duration(seconds: 5),
+      options: ChannelOptions(
+        // With TLS the server must present a certificate for [host] that the
+        // system trusts, or exactly [trustedCertificate] for a self-signed one.
+        credentials: tls
+            ? ChannelCredentials.secure(certificates: trustedCertificate)
+            : const ChannelCredentials.insecure(),
+        connectTimeout: const Duration(seconds: 5),
       ),
     );
     final api = GrpcGtoApi._(
@@ -105,6 +121,7 @@ class GrpcGtoApi implements GtoApi {
       label ?? '$host:$port',
       isLocal,
       onClose,
+      lost,
     );
     try {
       api.info = await api._server.getInfo(
@@ -139,6 +156,9 @@ class GrpcGtoApi implements GtoApi {
 
   @override
   late final GetInfoResponse info;
+
+  @override
+  final Future<String>? lost;
 
   CallOptions _options([Duration? timeout = const Duration(seconds: 30)]) =>
       CallOptions(
@@ -196,6 +216,13 @@ class GrpcGtoApi implements GtoApi {
       );
 
   @override
+  Future<List<Runout>> getRunouts(String jobId, String path) async =>
+      (await _solutions.getRunoutReport(
+        GetRunoutReportRequest(jobId: jobId, path: path),
+        options: _options(const Duration(minutes: 5)),
+      )).runouts;
+
+  @override
   Future<Job> resolve(
     String parentId,
     List<NodeLock> locks,
@@ -219,7 +246,11 @@ String describeError(Object error) {
     final message = error.message ?? '';
     switch (error.code) {
       case StatusCode.unavailable:
-        return 'No server reachable at that address.';
+        // A failed TLS handshake also ends up here.
+        return message.toLowerCase().contains('certificate') ||
+                message.toLowerCase().contains('handshake')
+            ? 'The server\'s certificate was not accepted.'
+            : 'No server reachable at that address.';
       case StatusCode.deadlineExceeded:
         return 'The server did not answer in time.';
       case StatusCode.unimplemented:

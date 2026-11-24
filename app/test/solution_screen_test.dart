@@ -212,7 +212,7 @@ void main() {
     expect(
       find.descendant(
         of: details,
-        matching: find.text('4.00 of 4 combos · EV 9.40'),
+        matching: find.text('4.00 of 4 combos · EV 9.40 · equity 47%'),
       ),
       findsOneWidget,
     );
@@ -266,6 +266,84 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, '');
     expect(find.text('OOP acts:'), findsOneWidget);
+  });
+
+  testWidgets('shows equity and switches the grid to EV and equity', (
+    tester,
+  ) async {
+    await pumpSolution(tester);
+    expect(find.byKey(const Key('node-equity')), findsOneWidget);
+    expect(find.textContaining('Equity: OOP 38.1%'), findsOneWidget);
+    StrategyMatrix matrix() =>
+        tester.widget<StrategyMatrix>(find.byType(StrategyMatrix));
+    expect(matrix().view, MatrixView.strategy);
+
+    await tester.tap(find.text('EV'));
+    await tester.pumpAndSettle();
+    expect(matrix().view, MatrixView.ev);
+
+    await tester.tap(find.text('Equity'));
+    await tester.pumpAndSettle();
+    expect(matrix().view, MatrixView.equity);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('valueColor runs from red through yellow to green', () {
+    expect(valueColor(0, 0, 10), const Color(0xFFD9534F));
+    expect(valueColor(5, 0, 10), const Color(0xFFE0B94F));
+    expect(valueColor(10, 0, 10), const Color(0xFF45A36B));
+    // Out of range, or no range at all, stays within the scale.
+    expect(valueColor(-3, 0, 10), const Color(0xFFD9534F));
+    expect(valueColor(7, 7, 7), const Color(0xFFE0B94F));
+  });
+
+  testWidgets('compares the cards at a deal', (tester) async {
+    final api = FakeApi();
+    addSampleSolution(api);
+    Runout runout(String card, double ev, double equity, double betFrequency) =>
+        Runout(
+          card: card,
+          oopEv: ev,
+          ipEv: 10 - ev,
+          oopEquity: equity,
+          ipEquity: 1 - equity,
+          type: NodeType.NODE_TYPE_ACTION,
+          player: Player.PLAYER_OOP,
+          actions: [
+            check()..frequency = 1 - betFrequency,
+            bet(7.5, 'bet7.5')..frequency = betFrequency,
+          ],
+        );
+    api.runouts['check/check'] = [
+      runout('2c', 4.1, 0.48, 0.2),
+      runout('As', 6.3, 0.61, 0.7),
+      runout('7d', 3.2, 0.40, 0.1),
+    ];
+    await pumpSolution(tester, api: api);
+    await tester.tap(find.byKey(const Key('action-check')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('action-check')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('runout-report')), findsNothing);
+    await tester.tap(find.byKey(const Key('runouts-button')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('runouts check/check'));
+    expect(find.byKey(const Key('runout-report')), findsOneWidget);
+    expect(find.text('EV 6.30'), findsOneWidget);
+    expect(find.text('Eq 61%'), findsOneWidget);
+    // Best card for OOP first.
+    final ace = tester.getTopLeft(find.byKey(const Key('runout-As')));
+    final deuce = tester.getTopLeft(find.byKey(const Key('runout-2c')));
+    final seven = tester.getTopLeft(find.byKey(const Key('runout-7d')));
+    expect(ace.dx, lessThan(deuce.dx));
+    expect(deuce.dx, lessThan(seven.dx));
+
+    // A tile deals its card.
+    await tester.tap(find.byKey(const Key('runout-2c')));
+    await tester.pumpAndSettle();
+    expect(api.nodeRequests.last, 'check/check/2c');
+    expect(find.byKey(const Key('runout-report')), findsNothing);
   });
 
   testWidgets('fits a phone screen', (tester) async {

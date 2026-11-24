@@ -64,6 +64,46 @@ v1::NodeType to_proto(NodeType type) {
   return v1::NODE_TYPE_UNSPECIFIED;
 }
 
+/// Adds the node's actions with how often the acting range takes each.
+template <typename AddAction>
+void fill_actions(const NodeReport& report, AddAction add_action) {
+  if (report.type != NodeType::Action) return;
+  const auto& reach = report.reach[static_cast<std::size_t>(report.player)];
+  double total_reach = 0;
+  for (const float value : reach) total_reach += value;
+
+  for (std::size_t a = 0; a < report.actions.size(); ++a) {
+    const Action& action = report.actions[a];
+    v1::NodeAction* proto = add_action();
+    proto->set_type(to_proto(action.type));
+    proto->set_amount(action.amount);
+    proto->set_label(action_label(action));
+    double weighted = 0;
+    for (std::size_t h = 0; h < reach.size(); ++h) {
+      weighted += static_cast<double>(reach[h]) * report.frequency(a, h);
+    }
+    proto->set_frequency(total_reach > 0 ? weighted / total_reach : 0.0);
+  }
+}
+
+/// The cards that can come at a chance node, named as the client knows them.
+std::vector<std::string> cards_at(const GameTree& tree, const NodeRef& ref) {
+  // The tree may hold this line with suits swapped.
+  CardMap to_client = identity_card_map();
+  for (std::size_t card = 0; card < to_client.size(); ++card) {
+    to_client[ref.card_map[card]] = static_cast<std::uint8_t>(card);
+  }
+  std::vector<std::uint8_t> cards;
+  for (const std::uint32_t child : tree.children_of(ref.node)) {
+    cards.push_back(to_client[tree.nodes[child].card]);
+  }
+  for (const IsoDeal& iso : tree.iso_of(ref.node)) cards.push_back(to_client[iso.card]);
+  std::sort(cards.begin(), cards.end());
+  std::vector<std::string> names;
+  for (const std::uint8_t card : cards) names.push_back(Card(card).to_string());
+  return names;
+}
+
 /// Reads a lock from the wire against a solver's tree and hands.
 bool read_lock(const Solver& solver, const v1::NodeLock& lock, NodeRef* ref,
                std::vector<std::uint8_t>* locked, std::vector<float>* strategy,
@@ -808,44 +848,51 @@ Error JobManager::node(const std::string& id, const std::string& path, v1::GetNo
     range->mutable_reach()->Add(report.reach[player].begin(), report.reach[player].end());
     range->mutable_ev()->Add(report.ev[player].begin(), report.ev[player].end());
     range->set_range_ev(report.range_ev[player]);
+    range->mutable_equity()->Add(report.equity[player].begin(), report.equity[player].end());
+    range->set_range_equity(report.range_equity[player]);
   }
 
   if (report.type == NodeType::Action) {
-    const auto actor = static_cast<std::size_t>(report.player);
-    const auto& reach = report.reach[actor];
-    double total_reach = 0;
-    for (const float value : reach) total_reach += value;
-
-    for (std::size_t a = 0; a < report.actions.size(); ++a) {
-      const Action& action = report.actions[a];
-      v1::NodeAction* proto = out->add_actions();
-      proto->set_type(to_proto(action.type));
-      proto->set_amount(action.amount);
-      proto->set_label(action_label(action));
-      double weighted = 0;
-      for (std::size_t h = 0; h < reach.size(); ++h) {
-        weighted += static_cast<double>(reach[h]) * report.frequency(a, h);
-      }
-      proto->set_frequency(total_reach > 0 ? weighted / total_reach : 0.0);
-    }
+    fill_actions(report, [&] { return out->add_actions(); });
     out->mutable_strategy()->Add(report.strategy.begin(), report.strategy.end());
     for (const std::uint8_t flag : report.locked) out->add_locked(flag != 0);
   }
 
   if (report.type == NodeType::Chance) {
-    // The tree may hold this line with suits swapped; name the cards as the
-    // client knows them.
-    CardMap to_client = identity_card_map();
-    for (std::size_t card = 0; card < to_client.size(); ++card) {
-      to_client[ref->card_map[card]] = static_cast<std::uint8_t>(card);
-    }
-    std::vector<std::uint8_t> cards;
-    for (const std::uint32_t child : tree.children_of(ref->node)) {
-      cards.push_back(to_client[tree.nodes[child].card]);
-    }
-    for (const IsoDeal& iso : tree.iso_of(ref->node)) cards.push_back(to_client[iso.card]);
-    std::sort(cards.begin(), cards.end());
-    for (const std::uint8_t card : cards) out->add_next_cards(Card(card).to_string());
+    for (const std::string& card : cards_at(tree, *ref)) out->add_next_cards(card);
+  }
+  return {};
+}
+
+Error JobManager::runouts(const std::string& id, const std::string& path,
+                          v1::GetRunoutReportResponse* out) {
+  std::shared_ptr<Solution> solution;
+  if (Error error = acquire_solution(id, &solution)) return error;
+
+  const std::lock_guard solve_lock(solution->mutex);
+  const Solver& solver = *solution->solver;
+  const GameTree& tree = solver.game().tree;
+
+  std::string find_error;
+  const auto ref = tree.find(path, &find_error);
+  if (!ref) return make_error(ErrorKind::NotFound, "path '" + path + "': " + find_error);
+  if (tree.nodes[ref->node].type != NodeType::Chance) {
+    return make_error(ErrorKind::InvalidArgument, "no card is dealt at '" + path + "'");
+  }
+
+  for (const std::string& card : cards_at(tree, *ref)) {
+    const auto child = tree.find(path.empty() ? card : path + "/" + card);
+    if (!child) continue;
+    const NodeReport report = solver.report(*child);
+    v1::Runout* runout = out->add_runouts();
+    runout->set_card(card);
+    runout->set_oop_ev(report.range_ev[kOop]);
+    runout->set_ip_ev(report.range_ev[kIp]);
+    runout->set_oop_equity(report.range_equity[kOop]);
+    runout->set_ip_equity(report.range_equity[kIp]);
+    runout->set_type(to_proto(report.type));
+    runout->set_player(report.player == kOop ? v1::PLAYER_OOP : v1::PLAYER_IP);
+    fill_actions(report, [&] { return runout->add_actions(); });
   }
   return {};
 }

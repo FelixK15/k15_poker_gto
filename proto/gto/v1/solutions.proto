@@ -8,6 +8,10 @@ package gto.v1;
 service SolutionService {
   // Everything about one node of a job's solution.
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+
+  // Where a card is dealt: how each possible card changes the spot. Fails
+  // with INVALID_ARGUMENT if no card is dealt at the path.
+  rpc GetRunoutReport(GetRunoutReportRequest) returns (GetRunoutReportResponse);
 }
 
 message GetNodeRequest {
@@ -68,6 +72,36 @@ message PlayerRange {
   repeated float ev = 3;
   // Reach-weighted average of `ev`.
   double range_ev = 4;
+  // Equity of each hand against the other player's range: its share of the
+  // pot, 0 to 1, if both checked or called to the end.
+  repeated float equity = 5;
+  double range_equity = 6;
+}
+
+message GetRunoutReportRequest {
+  string job_id = 1;
+  // Path of the node where the card is dealt.
+  string path = 2;
+}
+
+// The spot right after one particular card.
+message Runout {
+  string card = 1;
+  double oop_ev = 2;
+  double ip_ev = 3;
+  double oop_equity = 4;
+  double ip_equity = 5;
+  // What follows the card: usually a decision, or a showdown or another
+  // card if the players are all-in.
+  NodeType type = 6;
+  // If a decision follows: whose it is and what they do with their range.
+  Player player = 7;
+  repeated NodeAction actions = 8;
+}
+
+message GetRunoutReportResponse {
+  // One entry per card that can come, in card order.
+  repeated Runout runouts = 1;
 }
 
 message GetNodeResponse {

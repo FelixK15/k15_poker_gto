@@ -116,7 +116,17 @@ class LocalServer {
       );
     }
 
+    // Completes if the server ends without us asking it to.
+    var stopping = false;
+    final lost = process.exitCode.then((code) async {
+      if (stopping) await Completer<void>().future;
+      return 'The solver on this computer stopped unexpectedly '
+          '(exit code $code). Start it again to continue; solves that were '
+          'saved are still there.';
+    });
+
     Future<void> stop() async {
+      stopping = true;
       // Closing stdin asks for a clean shutdown; give it time to save.
       try {
         await process.stdin.close();
@@ -144,6 +154,7 @@ class LocalServer {
         label: label,
         isLocal: true,
         onClose: stop,
+        lost: lost,
       );
     } catch (_) {
       process.kill();

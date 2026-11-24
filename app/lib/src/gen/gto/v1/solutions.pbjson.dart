@@ -113,13 +113,96 @@ const PlayerRange$json = {
     {'1': 'reach', '3': 2, '4': 3, '5': 2, '10': 'reach'},
     {'1': 'ev', '3': 3, '4': 3, '5': 2, '10': 'ev'},
     {'1': 'range_ev', '3': 4, '4': 1, '5': 1, '10': 'rangeEv'},
+    {'1': 'equity', '3': 5, '4': 3, '5': 2, '10': 'equity'},
+    {'1': 'range_equity', '3': 6, '4': 1, '5': 1, '10': 'rangeEquity'},
   ],
 };
 
 /// Descriptor for `PlayerRange`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List playerRangeDescriptor = $convert.base64Decode(
     'CgtQbGF5ZXJSYW5nZRIUCgVoYW5kcxgBIAMoCVIFaGFuZHMSFAoFcmVhY2gYAiADKAJSBXJlYW'
-    'NoEg4KAmV2GAMgAygCUgJldhIZCghyYW5nZV9ldhgEIAEoAVIHcmFuZ2VFdg==');
+    'NoEg4KAmV2GAMgAygCUgJldhIZCghyYW5nZV9ldhgEIAEoAVIHcmFuZ2VFdhIWCgZlcXVpdHkY'
+    'BSADKAJSBmVxdWl0eRIhCgxyYW5nZV9lcXVpdHkYBiABKAFSC3JhbmdlRXF1aXR5');
+
+@$core.Deprecated('Use getRunoutReportRequestDescriptor instead')
+const GetRunoutReportRequest$json = {
+  '1': 'GetRunoutReportRequest',
+  '2': [
+    {'1': 'job_id', '3': 1, '4': 1, '5': 9, '10': 'jobId'},
+    {'1': 'path', '3': 2, '4': 1, '5': 9, '10': 'path'},
+  ],
+};
+
+/// Descriptor for `GetRunoutReportRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getRunoutReportRequestDescriptor =
+    $convert.base64Decode(
+        'ChZHZXRSdW5vdXRSZXBvcnRSZXF1ZXN0EhUKBmpvYl9pZBgBIAEoCVIFam9iSWQSEgoEcGF0aB'
+        'gCIAEoCVIEcGF0aA==');
+
+@$core.Deprecated('Use runoutDescriptor instead')
+const Runout$json = {
+  '1': 'Runout',
+  '2': [
+    {'1': 'card', '3': 1, '4': 1, '5': 9, '10': 'card'},
+    {'1': 'oop_ev', '3': 2, '4': 1, '5': 1, '10': 'oopEv'},
+    {'1': 'ip_ev', '3': 3, '4': 1, '5': 1, '10': 'ipEv'},
+    {'1': 'oop_equity', '3': 4, '4': 1, '5': 1, '10': 'oopEquity'},
+    {'1': 'ip_equity', '3': 5, '4': 1, '5': 1, '10': 'ipEquity'},
+    {
+      '1': 'type',
+      '3': 6,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.NodeType',
+      '10': 'type'
+    },
+    {
+      '1': 'player',
+      '3': 7,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.Player',
+      '10': 'player'
+    },
+    {
+      '1': 'actions',
+      '3': 8,
+      '4': 3,
+      '5': 11,
+      '6': '.gto.v1.NodeAction',
+      '10': 'actions'
+    },
+  ],
+};
+
+/// Descriptor for `Runout`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List runoutDescriptor = $convert.base64Decode(
+    'CgZSdW5vdXQSEgoEY2FyZBgBIAEoCVIEY2FyZBIVCgZvb3BfZXYYAiABKAFSBW9vcEV2EhMKBW'
+    'lwX2V2GAMgASgBUgRpcEV2Eh0KCm9vcF9lcXVpdHkYBCABKAFSCW9vcEVxdWl0eRIbCglpcF9l'
+    'cXVpdHkYBSABKAFSCGlwRXF1aXR5EiQKBHR5cGUYBiABKA4yEC5ndG8udjEuTm9kZVR5cGVSBH'
+    'R5cGUSJgoGcGxheWVyGAcgASgOMg4uZ3RvLnYxLlBsYXllclIGcGxheWVyEiwKB2FjdGlvbnMY'
+    'CCADKAsyEi5ndG8udjEuTm9kZUFjdGlvblIHYWN0aW9ucw==');
+
+@$core.Deprecated('Use getRunoutReportResponseDescriptor instead')
+const GetRunoutReportResponse$json = {
+  '1': 'GetRunoutReportResponse',
+  '2': [
+    {
+      '1': 'runouts',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.gto.v1.Runout',
+      '10': 'runouts'
+    },
+  ],
+};
+
+/// Descriptor for `GetRunoutReportResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getRunoutReportResponseDescriptor =
+    $convert.base64Decode(
+        'ChdHZXRSdW5vdXRSZXBvcnRSZXNwb25zZRIoCgdydW5vdXRzGAEgAygLMg4uZ3RvLnYxLlJ1bm'
+        '91dFIHcnVub3V0cw==');
 
 @$core.Deprecated('Use getNodeResponseDescriptor instead')
 const GetNodeResponse$json = {

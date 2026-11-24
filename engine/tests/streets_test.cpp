@@ -474,6 +474,42 @@ TEST(HoldemTurn, ThreadsDoNotChangeTheSolution) {
   EXPECT_EQ(single.report(GameTree::kRoot).strategy, multi.report(GameTree::kRoot).strategy);
 }
 
+TEST(HoldemTurn, EquityIgnoresTheBettingAndMatchesBruteForce) {
+  for (const bool isomorphism : {true, false}) {
+    SCOPED_TRACE(isomorphism ? "with isomorphism" : "without isomorphism");
+    SpotConfig spot = turn_spot();
+    spot.use_isomorphism = isomorphism;
+    auto game = make_game(spot);
+    ASSERT_TRUE(game.has_value());
+    Solver solver(std::move(*game));
+    solve(solver, 30);
+
+    const double expected = brute_force_share(spot.board, spot.ranges[kOop], spot.ranges[kIp]);
+    const NodeReport root = solver.report(GameTree::kRoot);
+    EXPECT_NEAR(root.range_equity[kOop], expected, 1e-4);
+    EXPECT_NEAR(root.range_equity[kIp], 1.0 - expected, 1e-4);
+    // Being behind in equity is not the same as being behind in value.
+    EXPECT_NE(root.range_ev[kOop], 100.0 * root.range_equity[kOop]);
+    for (std::size_t player = 0; player < 2; ++player) {
+      for (const float equity : root.equity[player]) {
+        EXPECT_GE(equity, 0.0f);
+        EXPECT_LE(equity, 1.0f + 1e-5f);
+      }
+    }
+
+    // After a bet and a call the ranges are narrower, and the equity is
+    // theirs, not the root's.
+    const auto called = solver.game().tree.find("bet66/call/2c");
+    ASSERT_TRUE(called.has_value());
+    const NodeReport river = solver.report(*called);
+    EXPECT_NEAR(river.range_equity[kOop] + river.range_equity[kIp], 1.0, 1e-4);
+
+    // A fold has no equity to speak of.
+    const NodeReport fold = solver.report(*solver.game().tree.find("bet66/fold"));
+    EXPECT_EQ(fold.range_equity[kOop], 0.0);
+  }
+}
+
 TEST(HoldemTurn, DealtCardRemovesBlockedHands) {
   auto game = make_game(turn_spot());
   ASSERT_TRUE(game.has_value());
