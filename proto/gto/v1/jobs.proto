@@ -1,0 +1,115 @@
+// Solves run as jobs on the server. A job keeps its solution: once it has
+// started, its strategy can be browsed through SolutionService, also while it
+// is still running.
+
+syntax = "proto3";
+
+package gto.v1;
+
+import "gto/v1/common.proto";
+
+service JobService {
+  // Queues a spot for solving. The server solves one job at a time.
+  rpc Submit(SubmitJobRequest) returns (Job);
+
+  // All jobs, newest first.
+  rpc List(ListJobsRequest) returns (ListJobsResponse);
+
+  rpc Get(GetJobRequest) returns (Job);
+
+  // Stops a queued or running job, keeping what it has computed so far.
+  rpc Pause(PauseJobRequest) returns (Job);
+
+  // Puts a paused or cancelled job back in the queue. It continues where it
+  // stopped.
+  rpc Resume(ResumeJobRequest) returns (Job);
+
+  // Stops a job for good. Its solution so far stays browsable.
+  rpc Cancel(CancelJobRequest) returns (Job);
+
+  // Removes a job and its solution from the server.
+  rpc Delete(DeleteJobRequest) returns (DeleteJobResponse);
+
+  // Sends the job now and again whenever it changes. Ends when the job is
+  // done, cancelled, failed or deleted.
+  rpc Watch(WatchJobRequest) returns (stream Job);
+}
+
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  JOB_STATE_QUEUED = 1;
+  JOB_STATE_RUNNING = 2;
+  JOB_STATE_PAUSED = 3;
+  JOB_STATE_DONE = 4;
+  JOB_STATE_CANCELLED = 5;
+  JOB_STATE_FAILED = 6;
+}
+
+message Job {
+  string id = 1;
+  // Free-text label chosen by the client.
+  string name = 2;
+  JobState state = 3;
+  Spot spot = 4;
+  SolveSettings settings = 5;
+
+  // Progress. Exploitability and EVs are from the latest measurement, which
+  // happens every few iterations.
+  uint32 iteration = 6;
+  bool measured = 7;
+  double exploitability_pct = 8;
+  double oop_ev = 9;
+  double ip_ev = 10;
+
+  // Why the job failed, if it did.
+  string error = 11;
+
+  // Milliseconds since the Unix epoch; 0 if it has not happened.
+  int64 created_ms = 12;
+  int64 finished_ms = 13;
+  // Time spent solving, not counting time queued or paused.
+  double solve_seconds = 14;
+
+  // Memory the solve needs.
+  uint64 memory_bytes = 15;
+  // Whether the solution can be browsed: the job has run at least once.
+  bool has_solution = 16;
+}
+
+message SubmitJobRequest {
+  Spot spot = 1;
+  SolveSettings settings = 2;
+  string name = 3;
+}
+
+message ListJobsRequest {}
+
+message ListJobsResponse {
+  repeated Job jobs = 1;
+}
+
+message GetJobRequest {
+  string id = 1;
+}
+
+message PauseJobRequest {
+  string id = 1;
+}
+
+message ResumeJobRequest {
+  string id = 1;
+}
+
+message CancelJobRequest {
+  string id = 1;
+}
+
+message DeleteJobRequest {
+  string id = 1;
+}
+
+message DeleteJobResponse {}
+
+message WatchJobRequest {
+  string id = 1;
+}

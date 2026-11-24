@@ -1,5 +1,9 @@
 set(GTO_PROTO_FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/gto/v1/common.proto
+  ${CMAKE_CURRENT_SOURCE_DIR}/gto/v1/jobs.proto
   ${CMAKE_CURRENT_SOURCE_DIR}/gto/v1/server.proto
+  ${CMAKE_CURRENT_SOURCE_DIR}/gto/v1/solutions.proto
+  ${CMAKE_CURRENT_SOURCE_DIR}/gto/v1/trees.proto
 )
 
 set(GTO_PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/gen)

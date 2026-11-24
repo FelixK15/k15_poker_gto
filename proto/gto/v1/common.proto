@@ -1,0 +1,56 @@
+// Messages shared by several services: the description of a spot to solve.
+
+syntax = "proto3";
+
+package gto.v1;
+
+// Bet and raise options for one player on one street.
+message BetSizing {
+  // Bet sizes in percent of the pot (50 = half pot).
+  repeated double bet_pct = 1;
+  // Raise sizes in percent of the pot after calling (100 = pot-size raise).
+  repeated double raise_pct = 2;
+  // Also offer all-in as a bet and as a raise.
+  bool allin = 3;
+}
+
+message StreetSizing {
+  BetSizing oop = 1;
+  BetSizing ip = 2;
+}
+
+message TreeSettings {
+  StreetSizing flop = 1;
+  StreetSizing turn = 2;
+  StreetSizing river = 3;
+  // Most raises allowed on a street after the opening bet. Default 3.
+  optional uint32 raise_cap = 4;
+  // A bet or raise that puts in at least this percentage of the remaining
+  // stack becomes all-in. 0 disables the rule. Default 67.
+  optional double allin_threshold_pct = 5;
+}
+
+// A heads-up postflop spot.
+message Spot {
+  // Three, four or five cards, e.g. "Ks Td 7h".
+  string board = 1;
+  // Ranges in the usual text form, e.g. "QQ+, AKs, AQo:0.5, A5s-A2s".
+  string oop_range = 2;
+  string ip_range = 3;
+  // Pot at the start of the spot, in any chip unit (typically big blinds).
+  double pot = 4;
+  // Chips each player has behind at the start of the spot.
+  double effective_stack = 5;
+  // Rake in percent of the final pot, and its cap in chips (0 = no cap).
+  double rake_pct = 6;
+  double rake_cap = 7;
+  TreeSettings tree = 8;
+}
+
+message SolveSettings {
+  // Stop after this many iterations. Default 1000.
+  uint32 max_iterations = 1;
+  // Stop once exploitability is at or below this percentage of the pot.
+  // Default 0.3.
+  optional double target_exploitability_pct = 2;
+}

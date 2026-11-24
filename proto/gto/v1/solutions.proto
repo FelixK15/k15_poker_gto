@@ -1,0 +1,101 @@
+// Browsing a solution node by node. Solutions stay on the server; a client
+// only ever fetches the node it is looking at.
+
+syntax = "proto3";
+
+package gto.v1;
+
+service SolutionService {
+  // Everything about one node of a job's solution.
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+}
+
+message GetNodeRequest {
+  string job_id = 1;
+  // Line from the start of the spot: actions and dealt cards separated by
+  // '/', e.g. "check/bet50/call/Ts/check". Empty for the root. Actions are
+  // named as in NodeAction.label.
+  string path = 2;
+}
+
+enum NodeType {
+  NODE_TYPE_UNSPECIFIED = 0;
+  // A player has to act.
+  NODE_TYPE_ACTION = 1;
+  // The next card is dealt.
+  NODE_TYPE_CHANCE = 2;
+  // The hand ended with a fold.
+  NODE_TYPE_FOLD = 3;
+  // The hand ended at showdown.
+  NODE_TYPE_SHOWDOWN = 4;
+}
+
+enum Player {
+  PLAYER_OOP = 0;
+  PLAYER_IP = 1;
+}
+
+enum ActionType {
+  ACTION_TYPE_UNSPECIFIED = 0;
+  ACTION_TYPE_FOLD = 1;
+  ACTION_TYPE_CHECK = 2;
+  ACTION_TYPE_CALL = 3;
+  ACTION_TYPE_BET = 4;
+  ACTION_TYPE_RAISE = 5;
+  ACTION_TYPE_ALLIN = 6;
+}
+
+message NodeAction {
+  ActionType type = 1;
+  // Chips the player has put in on this street after the action. 0 for fold
+  // and check.
+  double amount = 2;
+  // The name to use for this action in a path, e.g. "bet50".
+  string label = 3;
+  // How often the acting player takes this action over their whole range.
+  double frequency = 4;
+}
+
+// One player's range at a node. The three arrays are parallel.
+message PlayerRange {
+  // Hands as four characters, higher card first, e.g. "AhKd".
+  repeated string hands = 1;
+  // How much of each hand gets here: its starting weight times the
+  // probability of the player's own actions on the way. 0 for hands that a
+  // dealt card makes impossible.
+  repeated float reach = 2;
+  // Expected value of each hand, in chips.
+  repeated float ev = 3;
+  // Reach-weighted average of `ev`.
+  double range_ev = 4;
+}
+
+message GetNodeResponse {
+  NodeType type = 1;
+  // Action node: who acts. Fold node: who folded.
+  Player player = 2;
+  // The path of this node as the client gave it.
+  string path = 3;
+
+  // Action nodes: what the player can do.
+  repeated NodeAction actions = 4;
+  // Action nodes: the acting player's strategy, one value per action and
+  // hand: strategy[action * hand_count + hand], with hands in the order of
+  // that player's PlayerRange.
+  repeated float strategy = 5;
+
+  // Chance nodes: the cards that can come.
+  repeated string next_cards = 6;
+
+  PlayerRange oop = 7;
+  PlayerRange ip = 8;
+
+  // Pot at this node, including bets made since the start of the spot.
+  double pot = 9;
+  // Chips each player has put in since the start of the spot.
+  double oop_committed = 10;
+  double ip_committed = 11;
+
+  // The job's iteration count when this was read.
+  uint32 iteration = 12;
+}

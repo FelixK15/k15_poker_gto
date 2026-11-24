@@ -39,27 +39,45 @@ cmake --build --preset linux
 ctest --preset linux
 ```
 
-Run it:
+## Running the server
 
 ```powershell
 build\windows\server\Release\gto-server.exe --port 50051
 ```
 
-The server listens on `127.0.0.1` unless `--host` says otherwise. There is no authentication or
-TLS yet, so do not expose it to an untrusted network.
+The server solves one job at a time and keeps jobs and their solutions in `./gto-data`
+(`--data-dir` changes that), so they survive a restart. `--help` lists all options.
+
+It listens on `127.0.0.1` unless `--host` says otherwise. To accept clients from other machines it
+needs an access token, which clients send with every call:
+
+```powershell
+$env:GTO_SERVER_TOKEN = "choose-a-long-random-string"
+build\windows\server\Release\gto-server.exe --host 0.0.0.0 --port 50051
+```
+
+Connections are not encrypted yet. On a network you do not trust, reach the server through a VPN
+or an SSH tunnel.
+
+The API is defined in `proto/gto/v1/`: `TreeService` (size estimate), `JobService` (submit, list,
+pause, resume, cancel, delete, watch) and `SolutionService` (browse a solution node by node).
 
 ## Solving a spot from the command line
 
-`gto-cli` runs the engine without a server. A spot is a JSON file with the board, both ranges,
-pot, stack and bet sizes; see [examples/](examples/). Only river spots work so far.
+`gto-cli` runs the engine without a server. A spot is a JSON file with the board (three, four or
+five cards), both ranges, pot, stack and bet sizes per street; see [examples/](examples/).
 
 ```powershell
-build\windows\cli\Release\gto-cli.exe solve examples\river_srp.json --node check --node check/bet6.6
+build\windows\cli\Release\gto-cli.exe solve examples\turn_srp.json --node check --node check/check/2c
 ```
 
-It prints the tree size, the convergence, both players' EV and a strategy table per hand class for
-the root and for each `--node` action line. If an action line does not exist, the error lists the
-actions available at that point.
+It prints the tree size and memory, the convergence, both players' EV and a strategy table per hand
+class for the root and for each `--node` line. A line is a `/`-separated list of actions and dealt
+cards, e.g. `bet5/call/Ah/check`. If a step does not exist, the error lists what is available
+there. `--threads <n>` limits the threads used (default: all).
+
+Flop trees grow quickly with ranges and bet sizes; the tool prints the memory it needs before it
+starts. `examples/flop_3bet.json` is a small one.
 
 ## Running the app
 

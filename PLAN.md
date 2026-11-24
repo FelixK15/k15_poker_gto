@@ -56,7 +56,7 @@ browsed **node by node**; the client never downloads a multi-gigabyte tree.
 - **Showdown evaluation in O(n)** per node: hands sorted by strength, prefix sums, card-removal
   correction. This is the single most important optimisation; the naive version is O(n²).
 - **Suit isomorphism** on turn and river cards: equivalent runouts are solved once and mapped back
-  (up to roughly 3x less work and memory on monotone/rainbow-neutral boards).
+  (about a quarter less work and memory on two-tone flops and more than half on monotone ones; nothing on rainbow flops, where no two suits are alike).
 - **Exploitability** from a best-response pass, reported in % of pot. Solves stop at a target
   exploitability, an iteration limit, or on user request.
 
@@ -219,8 +219,8 @@ Durations are rough guesses for one focused developer, not commitments.
 |---|---|---|---|
 | M0 | Skeleton | **Done.** Repo builds on Windows; proto compiles to C++ and Dart. Linux build and CI not yet run | 1 week |
 | M1 | Engine core | **Done.** Cards, evaluator, ranges, tree builder, DCFR solver with exploitability; river spots solve via `gto-cli`; Kuhn poker and a river spot with a known answer pass | 3–4 weeks |
-| M2 | Full postflop | Chance nodes, so turn and flop solve; Leduc poker test (needs a chance node, moved here from M1); isomorphism; multithreading; results match reference solvers | 4–6 weeks |
-| M3 | Server | Jobs, queue, progress stream, solution store, `GetNode`, auth | 3 weeks |
+| M2 | Full postflop | **Done, except the cross-check.** Chance nodes, so turn and flop spots solve; suit isomorphism; multithreading; Leduc poker reaches its known value; check-down EVs match brute-force equity. Still open: comparing full spots against TexasSolver / postflop-solver | 4–6 weeks |
+| M3 | Server | **Done, except TLS and compression.** Jobs with a queue, pause, resume, cancel and delete; progress stream; solutions kept on disk and browsable node by node, also while solving; size estimate; access token. Still open: TLS (planned with the client in M4) and compressing saved solutions | 3 weeks |
 | M4 | Client MVP | Connect screen (local/remote), manual spot setup, solve, browse strategy matrix on Windows | 4–5 weeks |
 | M5 | Range library | 6-max/9-max × 100/200/300BB scenarios, range editor, import/export, tree presets | 2–3 weeks |
 | M6 | Node locking | Per-hand locks in the engine with warm-started re-solve; `Locks` API; lock editor and compare view in the client | 3–4 weeks |
