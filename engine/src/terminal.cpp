@@ -28,30 +28,35 @@ std::string holdem_hand_name(const Hand& hand) {
   return a.to_string() + b.to_string();
 }
 
-TerminalEvaluator::TerminalEvaluator(const HandSets& sets) : sets_(&sets) {
-  for (int player = 0; player < 2; ++player) {
-    const auto& hands = sets.hands[player];
-    const auto& strength = sets.strength[player];
-    assert(hands.size() == strength.size());
-    if (!hands.empty()) hole_cards_ = hands.front().num_cards;
-
-    auto& order = sorted_[player];
-    order.resize(hands.size());
+ShowdownTable make_showdown_table(std::array<std::vector<HandStrength>, 2> strength) {
+  ShowdownTable table;
+  table.strength = std::move(strength);
+  for (std::size_t player = 0; player < 2; ++player) {
+    const auto& values = table.strength[player];
+    auto& order = table.order[player];
+    order.resize(values.size());
     std::iota(order.begin(), order.end(), 0u);
     std::sort(order.begin(), order.end(),
-              [&](std::uint32_t a, std::uint32_t b) { return strength[a] < strength[b]; });
+              [&](std::uint32_t a, std::uint32_t b) { return values[a] < values[b]; });
+  }
+  return table;
+}
+
+TerminalEvaluator::TerminalEvaluator(const Hands& hands) : hands_(&hands) {
+  for (const auto& player_hands : hands) {
+    if (!player_hands.empty()) hole_cards_ = player_hands.front().num_cards;
   }
   assert(hole_cards_ == 1 || hole_cards_ == 2);
 
-  for (int player = 0; player < 2; ++player) {
+  for (std::size_t player = 0; player < 2; ++player) {
     std::unordered_map<std::uint64_t, std::int32_t> opponent_index;
-    const auto& opponent_hands = sets.hands[1 - player];
+    const auto& opponent_hands = hands[1 - player];
     for (std::size_t i = 0; i < opponent_hands.size(); ++i) {
       opponent_index.emplace(opponent_hands[i].mask, static_cast<std::int32_t>(i));
     }
-    auto& same = same_hand_[player];
-    same.reserve(sets.hands[player].size());
-    for (const Hand& hand : sets.hands[player]) {
+    auto& same = same_hand_[static_cast<std::size_t>(player)];
+    same.reserve(hands[player].size());
+    for (const Hand& hand : hands[player]) {
       const auto it = opponent_index.find(hand.mask);
       same.push_back(it == opponent_index.end() ? -1 : it->second);
     }
@@ -60,11 +65,11 @@ TerminalEvaluator::TerminalEvaluator(const HandSets& sets) : sets_(&sets) {
 
 void TerminalEvaluator::compatible_reach(int player, const float* opponent_reach,
                                          float* out) const {
-  const auto& hands = sets_->hands[player];
-  const auto& opponent_hands = sets_->hands[1 - player];
+  const auto& hands = (*hands_)[static_cast<std::size_t>(player)];
+  const auto& opponent_hands = (*hands_)[static_cast<std::size_t>(1 - player)];
 
   double total = 0;
-  double card_sum[kMaxCardIds] = {};
+  double card_sum[64] = {};
   for (std::size_t j = 0; j < opponent_hands.size(); ++j) {
     const double reach = opponent_reach[j];
     if (reach == 0) continue;
@@ -73,7 +78,7 @@ void TerminalEvaluator::compatible_reach(int player, const float* opponent_reach
     for (int c = 0; c < hand.num_cards; ++c) card_sum[hand.cards[c]] += reach;
   }
 
-  const auto& same = same_hand_[player];
+  const auto& same = same_hand_[static_cast<std::size_t>(player)];
   for (std::size_t i = 0; i < hands.size(); ++i) {
     const Hand& hand = hands[i];
     double value = total;
@@ -88,28 +93,28 @@ void TerminalEvaluator::fold(int player, double payoff, const float* opponent_re
                              float* out) const {
   compatible_reach(player, opponent_reach, out);
   const auto scale = static_cast<float>(payoff);
-  const std::size_t count = sets_->hands[player].size();
+  const std::size_t count = (*hands_)[static_cast<std::size_t>(player)].size();
   for (std::size_t i = 0; i < count; ++i) out[i] *= scale;
 }
 
-void TerminalEvaluator::showdown(int player, double win, double tie, double lose,
-                                 const float* opponent_reach, float* out) const {
+void TerminalEvaluator::showdown(const ShowdownTable& table, int player, double win, double tie,
+                                 double lose, const float* opponent_reach, float* out) const {
   const int opponent = 1 - player;
-  const auto& hands = sets_->hands[player];
-  const auto& opponent_hands = sets_->hands[opponent];
-  const auto& strength = sets_->strength[player];
-  const auto& opponent_strength = sets_->strength[opponent];
-  const auto& order = sorted_[player];
-  const auto& opponent_order = sorted_[opponent];
+  const auto& hands = (*hands_)[static_cast<std::size_t>(player)];
+  const auto& opponent_hands = (*hands_)[static_cast<std::size_t>(opponent)];
+  const auto& strength = table.strength[static_cast<std::size_t>(player)];
+  const auto& opponent_strength = table.strength[static_cast<std::size_t>(opponent)];
+  const auto& order = table.order[static_cast<std::size_t>(player)];
+  const auto& opponent_order = table.order[static_cast<std::size_t>(opponent)];
 
   // value = win·W + tie·T + lose·L with T = compatible − W − L
   //       = tie·compatible + (win − tie)·W + (lose − tie)·L
   compatible_reach(player, opponent_reach, out);
   for (std::size_t i = 0; i < hands.size(); ++i) out[i] = static_cast<float>(tie * out[i]);
 
-  // An opponent hand of different strength can share at most one card with
-  // ours in a way the per-card sums count exactly once, so no correction for
-  // the identical hand is needed in the two passes below.
+  // The identical hand has equal strength, so it never appears in the two
+  // strict passes below; every other blocked hand shares exactly one card and
+  // is counted once by the per-card sums.
   const auto accumulate = [&](double& sum, double* card_sum, std::uint32_t opponent_hand) {
     const double reach = opponent_reach[opponent_hand];
     if (reach == 0) return;
@@ -126,7 +131,7 @@ void TerminalEvaluator::showdown(int player, double win, double tie, double lose
   // Ascending: opponent hands we beat.
   {
     double sum = 0;
-    double card_sum[kMaxCardIds] = {};
+    double card_sum[64] = {};
     std::size_t j = 0;
     for (const std::uint32_t i : order) {
       while (j < opponent_order.size() && opponent_strength[opponent_order[j]] < strength[i]) {
@@ -139,7 +144,7 @@ void TerminalEvaluator::showdown(int player, double win, double tie, double lose
   // Descending: opponent hands that beat us.
   {
     double sum = 0;
-    double card_sum[kMaxCardIds] = {};
+    double card_sum[64] = {};
     std::size_t j = opponent_order.size();
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
       const std::uint32_t i = *it;

@@ -1,0 +1,30 @@
+// A turn in a single-raised pot, button against big blind, 100BB deep.
+// Chips are big blinds. Sizes are percentages of the pot.
+//
+// Try: --node check --node check/check/2c --node bet5/call/Ah
+{
+  "board": "Ks Td 7h 4c",
+  "pot": 10,
+  "effective_stack": 95,
+  "ranges": {
+    "oop": "TT-22, AQo-ATo, KQo-KTo, QJo, AJs-A2s, KQs-K2s, QJs-Q8s, JTs-J8s, T9s-T7s, 98s-97s, 87s, 76s, 65s",
+    "ip": "AA:0.25, KK:0.5, QQ-22, AKs-A2s, AKo-ATo, KQs-K8s, KQo-KTo, QJs-Q9s, QJo, JTs-J9s, T9s, 98s, 87s, 76s"
+  },
+  "tree": {
+    "turn": {
+      "oop": { "bet_pct": [50], "raise_pct": [60] },
+      "ip": { "bet_pct": [50, 100], "raise_pct": [60] }
+    },
+    "river": {
+      "oop": { "bet_pct": [50, 100], "raise_pct": [60], "allin": true },
+      "ip": { "bet_pct": [50, 100], "raise_pct": [60], "allin": true }
+    },
+    "raise_cap": 2,
+    "allin_threshold_pct": 67
+  },
+  "solve": {
+    "max_iterations": 500,
+    "target_exploitability_pct": 0.5,
+    "check_interval": 20
+  }
+}

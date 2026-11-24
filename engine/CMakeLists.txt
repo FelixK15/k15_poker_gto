@@ -10,9 +10,13 @@ add_library(solver STATIC
   src/hand_evaluator.cpp
   src/range.cpp
   src/solver.cpp
+  src/spot.cpp
   src/terminal.cpp
+  src/thread_pool.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/version.cpp
 )
 add_library(gto::solver ALIAS solver)
 
+find_package(Threads REQUIRED)
+target_link_libraries(solver PUBLIC Threads::Threads)
 target_include_directories(solver PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

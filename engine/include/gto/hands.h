@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -29,11 +30,18 @@ Hand make_hand(std::initializer_list<int> card_ids, float weight);
 /// Text form of a Hold'em hand, higher rank first, e.g. "AhKd".
 std::string holdem_hand_name(const Hand& hand);
 
-/// What the solver needs to know about both players' private hands.
-struct HandSets {
-  std::array<std::vector<Hand>, 2> hands;
-  /// Showdown strength of each hand; larger wins, equal ties.
+/// Both players' private hands, indexed by player.
+using Hands = std::array<std::vector<Hand>, 2>;
+
+/// Who beats whom on one complete board.
+struct ShowdownTable {
+  /// Strength of each hand; larger wins, equal ties. Hands that the board
+  /// makes impossible may hold any value: they never reach a showdown.
   std::array<std::vector<HandStrength>, 2> strength;
+  /// Hand indices ordered by ascending strength.
+  std::array<std::vector<std::uint32_t>, 2> order;
 };
+
+ShowdownTable make_showdown_table(std::array<std::vector<HandStrength>, 2> strength);
 
 }  // namespace gto
