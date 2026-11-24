@@ -136,6 +136,13 @@ grpc::Status SolutionServiceImpl::GetNode(grpc::ServerContext* context,
   return to_status(jobs_.node(request->job_id(), request->path(), response));
 }
 
+grpc::Status SolutionServiceImpl::GetRunoutReport(grpc::ServerContext* context,
+                                                  const v1::GetRunoutReportRequest* request,
+                                                  v1::GetRunoutReportResponse* response) {
+  GTO_REQUIRE_AUTH(context);
+  return to_status(jobs_.runouts(request->job_id(), request->path(), response));
+}
+
 grpc::Status LockServiceImpl::Resolve(grpc::ServerContext* context,
                                       const v1::ResolveRequest* request, v1::Job* response) {
   GTO_REQUIRE_AUTH(context);

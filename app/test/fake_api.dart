@@ -36,6 +36,10 @@ class FakeApi implements GtoApi {
   final List<({String parentId, List<NodeLock> locks, SolveSettings settings})>
   resolved = [];
   Object? resolveError;
+  final Map<String, List<Runout>> runouts = {};
+
+  @override
+  Future<String>? lost;
 
   EstimateTreeResponse estimateResult = EstimateTreeResponse(
     nodes: Int64(15774),
@@ -132,6 +136,16 @@ class FakeApi implements GtoApi {
   }
 
   @override
+  Future<List<Runout>> getRunouts(String jobId, String path) async {
+    calls.add('runouts $path');
+    final result = runouts[path];
+    if (result == null) {
+      throw GrpcError.invalidArgument("no card is dealt at '$path'");
+    }
+    return result;
+  }
+
+  @override
   Future<Job> resolve(
     String parentId,
     List<NodeLock> locks,
@@ -189,11 +203,14 @@ PlayerRange rangeOf(Map<String, double> classEv, {double reach = 1}) {
       range.hands.add(hand);
       range.reach.add(reach);
       range.ev.add(ev);
+      // Made up, but in step with the value: 0 to 1.
+      range.equity.add((ev / 20).clamp(0.0, 1.0));
       value += ev * reach;
       weight += reach;
     }
   });
   range.rangeEv = weight > 0 ? value / weight : 0;
+  range.rangeEquity = (range.rangeEv / 20).clamp(0.0, 1.0);
   return range;
 }
 

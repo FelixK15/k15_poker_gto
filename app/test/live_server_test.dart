@@ -6,6 +6,9 @@
 //   gto-server --port 50051
 //   $env:GTO_SERVER_PORT = "50051"; flutter test test/live_server_test.dart
 //
+// For a server started with --tls-cert, also set GTO_SERVER_CERT to that
+// certificate file and GTO_SERVER_HOST to a name the certificate is for.
+//
 // Starting the server from the app, as "This computer" does:
 //
 //   $env:GTO_SERVER_PATH = "..\build\windows\server\Release\gto-server.exe"
@@ -83,6 +86,11 @@ void main() {
   final host = environment['GTO_SERVER_HOST'] ?? '127.0.0.1';
   final token = environment['GTO_SERVER_TOKEN'] ?? '';
   final serverPath = environment['GTO_SERVER_PATH'] ?? '';
+  // PEM file of the server's certificate, if it was started with TLS.
+  final certificatePath = environment['GTO_SERVER_CERT'] ?? '';
+  final tls = certificatePath.isNotEmpty;
+  List<int>? certificate() =>
+      tls ? File(certificatePath).readAsBytesSync() : null;
 
   group('a running server', () {
     test('describes itself and solves a spot', () async {
@@ -90,6 +98,8 @@ void main() {
         host: host,
         port: port!,
         token: token,
+        tls: tls,
+        trustedCertificate: certificate(),
       );
       addTearDown(api.close);
 
@@ -105,7 +115,13 @@ void main() {
 
     test('turns away a wrong token', () async {
       await expectLater(
-        GrpcGtoApi.connect(host: host, port: port!, token: 'not-the-token'),
+        GrpcGtoApi.connect(
+          host: host,
+          port: port!,
+          token: 'not-the-token',
+          tls: tls,
+          trustedCertificate: certificate(),
+        ),
         throwsA(
           isA<GrpcError>().having(
             (e) => e.code,
@@ -115,6 +131,24 @@ void main() {
         ),
       );
     }, skip: token.isEmpty ? 'the server has no token' : false);
+
+    test(
+      'an encrypting server refuses plain and untrusted connections',
+      () async {
+        // Without TLS the two sides do not understand each other.
+        await expectLater(
+          GrpcGtoApi.connect(host: host, port: port!, token: token),
+          throwsA(isA<GrpcError>()),
+        );
+        // With TLS but without trusting its self-signed certificate, the
+        // client must not go on.
+        await expectLater(
+          GrpcGtoApi.connect(host: host, port: port, token: token, tls: true),
+          throwsA(isA<GrpcError>()),
+        );
+      },
+      skip: tls ? false : 'the server does not use TLS',
+    );
   }, skip: port == null ? 'GTO_SERVER_PORT not set' : false);
 
   group('a server started by the app', () {

@@ -26,3 +26,6 @@ Thumbs.db
 
 # Server data (jobs and solutions)
 gto-data/
+
+# Release packages
+/dist/

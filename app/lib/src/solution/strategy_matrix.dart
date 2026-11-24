@@ -3,6 +3,33 @@ import 'package:flutter/material.dart';
 import 'action_style.dart';
 import 'matrix_model.dart';
 
+/// What the grid's colours stand for.
+enum MatrixView {
+  /// How often each class takes each action.
+  strategy('Strategy'),
+
+  /// What each class is worth, in chips.
+  ev('EV'),
+
+  /// Each class's share of the pot at showdown.
+  equity('Equity');
+
+  const MatrixView(this.label);
+
+  final String label;
+}
+
+/// Colour for a value between [low] (red) and [high] (green).
+Color valueColor(double value, double low, double high) {
+  const bad = Color(0xFFD9534F);
+  const middle = Color(0xFFE0B94F);
+  const good = Color(0xFF45A36B);
+  final t = high > low ? ((value - low) / (high - low)).clamp(0.0, 1.0) : 0.5;
+  return t < 0.5
+      ? Color.lerp(bad, middle, t * 2)!
+      : Color.lerp(middle, good, (t - 0.5) * 2)!;
+}
+
 /// The 13×13 grid of hand classes. Each cell is filled from the bottom as far
 /// as the class is in the range, split left to right by how often it takes
 /// each action.
@@ -11,11 +38,15 @@ class StrategyMatrix extends StatelessWidget {
     super.key,
     required this.model,
     required this.colors,
+    this.view = MatrixView.strategy,
     this.selected,
     this.onSelected,
   });
 
   final MatrixModel model;
+
+  /// Strategy splits each cell by action; the other views colour it by value.
+  final MatrixView view;
 
   /// One colour per action of [model].
   final List<Color> colors;
@@ -47,6 +78,7 @@ class StrategyMatrix extends StatelessWidget {
               painter: _MatrixPainter(
                 model: model,
                 colors: colors,
+                view: view,
                 selected: selected,
                 fontFamily: DefaultTextStyle.of(context).style.fontFamily,
                 emptyColor: scheme.surfaceContainerHighest,
@@ -65,6 +97,7 @@ class _MatrixPainter extends CustomPainter {
   _MatrixPainter({
     required this.model,
     required this.colors,
+    required this.view,
     required this.selected,
     required this.fontFamily,
     required this.emptyColor,
@@ -74,6 +107,7 @@ class _MatrixPainter extends CustomPainter {
 
   final MatrixModel model;
   final List<Color> colors;
+  final MatrixView view;
   final int? selected;
   final String? fontFamily;
   final Color emptyColor;
@@ -86,6 +120,19 @@ class _MatrixPainter extends CustomPainter {
     final gap = cell > 24 ? 1.0 : 0.5;
     final paint = Paint();
     final fontSize = (cell * 0.3).clamp(7.0, 15.0);
+
+    // EV is coloured relative to the hands on screen; equity runs 0 to 1.
+    var low = 0.0, high = 1.0;
+    if (view == MatrixView.ev) {
+      final values = [
+        for (final c in model.cells)
+          if (!c.isEmpty) c.ev,
+      ];
+      if (values.isNotEmpty) {
+        low = values.reduce((a, b) => a < b ? a : b);
+        high = values.reduce((a, b) => a > b ? a : b);
+      }
+    }
 
     for (var row = 0; row < 13; ++row) {
       for (var col = 0; col < 13; ++col) {
@@ -102,7 +149,17 @@ class _MatrixPainter extends CustomPainter {
           // Fill from the bottom as far as the class is in the range.
           final height = rect.height * data.fraction;
           final top = rect.bottom - height;
-          if (model.actionCount == 0) {
+          if (view != MatrixView.strategy) {
+            canvas.drawRect(
+              Rect.fromLTRB(rect.left, top, rect.right, rect.bottom),
+              paint
+                ..color = valueColor(
+                  view == MatrixView.ev ? data.ev : data.equity,
+                  low,
+                  high,
+                ),
+            );
+          } else if (model.actionCount == 0) {
             canvas.drawRect(
               Rect.fromLTRB(rect.left, top, rect.right, rect.bottom),
               paint..color = rangeColor,
@@ -157,6 +214,30 @@ class _MatrixPainter extends CustomPainter {
             textDirection: TextDirection.ltr,
           )..layout(maxWidth: rect.width);
           text.paint(canvas, rect.topLeft + const Offset(3, 2));
+
+          // The number itself, where there is room for it.
+          if (view != MatrixView.strategy && !data.isEmpty && cell >= 34) {
+            final number = TextPainter(
+              text: TextSpan(
+                text: view == MatrixView.ev
+                    ? data.ev.toStringAsFixed(1)
+                    : '${(data.equity * 100).round()}%',
+                style: TextStyle(
+                  fontFamily: fontFamily,
+                  fontSize: fontSize * 0.9,
+                  color: const Color(0xFFFFFFFF),
+                  shadows: const [
+                    Shadow(blurRadius: 2, color: Color(0xCC000000)),
+                  ],
+                ),
+              ),
+              textDirection: TextDirection.ltr,
+            )..layout(maxWidth: rect.width);
+            number.paint(
+              canvas,
+              Offset(rect.left + 3, rect.bottom - number.height - 2),
+            );
+          }
         }
       }
     }
@@ -182,6 +263,7 @@ class _MatrixPainter extends CustomPainter {
   @override
   bool shouldRepaint(_MatrixPainter old) =>
       old.model != model ||
+      old.view != view ||
       old.selected != selected ||
       old.colors != colors ||
       old.emptyColor != emptyColor;

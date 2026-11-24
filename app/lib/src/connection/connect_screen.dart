@@ -26,6 +26,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   final _hostController = TextEditingController(text: '127.0.0.1');
   final _portController = TextEditingController(text: '50051');
   final _tokenController = TextEditingController();
+  final _certificateController = TextEditingController();
+  bool _tls = false;
 
   late final bool _localSupported =
       widget.localSupported ?? localSolvingSupported;
@@ -40,6 +42,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     _hostController.dispose();
     _portController.dispose();
     _tokenController.dispose();
+    _certificateController.dispose();
     super.dispose();
   }
 
@@ -61,6 +64,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             host: _hostController.text.trim(),
             port: int.parse(_portController.text.trim()),
             token: _tokenController.text.trim(),
+            tls: _tls,
+            certificatePath: _certificateController.text.trim(),
           ),
         );
       }
@@ -71,6 +76,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       setState(() {
         _error = error is LocalServerException
             ? error.message
+            : error is CertificateFileException
+            ? error.toString()
             : describeError(error);
         _connecting = false;
       });
@@ -80,6 +87,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Shown until the next attempt: why we are back on this screen.
+    final lost = ref.watch(connectionLostProvider);
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -145,6 +154,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                             _mode == ConnectionMode.local ? 'Start' : 'Connect',
                           ),
                   ),
+                  if (_error == null && lost != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      lost,
+                      key: const Key('connection-lost'),
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -226,6 +243,33 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             ),
             onFieldSubmitted: (_) => _connect(),
           ),
+          SwitchListTile(
+            key: const Key('tls-switch'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Encrypted connection (TLS)'),
+            subtitle: const Text(
+              'For servers started with a certificate. Use it whenever the '
+              'server is not on your own network.',
+            ),
+            value: _tls,
+            onChanged: _connecting ? null : (v) => setState(() => _tls = v),
+          ),
+          if (_tls)
+            TextFormField(
+              key: const Key('certificate-field'),
+              controller: _certificateController,
+              enabled: !_connecting,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                labelText: 'Server certificate file',
+                helperText:
+                    'Only for a self-signed certificate: the path of its '
+                    '.pem file on this device.',
+                helperMaxLines: 2,
+                border: OutlineInputBorder(),
+              ),
+            ),
         ],
       ),
     );

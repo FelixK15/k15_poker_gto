@@ -123,6 +123,12 @@ struct NodeReport {
   std::array<std::vector<float>, 2> ev;
   /// Expected value of each player's whole range at this node, in chips.
   std::array<double, 2> range_ev{0, 0};
+  /// Equity of each hand against the other player's range here: its share of
+  /// the pot if no more money went in, from 0 to 1. Zero where the hand ended
+  /// with a fold.
+  std::array<std::vector<float>, 2> equity;
+  /// Equity of each player's whole range.
+  std::array<double, 2> range_equity{0, 0};
   /// For each hand of the acting player, whether its strategy here is locked.
   /// Empty unless this is an action node.
   std::vector<std::uint8_t> locked;
@@ -219,7 +225,9 @@ class Solver {
     std::size_t top_ = 0;
   };
 
-  enum class Mode { Train, Average, BestResponse };
+  /// Equity plays no strategy at all: both players check or call to the
+  /// end, and a win counts 1, a tie one half.
+  enum class Mode { Train, Average, BestResponse, Equity };
 
   /// Values of `node` for every hand of `player` given the opponent's reach.
   /// Train updates regrets and average strategies on the way; the other two

@@ -4,8 +4,11 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -31,6 +34,8 @@ struct Options {
   unsigned threads = 0;
   std::uint64_t memory_limit_mb = 0;  // 0 = 80% of the machine's RAM
   bool exit_with_stdin = false;
+  std::string tls_cert;
+  std::string tls_key;
 };
 
 void print_usage() {
@@ -50,14 +55,16 @@ void print_usage() {
       "                          everything in memory only.\n"
       "  --threads <n>           Threads for solving (default: all).\n"
       "  --memory-limit-mb <n>   Largest solve to accept (default: 80% of RAM).\n"
+      "  --tls-cert <file>       Certificate chain in PEM form. Together with\n"
+      "  --tls-key <file>        its private key this encrypts all connections.\n"
       "  --exit-with-stdin       Shut down when standard input closes. For a\n"
       "                          client that starts the server itself: the\n"
       "                          server then never outlives it.\n"
       "  --version               Print version and exit.\n"
       "  --help                  Print this help and exit.\n\n"
       "After startup the server prints one line 'LISTENING <port>' on stdout.\n"
-      "Connections are not encrypted yet: on untrusted networks, put the server\n"
-      "behind a VPN or an SSH tunnel.");
+      "Without --tls-cert and --tls-key connections are not encrypted: on an\n"
+      "untrusted network use them, or put the server behind a VPN or SSH tunnel.");
 }
 
 template <typename T>
@@ -117,6 +124,14 @@ bool parse_args(int argc, char** argv, Options& options, int& exit_code) {
       if (!parse_number(next(), 1u, 4096u, options.threads)) {
         return fail("--threads needs a number from 1 to 4096");
       }
+    } else if (arg == "--tls-cert") {
+      const char* value = next();
+      if (value == nullptr || *value == '\0') return fail("--tls-cert needs a file");
+      options.tls_cert = value;
+    } else if (arg == "--tls-key") {
+      const char* value = next();
+      if (value == nullptr || *value == '\0') return fail("--tls-key needs a file");
+      options.tls_key = value;
     } else if (arg == "--exit-with-stdin") {
       options.exit_with_stdin = true;
     } else if (arg == "--memory-limit-mb") {
@@ -130,6 +145,15 @@ bool parse_args(int argc, char** argv, Options& options, int& exit_code) {
     }
   }
   return true;
+}
+
+/// The whole file, or nothing if it cannot be read.
+std::optional<std::string> read_file(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) return std::nullopt;
+  std::ostringstream content;
+  content << in.rdbuf();
+  return content.str();
 }
 
 bool is_loopback(const std::string& host) {
@@ -172,10 +196,29 @@ int main(int argc, char** argv) {
   gto::server::SolutionServiceImpl solution_service(auth, jobs);
   gto::server::LockServiceImpl lock_service(auth, jobs);
 
+  std::shared_ptr<grpc::ServerCredentials> credentials = grpc::InsecureServerCredentials();
+  const bool tls = !options.tls_cert.empty() || !options.tls_key.empty();
+  if (tls) {
+    if (options.tls_cert.empty() || options.tls_key.empty()) {
+      std::fputs("error: --tls-cert and --tls-key must be given together\n", stderr);
+      return EXIT_FAILURE;
+    }
+    const auto cert = read_file(options.tls_cert);
+    const auto key = read_file(options.tls_key);
+    if (!cert || !key) {
+      std::fprintf(stderr, "error: cannot read %s\n",
+                   (!cert ? options.tls_cert : options.tls_key).c_str());
+      return EXIT_FAILURE;
+    }
+    grpc::SslServerCredentialsOptions ssl;
+    ssl.pem_key_cert_pairs.push_back({*key, *cert});
+    credentials = grpc::SslServerCredentials(ssl);
+  }
+
   int bound_port = 0;
   grpc::ServerBuilder builder;
-  builder.AddListeningPort(options.host + ":" + std::to_string(options.port),
-                           grpc::InsecureServerCredentials(), &bound_port);
+  builder.AddListeningPort(options.host + ":" + std::to_string(options.port), credentials,
+                           &bound_port);
   builder.RegisterService(&server_service);
   builder.RegisterService(&tree_service);
   builder.RegisterService(&job_service);
@@ -193,8 +236,10 @@ int main(int argc, char** argv) {
   spdlog::info("data directory: {}",
                options.data_dir.empty() ? "none, memory only" : options.data_dir);
   spdlog::info("memory limit per solve: {} MB", config.memory_budget_bytes >> 20);
-  if (!is_loopback(options.host)) {
-    spdlog::warn("connections are not encrypted; use a VPN or SSH tunnel on untrusted networks");
+  spdlog::info("encryption: {}", tls ? "TLS" : "none");
+  if (!tls && !is_loopback(options.host)) {
+    spdlog::warn("connections are not encrypted; pass --tls-cert and --tls-key, or use a VPN "
+                 "or SSH tunnel on untrusted networks");
   }
   // Machine-readable line for a client that started us with --port 0.
   std::printf("LISTENING %d\n", bound_port);

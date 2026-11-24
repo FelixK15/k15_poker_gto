@@ -81,6 +81,9 @@ class JobManager {
 
   Error node(const std::string& id, const std::string& path, v1::GetNodeResponse* out);
 
+  /// How each card that can come at a chance node changes the spot.
+  Error runouts(const std::string& id, const std::string& path, v1::GetRunoutReportResponse* out);
+
   /// Queues a re-solve of a job under locks, as a new job that starts from
   /// the parent's solution.
   Error resolve(const v1::ResolveRequest& request, v1::Job* out);

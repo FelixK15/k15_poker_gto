@@ -46,6 +46,11 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// player to act.
   int? _selected;
   Player? _view;
+  MatrixView _matrixView = MatrixView.strategy;
+
+  /// The runout report of the chance node on screen, once asked for.
+  List<Runout>? _runouts;
+  bool _loadingRunouts = false;
 
   /// The locks to re-solve with: this solve's own, plus what the user adds.
   late List<NodeLock> _locks = [...widget.job.locks];
@@ -127,8 +132,26 @@ class _SolutionScreenState extends State<SolutionScreen> {
         ..addAll(path);
       _selected = null;
       _view = null;
+      _runouts = null;
     });
     _load();
+  }
+
+  Future<void> _loadRunouts() async {
+    final path = _path.join('/');
+    setState(() => _loadingRunouts = true);
+    try {
+      final runouts = await widget.api.getRunouts(_job.id, path);
+      // The user may have moved on while it was computed.
+      if (!mounted || path != _path.join('/')) return;
+      setState(() => _runouts = runouts);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(describeError(error))));
+    } finally {
+      if (mounted) setState(() => _loadingRunouts = false);
+    }
   }
 
   Future<void> _addLock(GetNodeResponse node) async {
@@ -363,6 +386,26 @@ class _SolutionScreenState extends State<SolutionScreen> {
           colors: colors,
           onStep: (step) => _go([..._path, step]),
         ),
+        if (node.type == NodeType.NODE_TYPE_CHANCE) ...[
+          const SizedBox(height: 8),
+          if (_runouts == null)
+            OutlinedButton.icon(
+              key: const Key('runouts-button'),
+              onPressed: _loadingRunouts ? null : _loadRunouts,
+              icon: _loadingRunouts
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.bar_chart, size: 18),
+              label: const Text('Compare the cards'),
+            )
+          else
+            _RunoutReport(
+              runouts: _runouts!,
+              onPick: (card) => _go([..._path, card]),
+            ),
+        ],
         if (node.type == NodeType.NODE_TYPE_ACTION) ...[
           const SizedBox(height: 8),
           Wrap(
@@ -390,6 +433,7 @@ class _SolutionScreenState extends State<SolutionScreen> {
       key: const Key('matrix'),
       model: model,
       colors: colors,
+      view: _matrixView,
       selected: _selected,
       onSelected: (index) =>
           setState(() => _selected = _selected == index ? null : index),
@@ -407,6 +451,8 @@ class _SolutionScreenState extends State<SolutionScreen> {
             _view = player;
             _selected = null;
           }),
+          matrixView: _matrixView,
+          onMatrixView: (view) => setState(() => _matrixView = view),
         ),
         if (_locks.isNotEmpty) _locksCard(context),
         if (_parentNode != null && node.type == NodeType.NODE_TYPE_ACTION)
@@ -608,6 +654,118 @@ class _NextStep extends StatelessWidget {
   }
 }
 
+/// One tile per card that can come: what the spot is worth after it and what
+/// the next player does. Tapping a tile deals the card.
+class _RunoutReport extends StatelessWidget {
+  const _RunoutReport({required this.runouts, required this.onPick});
+
+  final List<Runout> runouts;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Best cards for the out-of-position player first.
+    final sorted = [...runouts]..sort((a, b) => b.oopEv.compareTo(a.oopEv));
+    final lowest = sorted.isEmpty ? 0.0 : sorted.last.oopEv;
+    final highest = sorted.isEmpty ? 1.0 : sorted.first.oopEv;
+
+    return Column(
+      key: const Key('runout-report'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Cards by OOP\'s value after them. The bar shows what the next '
+          'player does.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final runout in sorted)
+              InkWell(
+                key: Key('runout-${runout.card}'),
+                onTap: () => onPick(runout.card),
+                child: Container(
+                  width: 104,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border(
+                      left: BorderSide(
+                        width: 4,
+                        color: valueColor(runout.oopEv, lowest, highest),
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        cardTitle(runout.card) ?? runout.card,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: suitColor(runout.card),
+                        ),
+                      ),
+                      Text(
+                        'EV ${runout.oopEv.toStringAsFixed(2)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        'Eq ${formatPercent(runout.oopEquity, digits: 0)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (runout.actions.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: _ActionBar(actions: runout.actions),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// A thin bar split by how often each action is taken.
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({required this.actions});
+
+  final List<NodeAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = actionColors(actions);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: SizedBox(
+        height: 6,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var a = 0; a < actions.length; ++a)
+              if (actions[a].frequency > 0.0005)
+                Expanded(
+                  flex: (actions[a].frequency * 1000).round(),
+                  child: ColoredBox(color: colors[a]),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// The cards that can come next, one row per suit.
 class _CardPicker extends StatelessWidget {
   const _CardPicker({required this.cards, required this.onPick});
@@ -663,6 +821,8 @@ class _Details extends StatelessWidget {
     required this.colors,
     required this.selected,
     required this.onView,
+    required this.matrixView,
+    required this.onMatrixView,
   });
 
   final GetNodeResponse node;
@@ -671,6 +831,8 @@ class _Details extends StatelessWidget {
   final List<Color> colors;
   final int? selected;
   final ValueChanged<Player> onView;
+  final MatrixView matrixView;
+  final ValueChanged<MatrixView> onMatrixView;
 
   @override
   Widget build(BuildContext context) {
@@ -691,6 +853,17 @@ class _Details extends StatelessWidget {
           selected: {viewed},
           onSelectionChanged: (selection) => onView(selection.first),
         ),
+        const SizedBox(height: 8),
+        SegmentedButton<MatrixView>(
+          key: const Key('matrix-view'),
+          showSelectedIcon: false,
+          segments: [
+            for (final view in MatrixView.values)
+              ButtonSegment(value: view, label: Text(view.label)),
+          ],
+          selected: {matrixView},
+          onSelectionChanged: (selection) => onMatrixView(selection.first),
+        ),
         const SizedBox(height: 12),
         Card(
           margin: EdgeInsets.zero,
@@ -709,6 +882,11 @@ class _Details extends StatelessWidget {
                   'EV: OOP ${node.oop.rangeEv.toStringAsFixed(2)} · '
                   'IP ${node.ip.rangeEv.toStringAsFixed(2)}',
                   key: const Key('node-ev'),
+                ),
+                Text(
+                  'Equity: OOP ${formatPercent(node.oop.rangeEquity)} · '
+                  'IP ${formatPercent(node.ip.rangeEquity)}',
+                  key: const Key('node-equity'),
                 ),
                 Text(
                   '${model.totalReach.toStringAsFixed(1)} combos in '
@@ -780,7 +958,8 @@ class _CellDetails extends StatelessWidget {
             else ...[
               Text(
                 '${cell.reach.toStringAsFixed(2)} of ${cell.combos} combos · '
-                'EV ${cell.ev.toStringAsFixed(2)}',
+                'EV ${cell.ev.toStringAsFixed(2)} · '
+                'equity ${formatPercent(cell.equity, digits: 0)}',
                 style: muted,
               ),
               const SizedBox(height: 8),

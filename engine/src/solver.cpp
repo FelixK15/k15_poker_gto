@@ -387,6 +387,32 @@ void Solver::average_strategy(std::uint32_t node_index, float* out) const {
 void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const float* opponent_reach,
                       float* out, Arena& arena) const {
   const Node& node = game_.tree.nodes[node_index];
+  if (mode == Mode::Equity) {
+    switch (node.type) {
+      case NodeType::Showdown:
+        terminal_.showdown(game_.showdowns[node.aux], player, 1.0, 0.5, 0.0, opponent_reach, out);
+        return;
+      case NodeType::Fold:
+        std::fill(out, out + num_hands(player), 0.0f);
+        return;
+      case NodeType::Action: {
+        // Every decision offers a check or a call; take it.
+        const auto actions = game_.tree.actions_of(node_index);
+        std::size_t passive = 0;
+        for (std::size_t a = 0; a < actions.size(); ++a) {
+          if (actions[a].type == ActionType::Check || actions[a].type == ActionType::Call) {
+            passive = a;
+            break;
+          }
+        }
+        traverse(mode, game_.tree.children_of(node_index)[passive], player, opponent_reach, out,
+                 arena);
+        return;
+      }
+      case NodeType::Chance:
+        break;
+    }
+  }
   if (terminal_values(node, player, opponent_reach, out)) return;
   if (node.type == NodeType::Chance) {
     traverse_chance(mode, node_index, player, opponent_reach, out, arena);
@@ -683,6 +709,17 @@ NodeReport Solver::report(const NodeRef& ref) const {
       ev[h] = possible && compatible[h] > 0 ? ev[h] / compatible[h] : 0.0f;
     }
     report.range_ev[p] = weight > 0 ? value / weight : 0.0;
+
+    auto& equity = report.equity[p];
+    equity.resize(num_hands(player));
+    traverse(Mode::Equity, ref.node, player, opponent_reach, equity.data(), main_arena_);
+    double share = 0;
+    for (std::size_t h = 0; h < equity.size(); ++h) {
+      const bool possible = (game_.hands[p][h].mask & dealt) == 0;
+      if (possible) share += static_cast<double>(report.reach[p][h]) * equity[h];
+      equity[h] = possible && compatible[h] > 0 ? equity[h] / compatible[h] : 0.0f;
+    }
+    report.range_equity[p] = weight > 0 ? share / weight : 0.0;
   }
 
   if (!ref.remapped) return report;
@@ -706,6 +743,7 @@ NodeReport Solver::report(const NodeRef& ref) const {
     };
     permute(report.reach[player], 1);
     permute(report.ev[player], 1);
+    permute(report.equity[player], 1);
     if (node.type == NodeType::Action && node.player == player) {
       permute(report.strategy, report.actions.size());
       const std::vector<std::uint8_t> original = report.locked;

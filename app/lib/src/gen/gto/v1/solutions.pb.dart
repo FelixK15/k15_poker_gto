@@ -195,12 +195,16 @@ class PlayerRange extends $pb.GeneratedMessage {
     $core.Iterable<$core.double>? reach,
     $core.Iterable<$core.double>? ev,
     $core.double? rangeEv,
+    $core.Iterable<$core.double>? equity,
+    $core.double? rangeEquity,
   }) {
     final result = PlayerRange._();
     if (hands != null) result.hands.addAll(hands);
     if (reach != null) result.reach.addAll(reach);
     if (ev != null) result.ev.addAll(ev);
     if (rangeEv != null) result.rangeEv = rangeEv;
+    if (equity != null) result.equity.addAll(equity);
+    if (rangeEquity != null) result.rangeEquity = rangeEquity;
     return result;
   }
 
@@ -221,6 +225,8 @@ class PlayerRange extends $pb.GeneratedMessage {
     ..p<$core.double>(2, _omitFieldNames ? '' : 'reach', $pb.PbFieldType.KF)
     ..p<$core.double>(3, _omitFieldNames ? '' : 'ev', $pb.PbFieldType.KF)
     ..aD(4, _omitFieldNames ? '' : 'rangeEv')
+    ..p<$core.double>(5, _omitFieldNames ? '' : 'equity', $pb.PbFieldType.KF)
+    ..aD(6, _omitFieldNames ? '' : 'rangeEquity')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -268,6 +274,286 @@ class PlayerRange extends $pb.GeneratedMessage {
   $core.bool hasRangeEv() => $_has(3);
   @$pb.TagNumber(4)
   void clearRangeEv() => $_clearField(4);
+
+  /// Equity of each hand against the other player's range: its share of the
+  /// pot, 0 to 1, if both checked or called to the end.
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.double> get equity => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $core.double get rangeEquity => $_getN(5);
+  @$pb.TagNumber(6)
+  set rangeEquity($core.double value) => $_setDouble(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasRangeEquity() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearRangeEquity() => $_clearField(6);
+}
+
+class GetRunoutReportRequest extends $pb.GeneratedMessage {
+  factory GetRunoutReportRequest({
+    $core.String? jobId,
+    $core.String? path,
+  }) {
+    final result = GetRunoutReportRequest._();
+    if (jobId != null) result.jobId = jobId;
+    if (path != null) result.path = path;
+    return result;
+  }
+
+  GetRunoutReportRequest._();
+
+  factory GetRunoutReportRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      GetRunoutReportRequest()..mergeFromBuffer(data, registry);
+  factory GetRunoutReportRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      GetRunoutReportRequest()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetRunoutReportRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: GetRunoutReportRequest.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'jobId')
+    ..aOS(2, _omitFieldNames ? '' : 'path')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetRunoutReportRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetRunoutReportRequest copyWith(
+          void Function(GetRunoutReportRequest) updates) =>
+      super.copyWith((message) => updates(message as GetRunoutReportRequest))
+          as GetRunoutReportRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use GetRunoutReportRequest() / GetRunoutReportRequest.new instead')
+  static GetRunoutReportRequest create() => GetRunoutReportRequest._();
+  static $pb.GeneratedMessage $_createMessage() => GetRunoutReportRequest._();
+  @$core.override
+  GetRunoutReportRequest createEmptyInstance() => GetRunoutReportRequest._();
+  @$core.pragma('dart2js:noInline')
+  static GetRunoutReportRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetRunoutReportRequest>(
+          GetRunoutReportRequest.$_createMessage);
+  static GetRunoutReportRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get jobId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set jobId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasJobId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearJobId() => $_clearField(1);
+
+  /// Path of the node where the card is dealt.
+  @$pb.TagNumber(2)
+  $core.String get path => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set path($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasPath() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearPath() => $_clearField(2);
+}
+
+/// The spot right after one particular card.
+class Runout extends $pb.GeneratedMessage {
+  factory Runout({
+    $core.String? card,
+    $core.double? oopEv,
+    $core.double? ipEv,
+    $core.double? oopEquity,
+    $core.double? ipEquity,
+    NodeType? type,
+    Player? player,
+    $core.Iterable<NodeAction>? actions,
+  }) {
+    final result = Runout._();
+    if (card != null) result.card = card;
+    if (oopEv != null) result.oopEv = oopEv;
+    if (ipEv != null) result.ipEv = ipEv;
+    if (oopEquity != null) result.oopEquity = oopEquity;
+    if (ipEquity != null) result.ipEquity = ipEquity;
+    if (type != null) result.type = type;
+    if (player != null) result.player = player;
+    if (actions != null) result.actions.addAll(actions);
+    return result;
+  }
+
+  Runout._();
+
+  factory Runout.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      Runout()..mergeFromBuffer(data, registry);
+  factory Runout.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      Runout()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'Runout',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: Runout.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'card')
+    ..aD(2, _omitFieldNames ? '' : 'oopEv')
+    ..aD(3, _omitFieldNames ? '' : 'ipEv')
+    ..aD(4, _omitFieldNames ? '' : 'oopEquity')
+    ..aD(5, _omitFieldNames ? '' : 'ipEquity')
+    ..aE<NodeType>(6, _omitFieldNames ? '' : 'type',
+        enumValues: NodeType.values)
+    ..aE<Player>(7, _omitFieldNames ? '' : 'player', enumValues: Player.values)
+    ..pPM<NodeAction>(8, _omitFieldNames ? '' : 'actions',
+        subBuilder: NodeAction.$_createMessage)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Runout clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Runout copyWith(void Function(Runout) updates) =>
+      super.copyWith((message) => updates(message as Runout)) as Runout;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use Runout() / Runout.new instead')
+  static Runout create() => Runout._();
+  static $pb.GeneratedMessage $_createMessage() => Runout._();
+  @$core.override
+  Runout createEmptyInstance() => Runout._();
+  @$core.pragma('dart2js:noInline')
+  static Runout getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<Runout>(Runout.$_createMessage);
+  static Runout? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get card => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set card($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCard() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCard() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.double get oopEv => $_getN(1);
+  @$pb.TagNumber(2)
+  set oopEv($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasOopEv() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearOopEv() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.double get ipEv => $_getN(2);
+  @$pb.TagNumber(3)
+  set ipEv($core.double value) => $_setDouble(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasIpEv() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearIpEv() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.double get oopEquity => $_getN(3);
+  @$pb.TagNumber(4)
+  set oopEquity($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasOopEquity() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearOopEquity() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.double get ipEquity => $_getN(4);
+  @$pb.TagNumber(5)
+  set ipEquity($core.double value) => $_setDouble(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasIpEquity() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearIpEquity() => $_clearField(5);
+
+  /// What follows the card: usually a decision, or a showdown or another
+  /// card if the players are all-in.
+  @$pb.TagNumber(6)
+  NodeType get type => $_getN(5);
+  @$pb.TagNumber(6)
+  set type(NodeType value) => $_setField(6, value);
+  @$pb.TagNumber(6)
+  $core.bool hasType() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearType() => $_clearField(6);
+
+  /// If a decision follows: whose it is and what they do with their range.
+  @$pb.TagNumber(7)
+  Player get player => $_getN(6);
+  @$pb.TagNumber(7)
+  set player(Player value) => $_setField(7, value);
+  @$pb.TagNumber(7)
+  $core.bool hasPlayer() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearPlayer() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $pb.PbList<NodeAction> get actions => $_getList(7);
+}
+
+class GetRunoutReportResponse extends $pb.GeneratedMessage {
+  factory GetRunoutReportResponse({
+    $core.Iterable<Runout>? runouts,
+  }) {
+    final result = GetRunoutReportResponse._();
+    if (runouts != null) result.runouts.addAll(runouts);
+    return result;
+  }
+
+  GetRunoutReportResponse._();
+
+  factory GetRunoutReportResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      GetRunoutReportResponse()..mergeFromBuffer(data, registry);
+  factory GetRunoutReportResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      GetRunoutReportResponse()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetRunoutReportResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: GetRunoutReportResponse.$_createMessage)
+    ..pPM<Runout>(1, _omitFieldNames ? '' : 'runouts',
+        subBuilder: Runout.$_createMessage)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetRunoutReportResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetRunoutReportResponse copyWith(
+          void Function(GetRunoutReportResponse) updates) =>
+      super.copyWith((message) => updates(message as GetRunoutReportResponse))
+          as GetRunoutReportResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated(
+      'Use GetRunoutReportResponse() / GetRunoutReportResponse.new instead')
+  static GetRunoutReportResponse create() => GetRunoutReportResponse._();
+  static $pb.GeneratedMessage $_createMessage() => GetRunoutReportResponse._();
+  @$core.override
+  GetRunoutReportResponse createEmptyInstance() => GetRunoutReportResponse._();
+  @$core.pragma('dart2js:noInline')
+  static GetRunoutReportResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetRunoutReportResponse>(
+          GetRunoutReportResponse.$_createMessage);
+  static GetRunoutReportResponse? _defaultInstance;
+
+  /// One entry per card that can come, in card order.
+  @$pb.TagNumber(1)
+  $pb.PbList<Runout> get runouts => $_getList(0);
 }
 
 class GetNodeResponse extends $pb.GeneratedMessage {

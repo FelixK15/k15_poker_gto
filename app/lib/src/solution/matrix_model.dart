@@ -10,6 +10,7 @@ class HandView {
     required this.reach,
     required this.ev,
     required this.frequencies,
+    this.equity = 0,
     this.locked = false,
   });
 
@@ -19,6 +20,9 @@ class HandView {
   /// How much of the hand gets to this node, 0 to 1.
   final double reach;
   final double ev;
+
+  /// Share of the pot the hand wins if no more money goes in, 0 to 1.
+  final double equity;
 
   /// Per action; empty if the hand's owner is not the one acting.
   final List<double> frequencies;
@@ -44,6 +48,7 @@ class MatrixCell {
   /// Reach that takes each action.
   final List<double> actionReach;
   double _evTimesReach = 0;
+  double _equityTimesReach = 0;
 
   /// Share of the class that is in the range here, 0 to 1.
   double get fraction => (reach / combos).clamp(0.0, 1.0);
@@ -53,6 +58,9 @@ class MatrixCell {
 
   /// Reach-weighted EV of the class.
   double get ev => reach > 0 ? _evTimesReach / reach : 0;
+
+  /// Reach-weighted equity of the class.
+  double get equity => reach > 0 ? _equityTimesReach / reach : 0;
 
   bool get isEmpty => reach <= 0;
 
@@ -102,6 +110,7 @@ class MatrixModel {
       if (index == null) continue;
       final reach = range.reach[h].toDouble();
       final ev = range.ev[h].toDouble();
+      final equity = h < range.equity.length ? range.equity[h].toDouble() : 0.0;
       final frequencies = [
         for (var a = 0; a < actions; ++a)
           strategy[a * handCount + h].toDouble(),
@@ -114,11 +123,13 @@ class MatrixModel {
           reach: reach,
           ev: ev,
           frequencies: frequencies,
+          equity: equity,
           locked: actions > 0 && h < locked.length && locked[h],
         ),
       );
       cell.reach += reach;
       cell._evTimesReach += ev * reach;
+      cell._equityTimesReach += equity * reach;
       for (var a = 0; a < actions; ++a) {
         cell.actionReach[a] += reach * frequencies[a];
       }
