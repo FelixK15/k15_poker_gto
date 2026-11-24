@@ -101,12 +101,14 @@ for everything else (the opponent's exploit and the locked player's adjustment e
 - **Engine:** a locked node skips the regret update for its locked combos and always plays the
   fixed frequencies; its values still propagate up and down the tree. Any number of nodes can be
   locked, for either player. Locks are stored sparsely (only locked nodes cost memory).
-- **Isomorphism:** a lock on a specific turn or river card breaks suit symmetry for that runout.
-  The tree builder un-merges the affected runouts when a lock is placed there; flop-node locks
-  are unaffected.
-- **Re-solve:** starts from the existing solution (warm start) rather than from scratch, so small
-  locks converge quickly. The result is saved as a new solution linked to its parent, so the
-  original is kept and the two can be compared.
+- **Isomorphism:** where interchangeable cards are stored once below a locked node, the lock must not
+  tell those suits apart, or the merged runouts would no longer be the same situation. The engine
+  makes such a lock symmetric: every hand in a group of mirrored hands gets the group's average.
+  Locks on whole hand classes are symmetric already. (The original idea of un-merging the
+  affected runouts was dropped: it would change the tree and rule out a warm start.)
+- **Re-solve:** a new job that copies the parent's state, keeps its regrets and iteration count, and
+  rebuilds the average strategy from there (the parent's average belongs to another game). The
+  parent is kept, so the two can be compared.
 - **Exploitability with locks:** the best response for the locked player is computed with the
   locked nodes held fixed. The reported number therefore means "distance from equilibrium of the
   locked game", and the UI labels it that way.
@@ -131,7 +133,7 @@ These cost little now and are expensive to retrofit:
 | `Trees` | `EstimateTree` (config → nodes, memory) |
 | `Jobs` | `Submit`, `List`, `Get`, `Pause`, `Resume`, `Cancel`, `Watch` (stream: iteration, exploitability, ETA) |
 | `Solutions` | `List`, `Delete`, `GetNode` (path → actions, per-hand strategy, EV, equity for both players), `GetRunoutReport`, `Export` |
-| `Locks` | `SetLock` (solution, node path, per-hand frequencies), `ClearLock`, `ListLocks`, `Resolve` (→ new job, warm-started, child solution) |
+| `Locks` | `Resolve` (parent job, locks, settings → new job). A solution's locks never change; they are listed on its `Job` |
 | `Ranges` | Not built: the range library and saved ranges live in the client instead (see section 6), so they work the same against any server |
 
 `GetNode` is addressed by the action path from the root (e.g. `bet33 / call / Ts / check`), which
@@ -229,7 +231,7 @@ Durations are rough guesses for one focused developer, not commitments.
 | M3 | Server | **Done, except TLS and compression.** Jobs with a queue, pause, resume, cancel and delete; progress stream; solutions kept on disk and browsable node by node, also while solving; size estimate; access token. Still open: TLS (planned with the client in M4) and compressing saved solutions | 3 weeks |
 | M4 | Client MVP | **Done on Windows, except TLS.** Connect screen that starts the solver on this computer or connects to a server with a token; spot setup with a live size estimate; jobs list with pause, resume, cancel, delete; solution browser with the strategy matrix, breadcrumb, card picker and per-hand details. Still open: TLS on both sides, and shipping the server next to the app (M7) | 4–5 weeks |
 | M5 | Range library | **Done.** Preflop line picker for 6-max and 9-max at 100/200/300BB (single-raised, 3-bet and 4-bet pots) that fills in ranges, pot and stacks; range editor on the 13×13 grid with weights, text import (PioSOLVER and GTO+ forms) and saved ranges; tree presets; board picker. The ranges are rule-based approximations, see section 6. Not done: editing single suit combinations on the grid (they can be typed) | 2–3 weeks |
-| M6 | Node locking | Per-hand locks in the engine with warm-started re-solve; `Locks` API; lock editor and compare view in the client | 3–4 weeks |
+| M6 | Node locking | **Done.** Per-hand locks in the engine; a re-solve is a new job that starts from the parent's solution with the locks in force; lock dialog (whole range or one hand class), lock list, and a comparison with the parent in the client. Not done: painting different frequencies per hand in one go, and a side-by-side compare view | 3–4 weeks |
 | M7 | Android + polish | Phone layouts, reconnect handling, runout reports, EV/equity views, installers, Docker image | 3–4 weeks |
 | M8 | Performance | AVX2 kernels, 16-bit storage, tuning against benchmarks | ongoing |
 

@@ -172,6 +172,7 @@ const GetNodeResponse$json = {
     {'1': 'oop_committed', '3': 10, '4': 1, '5': 1, '10': 'oopCommitted'},
     {'1': 'ip_committed', '3': 11, '4': 1, '5': 1, '10': 'ipCommitted'},
     {'1': 'iteration', '3': 12, '4': 1, '5': 13, '10': 'iteration'},
+    {'1': 'locked', '3': 13, '4': 3, '5': 8, '10': 'locked'},
   ],
 };
 
@@ -184,4 +185,4 @@ final $typed_data.Uint8List getNodeResponseDescriptor = $convert.base64Decode(
     'CgNvb3AYByABKAsyEy5ndG8udjEuUGxheWVyUmFuZ2VSA29vcBIjCgJpcBgIIAEoCzITLmd0by'
     '52MS5QbGF5ZXJSYW5nZVICaXASEAoDcG90GAkgASgBUgNwb3QSIwoNb29wX2NvbW1pdHRlZBgK'
     'IAEoAVIMb29wQ29tbWl0dGVkEiEKDGlwX2NvbW1pdHRlZBgLIAEoAVILaXBDb21taXR0ZWQSHA'
-    'oJaXRlcmF0aW9uGAwgASgNUglpdGVyYXRpb24=');
+    'oJaXRlcmF0aW9uGAwgASgNUglpdGVyYXRpb24SFgoGbG9ja2VkGA0gAygIUgZsb2NrZWQ=');

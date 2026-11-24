@@ -195,6 +195,68 @@ void main() {
       await api.delete(job.id);
     });
 
+    test('re-solves under a lock', () async {
+      final api = await LocalServer.start(
+        executable: serverPath,
+        dataDir: dataDir.path,
+      );
+      addTearDown(api.close);
+
+      final parent = await api.submit(
+        quickSpot(),
+        SolveSettings(maxIterations: 1000, targetExploitabilityPct: 0),
+        'parent',
+      );
+      expect(
+        (await api.watch(parent.id).toList()).last.state,
+        JobState.JOB_STATE_DONE,
+      );
+
+      // Make OOP fold every hand to the bet: [fold, call].
+      final node = await api.getNode(parent.id, 'check/allin');
+      final child = await api.resolve(parent.id, [
+        NodeLock(
+          path: 'check/allin',
+          hands: [
+            for (final hand in node.oop.hands)
+              HandLock(hand: hand, frequencies: [1, 0]),
+          ],
+        ),
+      ], SolveSettings(maxIterations: 1000, targetExploitabilityPct: 0));
+      expect(child.parentId, parent.id);
+
+      final done = (await api.watch(child.id).toList()).last;
+      expect(done.state, JobState.JOB_STATE_DONE);
+      expect(done.iteration, 2000);
+      // IP now bets everything and always takes the pot.
+      expect(done.ipEv, closeTo(100, 0.3));
+      final locked = await api.getNode(child.id, 'check/allin');
+      expect(locked.locked, everyElement(isTrue));
+      final ip = await api.getNode(child.id, 'check');
+      expect(ip.actions[1].frequency, closeTo(1, 0.01));
+      // The parent kept its own solution.
+      final before = await api.getNode(parent.id, 'check');
+      expect(before.actions[1].frequency, closeTo(0.3, 0.01));
+
+      await expectLater(
+        api.resolve(parent.id, [
+          NodeLock(
+            path: 'nowhere',
+            hands: [
+              HandLock(hand: 'AsAh', frequencies: [1]),
+            ],
+          ),
+        ], SolveSettings()),
+        throwsA(
+          isA<GrpcError>().having(
+            (e) => e.code,
+            'code',
+            StatusCode.invalidArgument,
+          ),
+        ),
+      );
+    });
+
     test('reports a missing executable', () async {
       await expectLater(
         LocalServer.start(

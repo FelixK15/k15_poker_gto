@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <fstream>
 #include <functional>
+#include <sstream>
+#include <unordered_map>
 #include <system_error>
 
 #include <spdlog/spdlog.h>
@@ -60,6 +62,68 @@ v1::NodeType to_proto(NodeType type) {
     case NodeType::Showdown: return v1::NODE_TYPE_SHOWDOWN;
   }
   return v1::NODE_TYPE_UNSPECIFIED;
+}
+
+/// Reads a lock from the wire against a solver's tree and hands.
+bool read_lock(const Solver& solver, const v1::NodeLock& lock, NodeRef* ref,
+               std::vector<std::uint8_t>* locked, std::vector<float>* strategy,
+               std::string* error) {
+  const Game& game = solver.game();
+  const std::string where = "lock on '" + lock.path() + "': ";
+
+  std::string find_error;
+  const auto found = game.tree.find(lock.path(), &find_error);
+  if (!found) {
+    *error = where + find_error;
+    return false;
+  }
+  const Node& node = game.tree.nodes[found->node];
+  if (node.type != NodeType::Action) {
+    *error = where + "only a decision can be locked";
+    return false;
+  }
+  if (lock.hands().empty()) {
+    *error = where + "it names no hands";
+    return false;
+  }
+
+  const auto& hands = game.hands[node.player];
+  const std::size_t actions = node.num_children;
+  std::unordered_map<std::string, std::size_t> index;
+  for (std::size_t h = 0; h < hands.size(); ++h) index.emplace(holdem_hand_name(hands[h]), h);
+
+  locked->assign(hands.size(), 0);
+  strategy->assign(actions * hands.size(), 0.0f);
+  for (const v1::HandLock& hand : lock.hands()) {
+    const auto it = index.find(hand.hand());
+    if (it == index.end()) {
+      *error = where + "the hand '" + hand.hand() + "' is not in the " +
+               (node.player == kOop ? "OOP" : "IP") + " range";
+      return false;
+    }
+    if (static_cast<std::size_t>(hand.frequencies_size()) != actions) {
+      *error = where + "the hand '" + hand.hand() + "' needs " + std::to_string(actions) +
+               " frequencies, one per action";
+      return false;
+    }
+    float sum = 0;
+    for (std::size_t a = 0; a < actions; ++a) {
+      const float value = hand.frequencies(static_cast<int>(a));
+      if (!(value >= 0)) {
+        *error = where + "frequencies cannot be negative";
+        return false;
+      }
+      (*strategy)[a * hands.size() + it->second] = value;
+      sum += value;
+    }
+    if (!(sum > 0)) {
+      *error = where + "the frequencies of '" + hand.hand() + "' add up to zero";
+      return false;
+    }
+    (*locked)[it->second] = 1;
+  }
+  *ref = *found;
+  return true;
 }
 
 /// Writes a file so that a crash never leaves a half-written one behind.
@@ -295,7 +359,7 @@ Error JobManager::submit(const v1::SubmitJobRequest& request, v1::Job* out) {
   *job.mutable_spot() = request.spot();
   // Store the settings with defaults filled in, so a job always shows what
   // it will actually do.
-  const ResolvedSettings settings = resolve(request.settings());
+  const ResolvedSettings settings = gto::server::resolve(request.settings());
   job.mutable_settings()->set_max_iterations(static_cast<std::uint32_t>(settings.max_iterations));
   job.mutable_settings()->set_target_exploitability_pct(settings.target_exploitability_pct);
   job.set_created_ms(now_ms());
@@ -459,8 +523,8 @@ Error JobManager::remove(const std::string& id) {
 
 // --- Solving ---------------------------------------------------------------
 
-std::shared_ptr<JobManager::Solution> JobManager::load_solution(const v1::Job& job,
-                                                               std::string* error) const {
+std::shared_ptr<JobManager::Solution> JobManager::load_solution(
+    const v1::Job& job, const std::string& initial_state, std::string* error) const {
   auto config = to_spot_config(job.spot(), error);
   if (!config) return nullptr;
   config->tree.max_nodes = config_.max_nodes;
@@ -472,15 +536,39 @@ std::shared_ptr<JobManager::Solution> JobManager::load_solution(const v1::Job& j
   solver_config.threads = config_.threads;
   solution->solver = std::make_unique<Solver>(std::move(*game), solver_config);
 
-  if (job.has_solution() && !config_.data_dir.empty()) {
+  Solver& solver = *solution->solver;
+  std::error_code ec;
+  const bool have_file = !config_.data_dir.empty() && fs::exists(state_file(job.id()), ec);
+  std::string load_error;
+  bool loaded = true;
+  if (!initial_state.empty()) {
+    std::istringstream in(initial_state, std::ios::binary);
+    loaded = solver.load(in, &load_error);
+  } else if (have_file) {
     std::ifstream in(state_file(job.id()), std::ios::binary);
-    std::string load_error;
-    if (!in || !solution->solver->load(in, &load_error)) {
-      *error = "cannot read the saved solution: " +
-               (load_error.empty() ? std::string("the file is missing") : load_error);
+    loaded = in && solver.load(in, &load_error);
+  } else if (job.has_solution() && !config_.data_dir.empty()) {
+    loaded = false;
+  }
+  if (!loaded) {
+    *error = "cannot read the saved solution: " +
+             (load_error.empty() ? std::string("the file is missing") : load_error);
+    return nullptr;
+  }
+
+  // Locks are part of the job, not of the saved state.
+  for (const v1::NodeLock& lock : job.locks()) {
+    NodeRef ref;
+    std::vector<std::uint8_t> locked;
+    std::vector<float> strategy;
+    if (!read_lock(solver, lock, &ref, &locked, &strategy, error) ||
+        !solver.set_lock(ref, locked, strategy, error)) {
       return nullptr;
     }
   }
+  // A re-solve keeps what the parent learned about each action, but its
+  // average strategy has to be built anew: the parent's is of another game.
+  if (job.warm_start_pending()) solver.warm_restart();
   return solution;
 }
 
@@ -508,12 +596,15 @@ void JobManager::worker_loop() {
 void JobManager::run_job(const std::string& id) {
   v1::Job job;
   std::shared_ptr<Solution> solution;
+  std::string initial_state;
   {
     const std::lock_guard lock(mutex_);
     Entry* entry = find(id);
     if (entry == nullptr) return;
     job = entry->job;
     solution = entry->solution;
+    initial_state = std::move(entry->initial_state);
+    entry->initial_state.clear();
   }
 
   // Applies the final state of this run. Returns false if the job is gone.
@@ -531,7 +622,7 @@ void JobManager::run_job(const std::string& id) {
     std::string error;
     {
       const std::lock_guard load_lock(load_mutex_);
-      solution = load_solution(job, &error);
+      solution = load_solution(job, initial_state, &error);
     }
     if (!solution) {
       spdlog::warn("job {} failed: {}", id, error);
@@ -549,7 +640,7 @@ void JobManager::run_job(const std::string& id) {
     evict_idle_solutions();
   }
 
-  const ResolvedSettings settings = resolve(job.settings());
+  const ResolvedSettings settings = gto::server::resolve(job.settings());
   const int interval = std::max(1, config_.check_interval);
   spdlog::info("job {} started ({} MB)", id, job.memory_bytes() >> 20);
 
@@ -627,6 +718,8 @@ void JobManager::run_job(const std::string& id) {
                                                           : v1::JOB_STATE_PAUSED;
   finish([&](v1::Job& j) {
     j.set_state(state);
+    // From here on the job continues from its own saved state.
+    if (saved) j.set_warm_start_pending(false);
     if (is_final(state)) j.set_finished_ms(now_ms());
     if (!saved) j.set_error("the solution could not be saved to disk");
   });
@@ -669,7 +762,7 @@ Error JobManager::acquire_solution(const std::string& id, std::shared_ptr<Soluti
   }
 
   std::string error;
-  std::shared_ptr<Solution> solution = load_solution(job, &error);
+  std::shared_ptr<Solution> solution = load_solution(job, std::string(), &error);
   if (!solution) return make_error(ErrorKind::Internal, error);
 
   const std::lock_guard lock(mutex_);
@@ -736,6 +829,7 @@ Error JobManager::node(const std::string& id, const std::string& path, v1::GetNo
       proto->set_frequency(total_reach > 0 ? weighted / total_reach : 0.0);
     }
     out->mutable_strategy()->Add(report.strategy.begin(), report.strategy.end());
+    for (const std::uint8_t flag : report.locked) out->add_locked(flag != 0);
   }
 
   if (report.type == NodeType::Chance) {
@@ -753,6 +847,87 @@ Error JobManager::node(const std::string& id, const std::string& path, v1::GetNo
     std::sort(cards.begin(), cards.end());
     for (const std::uint8_t card : cards) out->add_next_cards(Card(card).to_string());
   }
+  return {};
+}
+
+// --- Locks -----------------------------------------------------------------
+
+Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
+  if (request.locks().empty()) {
+    return make_error(ErrorKind::InvalidArgument, "a re-solve needs at least one lock");
+  }
+  if (request.name().size() > 200) {
+    return make_error(ErrorKind::InvalidArgument, "the name is longer than 200 characters");
+  }
+
+  v1::Job parent;
+  {
+    const std::lock_guard lock(mutex_);
+    const Entry* entry = find(request.parent_job_id());
+    if (entry == nullptr) return not_found(request.parent_job_id());
+    parent = entry->job;
+  }
+  if (parent.state() == v1::JOB_STATE_RUNNING || parent.state() == v1::JOB_STATE_QUEUED) {
+    return make_error(ErrorKind::FailedPrecondition,
+                      "the job is still solving; pause it or wait until it is done");
+  }
+
+  // Check the locks against the parent's tree and take a copy of its state.
+  std::shared_ptr<Solution> solution;
+  if (Error error = acquire_solution(parent.id(), &solution)) return error;
+  std::string state;
+  int parent_iterations = 0;
+  {
+    const std::lock_guard solve_lock(solution->mutex);
+    for (const v1::NodeLock& lock : request.locks()) {
+      NodeRef ref;
+      std::vector<std::uint8_t> locked;
+      std::vector<float> strategy;
+      std::string error;
+      if (!read_lock(*solution->solver, lock, &ref, &locked, &strategy, &error)) {
+        return make_error(ErrorKind::InvalidArgument, error);
+      }
+    }
+    std::ostringstream buffer(std::ios::binary);
+    solution->solver->save(buffer);
+    state = std::move(buffer).str();
+    parent_iterations = solution->solver->iterations();
+  }
+
+  const std::lock_guard lock(mutex_);
+  if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+
+  Entry entry;
+  v1::Job& job = entry.job;
+  job.set_id(new_id());
+  job.set_name(request.name().empty() ? parent.name() + " (locked)" : request.name());
+  job.set_state(v1::JOB_STATE_QUEUED);
+  *job.mutable_spot() = parent.spot();
+  const ResolvedSettings settings = gto::server::resolve(request.settings());
+  job.mutable_settings()->set_max_iterations(
+      static_cast<std::uint32_t>(parent_iterations + settings.max_iterations));
+  job.mutable_settings()->set_target_exploitability_pct(settings.target_exploitability_pct);
+  job.set_iteration(static_cast<std::uint32_t>(parent_iterations));
+  job.set_created_ms(now_ms());
+  job.set_memory_bytes(parent.memory_bytes());
+  job.set_parent_id(parent.id());
+  *job.mutable_locks() = request.locks();
+  job.set_warm_start_pending(true);
+
+  if (config_.data_dir.empty()) {
+    entry.initial_state = std::move(state);
+  } else {
+    const bool ok = write_atomically(state_file(job.id()), [&](std::ostream& file) {
+      file.write(state.data(), static_cast<std::streamsize>(state.size()));
+      return static_cast<bool>(file);
+    });
+    if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
+  }
+  write_job(job);
+  *out = job;
+  queue_.push_back(job.id());
+  jobs_.emplace(job.id(), std::move(entry));
+  queue_cv_.notify_one();
   return {};
 }
 

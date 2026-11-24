@@ -10,6 +10,7 @@ class HandView {
     required this.reach,
     required this.ev,
     required this.frequencies,
+    this.locked = false,
   });
 
   /// Four characters, higher card first.
@@ -21,6 +22,9 @@ class HandView {
 
   /// Per action; empty if the hand's owner is not the one acting.
   final List<double> frequencies;
+
+  /// Whether the hand's strategy here is fixed by a lock.
+  final bool locked;
 }
 
 /// One of the 169 hand classes (AA, AKs, AKo, …) at a node.
@@ -51,6 +55,9 @@ class MatrixCell {
   double get ev => reach > 0 ? _evTimesReach / reach : 0;
 
   bool get isEmpty => reach <= 0;
+
+  /// Whether a lock fixes the strategy of any of the class's hands here.
+  bool get hasLock => hands.any((hand) => hand.locked);
 }
 
 /// A player's range at a node, arranged as the familiar 13×13 grid: pairs on
@@ -64,6 +71,7 @@ class MatrixModel {
     PlayerRange range, {
     List<double> strategy = const [],
     int actionCount = 0,
+    List<bool> locked = const [],
   }) {
     final handCount = range.hands.length;
     final hasStrategy =
@@ -101,7 +109,13 @@ class MatrixModel {
 
       final cell = cells[index];
       cell.hands.add(
-        HandView(name: name, reach: reach, ev: ev, frequencies: frequencies),
+        HandView(
+          name: name,
+          reach: reach,
+          ev: ev,
+          frequencies: frequencies,
+          locked: actions > 0 && h < locked.length && locked[h],
+        ),
       );
       cell.reach += reach;
       cell._evTimesReach += ev * reach;

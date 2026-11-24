@@ -2,6 +2,7 @@
 
 #include "auth.h"
 #include "gto/v1/jobs.grpc.pb.h"
+#include "gto/v1/locks.grpc.pb.h"
 #include "gto/v1/server.grpc.pb.h"
 #include "gto/v1/solutions.grpc.pb.h"
 #include "gto/v1/trees.grpc.pb.h"
@@ -10,7 +11,7 @@
 namespace gto::server {
 
 inline constexpr unsigned kApiMajor = 1;
-inline constexpr unsigned kApiMinor = 1;
+inline constexpr unsigned kApiMinor = 2;
 
 class ServerServiceImpl final : public v1::ServerService::Service {
  public:
@@ -71,6 +72,18 @@ class SolutionServiceImpl final : public v1::SolutionService::Service {
 
   grpc::Status GetNode(grpc::ServerContext* context, const v1::GetNodeRequest* request,
                        v1::GetNodeResponse* response) override;
+
+ private:
+  const Auth& auth_;
+  JobManager& jobs_;
+};
+
+class LockServiceImpl final : public v1::LockService::Service {
+ public:
+  LockServiceImpl(const Auth& auth, JobManager& jobs) : auth_(auth), jobs_(jobs) {}
+
+  grpc::Status Resolve(grpc::ServerContext* context, const v1::ResolveRequest* request,
+                       v1::Job* response) override;
 
  private:
   const Auth& auth_;

@@ -284,6 +284,7 @@ class GetNodeResponse extends $pb.GeneratedMessage {
     $core.double? oopCommitted,
     $core.double? ipCommitted,
     $core.int? iteration,
+    $core.Iterable<$core.bool>? locked,
   }) {
     final result = GetNodeResponse._();
     if (type != null) result.type = type;
@@ -298,6 +299,7 @@ class GetNodeResponse extends $pb.GeneratedMessage {
     if (oopCommitted != null) result.oopCommitted = oopCommitted;
     if (ipCommitted != null) result.ipCommitted = ipCommitted;
     if (iteration != null) result.iteration = iteration;
+    if (locked != null) result.locked.addAll(locked);
     return result;
   }
 
@@ -330,6 +332,7 @@ class GetNodeResponse extends $pb.GeneratedMessage {
     ..aD(10, _omitFieldNames ? '' : 'oopCommitted')
     ..aD(11, _omitFieldNames ? '' : 'ipCommitted')
     ..aI(12, _omitFieldNames ? '' : 'iteration', fieldType: $pb.PbFieldType.OU3)
+    ..p<$core.bool>(13, _omitFieldNames ? '' : 'locked', $pb.PbFieldType.KB)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -457,6 +460,11 @@ class GetNodeResponse extends $pb.GeneratedMessage {
   $core.bool hasIteration() => $_has(11);
   @$pb.TagNumber(12)
   void clearIteration() => $_clearField(12);
+
+  /// Action nodes: for each hand of the acting player, whether its strategy
+  /// here is locked.
+  @$pb.TagNumber(13)
+  $pb.PbList<$core.bool> get locked => $_getList(12);
 }
 
 const $core.bool _omitFieldNames =

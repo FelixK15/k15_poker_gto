@@ -427,6 +427,136 @@ class Spot extends $pb.GeneratedMessage {
   TreeSettings ensureTree() => $_ensure(7);
 }
 
+/// A player's strategy fixed for some hands at one decision.
+class NodeLock extends $pb.GeneratedMessage {
+  factory NodeLock({
+    $core.String? path,
+    $core.Iterable<HandLock>? hands,
+  }) {
+    final result = NodeLock._();
+    if (path != null) result.path = path;
+    if (hands != null) result.hands.addAll(hands);
+    return result;
+  }
+
+  NodeLock._();
+
+  factory NodeLock.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeLock()..mergeFromBuffer(data, registry);
+  factory NodeLock.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      NodeLock()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeLock',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: NodeLock.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'path')
+    ..pPM<HandLock>(2, _omitFieldNames ? '' : 'hands',
+        subBuilder: HandLock.$_createMessage)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeLock clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeLock copyWith(void Function(NodeLock) updates) =>
+      super.copyWith((message) => updates(message as NodeLock)) as NodeLock;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use NodeLock() / NodeLock.new instead')
+  static NodeLock create() => NodeLock._();
+  static $pb.GeneratedMessage $_createMessage() => NodeLock._();
+  @$core.override
+  NodeLock createEmptyInstance() => NodeLock._();
+  @$core.pragma('dart2js:noInline')
+  static NodeLock getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NodeLock>(NodeLock.$_createMessage);
+  static NodeLock? _defaultInstance;
+
+  /// Line to the decision, as in GetNodeRequest.path.
+  @$pb.TagNumber(1)
+  $core.String get path => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set path($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPath() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPath() => $_clearField(1);
+
+  /// The hands to lock. Other hands at the node stay free.
+  @$pb.TagNumber(2)
+  $pb.PbList<HandLock> get hands => $_getList(1);
+}
+
+class HandLock extends $pb.GeneratedMessage {
+  factory HandLock({
+    $core.String? hand,
+    $core.Iterable<$core.double>? frequencies,
+  }) {
+    final result = HandLock._();
+    if (hand != null) result.hand = hand;
+    if (frequencies != null) result.frequencies.addAll(frequencies);
+    return result;
+  }
+
+  HandLock._();
+
+  factory HandLock.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      HandLock()..mergeFromBuffer(data, registry);
+  factory HandLock.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      HandLock()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'HandLock',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: HandLock.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'hand')
+    ..p<$core.double>(
+        2, _omitFieldNames ? '' : 'frequencies', $pb.PbFieldType.KF)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  HandLock clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  HandLock copyWith(void Function(HandLock) updates) =>
+      super.copyWith((message) => updates(message as HandLock)) as HandLock;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use HandLock() / HandLock.new instead')
+  static HandLock create() => HandLock._();
+  static $pb.GeneratedMessage $_createMessage() => HandLock._();
+  @$core.override
+  HandLock createEmptyInstance() => HandLock._();
+  @$core.pragma('dart2js:noInline')
+  static HandLock getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<HandLock>(HandLock.$_createMessage);
+  static HandLock? _defaultInstance;
+
+  /// The hand as GetNode names it, e.g. "AhKd".
+  @$pb.TagNumber(1)
+  $core.String get hand => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set hand($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasHand() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearHand() => $_clearField(1);
+
+  /// How often it takes each action, in the order of the node's actions.
+  /// Scaled to add up to one.
+  @$pb.TagNumber(2)
+  $pb.PbList<$core.double> get frequencies => $_getList(1);
+}
+
 class SolveSettings extends $pb.GeneratedMessage {
   factory SolveSettings({
     $core.int? maxIterations,

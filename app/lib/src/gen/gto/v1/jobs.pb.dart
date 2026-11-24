@@ -40,6 +40,9 @@ class Job extends $pb.GeneratedMessage {
     $core.double? solveSeconds,
     $fixnum.Int64? memoryBytes,
     $core.bool? hasSolution,
+    $core.String? parentId,
+    $core.Iterable<$1.NodeLock>? locks,
+    $core.bool? warmStartPending,
   }) {
     final result = Job._();
     if (id != null) result.id = id;
@@ -58,6 +61,9 @@ class Job extends $pb.GeneratedMessage {
     if (solveSeconds != null) result.solveSeconds = solveSeconds;
     if (memoryBytes != null) result.memoryBytes = memoryBytes;
     if (hasSolution != null) result.hasSolution = hasSolution;
+    if (parentId != null) result.parentId = parentId;
+    if (locks != null) result.locks.addAll(locks);
+    if (warmStartPending != null) result.warmStartPending = warmStartPending;
     return result;
   }
 
@@ -95,6 +101,10 @@ class Job extends $pb.GeneratedMessage {
         15, _omitFieldNames ? '' : 'memoryBytes', $pb.PbFieldType.OU6,
         defaultOrMaker: $fixnum.Int64.ZERO)
     ..aOB(16, _omitFieldNames ? '' : 'hasSolution')
+    ..aOS(17, _omitFieldNames ? '' : 'parentId')
+    ..pPM<$1.NodeLock>(18, _omitFieldNames ? '' : 'locks',
+        subBuilder: $1.NodeLock.$_createMessage)
+    ..aOB(19, _omitFieldNames ? '' : 'warmStartPending')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -272,6 +282,30 @@ class Job extends $pb.GeneratedMessage {
   $core.bool hasHasSolution() => $_has(15);
   @$pb.TagNumber(16)
   void clearHasSolution() => $_clearField(16);
+
+  /// Set for a re-solve under locks: the job it started from, and the locks
+  /// in force. See locks.proto.
+  @$pb.TagNumber(17)
+  $core.String get parentId => $_getSZ(16);
+  @$pb.TagNumber(17)
+  set parentId($core.String value) => $_setString(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasParentId() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearParentId() => $_clearField(17);
+
+  @$pb.TagNumber(18)
+  $pb.PbList<$1.NodeLock> get locks => $_getList(17);
+
+  /// Server bookkeeping: the job still has to start from its parent's state.
+  @$pb.TagNumber(19)
+  $core.bool get warmStartPending => $_getBF(18);
+  @$pb.TagNumber(19)
+  set warmStartPending($core.bool value) => $_setBool(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasWarmStartPending() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearWarmStartPending() => $_clearField(19);
 }
 
 class SubmitJobRequest extends $pb.GeneratedMessage {

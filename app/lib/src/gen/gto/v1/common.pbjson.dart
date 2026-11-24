@@ -142,6 +142,41 @@ final $typed_data.Uint8List spotDescriptor = $convert.base64Decode(
     'VQY3QSGQoIcmFrZV9jYXAYByABKAFSB3Jha2VDYXASKAoEdHJlZRgIIAEoCzIULmd0by52MS5U'
     'cmVlU2V0dGluZ3NSBHRyZWU=');
 
+@$core.Deprecated('Use nodeLockDescriptor instead')
+const NodeLock$json = {
+  '1': 'NodeLock',
+  '2': [
+    {'1': 'path', '3': 1, '4': 1, '5': 9, '10': 'path'},
+    {
+      '1': 'hands',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.gto.v1.HandLock',
+      '10': 'hands'
+    },
+  ],
+};
+
+/// Descriptor for `NodeLock`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List nodeLockDescriptor = $convert.base64Decode(
+    'CghOb2RlTG9jaxISCgRwYXRoGAEgASgJUgRwYXRoEiYKBWhhbmRzGAIgAygLMhAuZ3RvLnYxLk'
+    'hhbmRMb2NrUgVoYW5kcw==');
+
+@$core.Deprecated('Use handLockDescriptor instead')
+const HandLock$json = {
+  '1': 'HandLock',
+  '2': [
+    {'1': 'hand', '3': 1, '4': 1, '5': 9, '10': 'hand'},
+    {'1': 'frequencies', '3': 2, '4': 3, '5': 2, '10': 'frequencies'},
+  ],
+};
+
+/// Descriptor for `HandLock`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List handLockDescriptor = $convert.base64Decode(
+    'CghIYW5kTG9jaxISCgRoYW5kGAEgASgJUgRoYW5kEiAKC2ZyZXF1ZW5jaWVzGAIgAygCUgtmcm'
+    'VxdWVuY2llcw==');
+
 @$core.Deprecated('Use solveSettingsDescriptor instead')
 const SolveSettings$json = {
   '1': 'SolveSettings',

@@ -299,6 +299,13 @@ class _JobCard extends StatelessWidget {
                     : theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            if (job.locks.isNotEmpty)
+              Text(
+                'Re-solve with ${job.locks.length} locked '
+                '${job.locks.length == 1 ? 'decision' : 'decisions'}',
+                key: Key('locks-${job.id}'),
+                style: theme.textTheme.bodySmall,
+              ),
             if (running) ...[
               const SizedBox(height: 8),
               Padding(

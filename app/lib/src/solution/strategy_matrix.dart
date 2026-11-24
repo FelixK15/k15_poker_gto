@@ -125,6 +125,19 @@ class _MatrixPainter extends CustomPainter {
           }
         }
 
+        // A corner mark on classes whose strategy is locked.
+        if (data.hasLock) {
+          final mark = cell * 0.28;
+          canvas.drawPath(
+            Path()
+              ..moveTo(rect.right - mark, rect.top)
+              ..lineTo(rect.right, rect.top)
+              ..lineTo(rect.right, rect.top + mark)
+              ..close(),
+            paint..color = const Color(0xFFFFFFFF),
+          );
+        }
+
         if (cell >= 18) {
           final text = TextPainter(
             text: TextSpan(

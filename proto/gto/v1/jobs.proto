@@ -74,6 +74,13 @@ message Job {
   uint64 memory_bytes = 15;
   // Whether the solution can be browsed: the job has run at least once.
   bool has_solution = 16;
+
+  // Set for a re-solve under locks: the job it started from, and the locks
+  // in force. See locks.proto.
+  string parent_id = 17;
+  repeated NodeLock locks = 18;
+  // Server bookkeeping: the job still has to start from its parent's state.
+  bool warm_start_pending = 19;
 }
 
 message SubmitJobRequest {

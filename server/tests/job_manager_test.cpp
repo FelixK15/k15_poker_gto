@@ -517,5 +517,193 @@ TEST(JobManager, FailsAJobWhoseSavedSolutionIsDamaged) {
   EXPECT_EQ(jobs.resume(id, &resumed).kind, ErrorKind::FailedPrecondition);
 }
 
+/// A lock on every hand of the acting player, read from the node itself.
+v1::NodeLock lock_whole_range(JobManager& jobs, const std::string& job_id,
+                              const std::string& path, const std::vector<float>& frequencies) {
+  v1::GetNodeResponse node;
+  EXPECT_FALSE(jobs.node(job_id, path, &node));
+  v1::NodeLock lock;
+  lock.set_path(path);
+  const v1::PlayerRange& range = node.player() == v1::PLAYER_OOP ? node.oop() : node.ip();
+  for (const std::string& hand : range.hands()) {
+    v1::HandLock* hand_lock = lock.add_hands();
+    hand_lock->set_hand(hand);
+    for (const float f : frequencies) hand_lock->add_frequencies(f);
+  }
+  return lock;
+}
+
+v1::ResolveRequest resolve_request(const std::string& parent, const v1::NodeLock& lock,
+                                   std::uint32_t iterations = 1000) {
+  v1::ResolveRequest request;
+  request.set_parent_job_id(parent);
+  *request.add_locks() = lock;
+  request.mutable_settings()->set_max_iterations(iterations);
+  request.mutable_settings()->set_target_exploitability_pct(0);
+  return request;
+}
+
+TEST(JobManager, ResolvesUnderALock) {
+  JobManager jobs(memory_config());
+  v1::Job parent;
+  ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 1000, 0), &parent));
+  ASSERT_TRUE(wait_for_state(jobs, parent.id(), v1::JOB_STATE_DONE));
+
+  // OOP always folds to the bet: [fold, call].
+  const v1::NodeLock lock = lock_whole_range(jobs, parent.id(), "check/allin", {1, 0});
+  v1::Job child;
+  ASSERT_FALSE(jobs.resolve(resolve_request(parent.id(), lock), &child));
+  EXPECT_NE(child.id(), parent.id());
+  EXPECT_EQ(child.parent_id(), parent.id());
+  EXPECT_EQ(child.name(), parent.name() + " (locked)");
+  ASSERT_EQ(child.locks_size(), 1);
+  EXPECT_EQ(child.locks(0).path(), "check/allin");
+  // It continues the parent's count and may run a thousand more.
+  EXPECT_EQ(child.iteration(), 1000u);
+  EXPECT_EQ(child.settings().max_iterations(), 2000u);
+  EXPECT_FALSE(child.has_solution());
+
+  ASSERT_TRUE(wait_for_state(jobs, child.id(), v1::JOB_STATE_DONE));
+  child = job_of(jobs, child.id());
+  EXPECT_EQ(child.iteration(), 2000u);
+  EXPECT_FALSE(child.warm_start_pending());
+  // Against a player who always folds, IP bets everything and takes the pot.
+  EXPECT_NEAR(child.ip_ev(), 100.0, 0.3);
+  EXPECT_NEAR(child.oop_ev(), 0.0, 0.3);
+  EXPECT_NEAR(child.exploitability_pct(), 0.0, 0.1);
+
+  v1::GetNodeResponse locked_node;
+  ASSERT_FALSE(jobs.node(child.id(), "check/allin", &locked_node));
+  ASSERT_EQ(locked_node.locked_size(), 3);
+  for (int h = 0; h < 3; ++h) {
+    EXPECT_TRUE(locked_node.locked(h));
+    EXPECT_EQ(locked_node.strategy(h), 1.0f);      // fold
+    EXPECT_EQ(locked_node.strategy(3 + h), 0.0f);  // call
+  }
+  v1::GetNodeResponse free_node;
+  ASSERT_FALSE(jobs.node(child.id(), "check", &free_node));
+  EXPECT_NEAR(free_node.actions(1).frequency(), 1.0, 0.01);
+  for (const bool flag : free_node.locked()) EXPECT_FALSE(flag);
+
+  // The parent is untouched.
+  v1::GetNodeResponse parent_node;
+  ASSERT_FALSE(jobs.node(parent.id(), "check", &parent_node));
+  EXPECT_NEAR(parent_node.actions(1).frequency(), 0.3, 0.01);
+  EXPECT_NEAR(job_of(jobs, parent.id()).ip_ev(), 30.0, 0.3);
+  for (const bool flag : parent_node.locked()) EXPECT_FALSE(flag);
+}
+
+TEST(JobManager, RejectsBadLocks) {
+  JobManager jobs(memory_config());
+  v1::Job parent;
+  ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 100, 0), &parent));
+  ASSERT_TRUE(wait_for_state(jobs, parent.id(), v1::JOB_STATE_DONE));
+  const v1::NodeLock good = lock_whole_range(jobs, parent.id(), "check/allin", {1, 0});
+  v1::Job child;
+
+  v1::ResolveRequest none;
+  none.set_parent_job_id(parent.id());
+  EXPECT_EQ(jobs.resolve(none, &child).kind, ErrorKind::InvalidArgument);
+
+  EXPECT_EQ(jobs.resolve(resolve_request("nope", good), &child).kind, ErrorKind::NotFound);
+
+  v1::NodeLock bad_path = good;
+  bad_path.set_path("check/bet50");
+  Error error = jobs.resolve(resolve_request(parent.id(), bad_path), &child);
+  EXPECT_EQ(error.kind, ErrorKind::InvalidArgument);
+  EXPECT_NE(error.message.find("check/bet50"), std::string::npos) << error.message;
+
+  v1::NodeLock terminal = good;
+  terminal.set_path("check/check");
+  EXPECT_EQ(jobs.resolve(resolve_request(parent.id(), terminal), &child).kind,
+            ErrorKind::InvalidArgument);
+
+  v1::NodeLock bad_hand = good;
+  bad_hand.mutable_hands(0)->set_hand("AsAh");
+  error = jobs.resolve(resolve_request(parent.id(), bad_hand), &child);
+  EXPECT_EQ(error.kind, ErrorKind::InvalidArgument);
+  EXPECT_NE(error.message.find("AsAh"), std::string::npos) << error.message;
+
+  v1::NodeLock wrong_count = good;
+  wrong_count.mutable_hands(0)->add_frequencies(0);
+  EXPECT_EQ(jobs.resolve(resolve_request(parent.id(), wrong_count), &child).kind,
+            ErrorKind::InvalidArgument);
+
+  v1::NodeLock zero = good;
+  zero.mutable_hands(0)->set_frequencies(0, 0);
+  EXPECT_EQ(jobs.resolve(resolve_request(parent.id(), zero), &child).kind,
+            ErrorKind::InvalidArgument);
+
+  v1::NodeLock empty;
+  empty.set_path("check/allin");
+  EXPECT_EQ(jobs.resolve(resolve_request(parent.id(), empty), &child).kind,
+            ErrorKind::InvalidArgument);
+
+  // Nothing was queued by any of that.
+  EXPECT_EQ(jobs.list().size(), 1u);
+
+  // A job that is still solving cannot be the starting point.
+  v1::Job running;
+  ASSERT_FALSE(jobs.submit(endless_request(), &running));
+  ASSERT_TRUE(wait_until([&] { return job_of(jobs, running.id()).iteration() >= 2; }));
+  const v1::NodeLock on_running = lock_whole_range(jobs, running.id(), "", {1, 0});
+  EXPECT_EQ(jobs.resolve(resolve_request(running.id(), on_running), &child).kind,
+            ErrorKind::FailedPrecondition);
+}
+
+TEST(JobManager, KeepsLocksAcrossRestarts) {
+  const TempDir dir;
+  JobManagerConfig config = memory_config();
+  config.data_dir = dir.path();
+
+  std::string child_id, waiting_id;
+  v1::GetNodeResponse before;
+  {
+    JobManager jobs(config);
+    v1::Job parent, child, waiting;
+    ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 500, 0), &parent));
+    ASSERT_TRUE(wait_for_state(jobs, parent.id(), v1::JOB_STATE_DONE));
+    const v1::NodeLock lock = lock_whole_range(jobs, parent.id(), "check/allin", {0, 1});
+    ASSERT_FALSE(jobs.resolve(resolve_request(parent.id(), lock, 500), &child));
+    ASSERT_TRUE(wait_for_state(jobs, child.id(), v1::JOB_STATE_DONE));
+    ASSERT_FALSE(jobs.node(child.id(), "check", &before));
+
+    // A second re-solve that is paused before it starts.
+    ASSERT_FALSE(jobs.submit(endless_request(), &waiting));
+    v1::Job queued;
+    ASSERT_FALSE(jobs.resolve(resolve_request(parent.id(), lock, 300), &queued));
+    v1::Job paused;
+    ASSERT_FALSE(jobs.pause(queued.id(), &paused));
+    child_id = child.id();
+    waiting_id = queued.id();
+  }
+
+  JobManager jobs(config);
+  const v1::Job child = job_of(jobs, child_id);
+  EXPECT_EQ(child.state(), v1::JOB_STATE_DONE);
+  ASSERT_EQ(child.locks_size(), 1);
+
+  // The lock is in force again after loading, and the solution is the same.
+  v1::GetNodeResponse locked_node, after;
+  ASSERT_FALSE(jobs.node(child_id, "check/allin", &locked_node));
+  for (int h = 0; h < 3; ++h) {
+    EXPECT_TRUE(locked_node.locked(h));
+    EXPECT_EQ(locked_node.strategy(3 + h), 1.0f);  // always call
+  }
+  ASSERT_FALSE(jobs.node(child_id, "check", &after));
+  ASSERT_EQ(after.strategy_size(), before.strategy_size());
+  for (int i = 0; i < after.strategy_size(); ++i) EXPECT_EQ(after.strategy(i), before.strategy(i));
+  // Facing a player who always calls, IP never bluffs.
+  EXPECT_NEAR(after.actions(1).frequency(), 0.2, 0.01);
+
+  // The one that never started still starts from its parent and its locks.
+  v1::Job resumed;
+  ASSERT_FALSE(jobs.resume(waiting_id, &resumed));
+  ASSERT_TRUE(wait_for_state(jobs, waiting_id, v1::JOB_STATE_DONE));
+  const v1::Job finished = job_of(jobs, waiting_id);
+  EXPECT_EQ(finished.iteration(), 800u);
+  EXPECT_NEAR(finished.ip_ev(), 40.0, 0.5);
+}
+
 }  // namespace
 }  // namespace gto::server

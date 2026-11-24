@@ -136,6 +136,12 @@ grpc::Status SolutionServiceImpl::GetNode(grpc::ServerContext* context,
   return to_status(jobs_.node(request->job_id(), request->path(), response));
 }
 
+grpc::Status LockServiceImpl::Resolve(grpc::ServerContext* context,
+                                      const v1::ResolveRequest* request, v1::Job* response) {
+  GTO_REQUIRE_AUTH(context);
+  return to_status(jobs_.resolve(*request, response));
+}
+
 #undef GTO_REQUIRE_AUTH
 
 }  // namespace gto::server

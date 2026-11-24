@@ -60,7 +60,8 @@ Connections are not encrypted yet. On a network you do not trust, reach the serv
 or an SSH tunnel.
 
 The API is defined in `proto/gto/v1/`: `TreeService` (size estimate), `JobService` (submit, list,
-pause, resume, cancel, delete, watch) and `SolutionService` (browse a solution node by node).
+pause, resume, cancel, delete, watch), `SolutionService` (browse a solution node by node) and
+`LockService` (re-solve under locks).
 
 ## Solving a spot from the command line
 
@@ -99,6 +100,11 @@ When setting up a solve, the **Preflop** row fills in both ranges, the pot and t
 line such as "BTN opens, BB calls" at 6-max or 9-max and 100, 200 or 300BB. Those ranges are rough,
 rule-based starting points, not solver output: edit them on the grid (the button next to each
 range), paste your own in PioSOLVER or GTO+ text form, and save the ones you want to keep.
+
+In a solution, **Lock this decision…** fixes how the player to act plays there, for the whole
+range or for the hand class picked in the grid. **Re-solve with these locks** then queues a new
+solve that starts from this one and finds the best play around the locks; the original stays, and
+the new one shows what changed against it.
 
 Tests that need a real server are skipped by default; `app/test/live_server_test.dart` says how to
 run them. `app/test/screenshots_test.dart` renders the main screens to PNG files.
