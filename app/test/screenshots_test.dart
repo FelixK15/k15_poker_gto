@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k15_gto/src/api/gto_api.dart';
 import 'package:k15_gto/src/jobs/jobs_screen.dart';
+import 'package:k15_gto/src/range/preflop_library.dart';
+import 'package:k15_gto/src/range/range_editor.dart';
+import 'package:k15_gto/src/range/range_store.dart';
 import 'package:k15_gto/src/solution/matrix_model.dart';
 import 'package:k15_gto/src/solution/solution_screen.dart';
 import 'package:k15_gto/src/spot/spot_setup_screen.dart';
@@ -151,6 +154,31 @@ void main() {
         ),
       ),
       size: const Size(1100, 1000),
+    );
+  }, skip: skip);
+
+  testWidgets('range editor', (tester) async {
+    final scenario = PreflopLibrary.scenario(
+      format: TableFormat.sixMax,
+      stack: 100,
+      potType: PotType.singleRaised,
+      opener: 'BTN',
+      defender: 'BB',
+    );
+    await shoot(
+      tester,
+      'range_editor',
+      Scaffold(
+        body: RangeEditor(
+          title: 'BB calls a BTN open (baseline)',
+          initialText: scenario.oopRange.toString(),
+          store: MemoryRangeStore({
+            'My BB defend': 'AA',
+            '3-bet bluffs': 'A5s',
+          }),
+        ),
+      ),
+      size: const Size(1200, 820),
     );
   }, skip: skip);
 

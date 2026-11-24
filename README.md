@@ -95,6 +95,11 @@ build the server first. `GTO_SERVER_PATH` overrides the search. Local jobs and s
 in `%LOCALAPPDATA%\K15GTO\data`; the solver stops when the app closes and saves a running solve,
 which shows up as paused the next time.
 
+When setting up a solve, the **Preflop** row fills in both ranges, the pot and the stacks for a
+line such as "BTN opens, BB calls" at 6-max or 9-max and 100, 200 or 300BB. Those ranges are rough,
+rule-based starting points, not solver output: edit them on the grid (the button next to each
+range), paste your own in PioSOLVER or GTO+ text form, and save the ones you want to keep.
+
 Tests that need a real server are skipped by default; `app/test/live_server_test.dart` says how to
 run them. `app/test/screenshots_test.dart` renders the main screens to PNG files.
 

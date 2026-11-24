@@ -4,7 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../api/gto_api.dart';
 import '../common/format.dart';
+import '../range/preflop_library.dart';
+import '../range/range_editor.dart';
+import '../range/range_store.dart';
+import 'board_picker.dart';
 import 'spot_form.dart';
+import 'tree_presets.dart';
 
 /// Describe a spot, see what solving it takes, and send it off.
 class SpotSetupScreen extends StatefulWidget {
@@ -12,6 +17,7 @@ class SpotSetupScreen extends StatefulWidget {
     super.key,
     required this.api,
     required this.onSubmitted,
+    this.store,
     this.estimateDelay = const Duration(milliseconds: 400),
   });
 
@@ -22,12 +28,28 @@ class SpotSetupScreen extends StatefulWidget {
   /// size of the tree.
   final Duration estimateDelay;
 
+  /// Where the range editor keeps saved ranges; memory only if not given.
+  final RangeStore? store;
+
   @override
   State<SpotSetupScreen> createState() => _SpotSetupScreenState();
 }
 
 class _SpotSetupScreenState extends State<SpotSetupScreen> {
   final _input = SpotInput();
+  late final RangeStore _store = widget.store ?? MemoryRangeStore();
+
+  /// Bumped whenever the form is filled in from code, so that the text
+  /// fields start over with the new values.
+  int _formVersion = 0;
+
+  // The preflop line the ranges are taken from.
+  TableFormat _format = TableFormat.sixMax;
+  int _stack = 100;
+  PotType _potType = PotType.singleRaised;
+  String _opener = 'BTN';
+  String _defender = 'BB';
+  String? _scenarioDescription;
 
   Timer? _debounce;
   int _estimateRequest = 0;
@@ -117,6 +139,192 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     }
   }
 
+  /// Something the form shows was set from code rather than typed.
+  void _filledIn(void Function() change) {
+    setState(() {
+      change();
+      ++_formVersion;
+    });
+    _changed();
+  }
+
+  void _applyScenario() {
+    // Changing the opener or the table can leave the other seat impossible.
+    final openers = PreflopLibrary.openers(_format);
+    if (!openers.contains(_opener)) _opener = openers.last;
+    final defenders = PreflopLibrary.defenders(_format, _opener);
+    if (!defenders.contains(_defender)) _defender = defenders.last;
+
+    final scenario = PreflopLibrary.scenario(
+      format: _format,
+      stack: _stack,
+      potType: _potType,
+      opener: _opener,
+      defender: _defender,
+    );
+    _filledIn(() {
+      _input
+        ..oopRange = scenario.oopRange.toString()
+        ..ipRange = scenario.ipRange.toString()
+        ..pot = formatChips(scenario.pot)
+        ..stack = formatChips(scenario.effectiveStack);
+      _scenarioDescription =
+          '${scenario.description}. '
+          'OOP is ${scenario.oopPosition}, IP is ${scenario.ipPosition}.';
+    });
+  }
+
+  Future<void> _editRange({required bool oop}) async {
+    final text = await showRangeEditor(
+      context,
+      title: oop ? 'Out of position range' : 'In position range',
+      initialText: oop ? _input.oopRange : _input.ipRange,
+      store: _store,
+    );
+    if (text == null || !mounted) return;
+    _filledIn(() => oop ? _input.oopRange = text : _input.ipRange = text);
+  }
+
+  Future<void> _pickBoard() async {
+    final board = await showBoardPicker(context, _input.board);
+    if (board == null || !mounted) return;
+    _filledIn(() => _input.board = board);
+  }
+
+  Widget _scenarioSection() {
+    final openers = PreflopLibrary.openers(_format);
+    final defenders = PreflopLibrary.defenders(_format, _opener);
+
+    Widget choice<T>(
+      String key,
+      String label,
+      T value,
+      List<T> values,
+      String Function(T) text,
+      void Function(T) set, {
+      double width = 150,
+    }) {
+      return SizedBox(
+        width: width,
+        child: DropdownButtonFormField<T>(
+          key: Key('scenario-$key'),
+          initialValue: values.contains(value) ? value : values.last,
+          isDense: true,
+          // Let the text shrink to the box instead of overflowing it.
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+            isDense: true,
+          ),
+          items: [
+            for (final v in values)
+              DropdownMenuItem(value: v, child: Text(text(v))),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            set(v);
+            _applyScenario();
+          },
+        ),
+      );
+    }
+
+    final theme = Theme.of(context);
+    return _section('Preflop', [
+      Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          choice<TableFormat>(
+            'format',
+            'Table',
+            _format,
+            TableFormat.values,
+            (f) => f.label,
+            (f) => _format = f,
+            width: 120,
+          ),
+          choice<int>(
+            'stack',
+            'Stacks',
+            _stack,
+            stackDepths,
+            (s) => '$s BB',
+            (s) => _stack = s,
+            width: 120,
+          ),
+          choice<PotType>(
+            'pot-type',
+            'Pot',
+            _potType,
+            PotType.values,
+            (t) => t.label,
+            (t) => _potType = t,
+            width: 200,
+          ),
+          choice<String>(
+            'opener',
+            'Opens',
+            _opener,
+            openers,
+            (p) => p,
+            (p) => _opener = p,
+            width: 120,
+          ),
+          choice<String>(
+            'defender',
+            'Against',
+            _defender,
+            defenders,
+            (p) => p,
+            (p) => _defender = p,
+            width: 120,
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Text(
+        _scenarioDescription ??
+            'Pick a line to fill in both ranges, the pot and the stacks.',
+        key: const Key('scenario-description'),
+        style: theme.textTheme.bodyMedium,
+      ),
+      Text(
+        'These ranges are rough starting points built from simple rules, '
+        'not solver output. Adjust them to your game.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ]);
+  }
+
+  Widget _rangeField({required bool oop}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _field(
+            oop ? 'oop-range' : 'ip-range',
+            oop ? 'Out of position range' : 'In position range',
+            oop ? _input.oopRange : _input.ipRange,
+            (v) => oop ? _input.oopRange = v : _input.ipRange = v,
+            lines: 3,
+            hint: oop ? 'QQ+, AKs, AQo:0.5, A5s-A2s' : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filledTonal(
+          key: Key(oop ? 'edit-oop-range' : 'edit-ip-range'),
+          tooltip: 'Edit on the grid',
+          icon: const Icon(Icons.grid_on),
+          onPressed: () => _editRange(oop: oop),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Streets before the board's own are not played in this spot.
@@ -135,8 +343,11 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 900),
                   child: Column(
+                    // A new key makes every field take its value afresh.
+                    key: ValueKey(_formVersion),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _scenarioSection(),
                       _section('Spot', [
                         Wrap(
                           spacing: 12,
@@ -149,6 +360,12 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                               (v) => _input.board = v,
                               width: 220,
                               hint: 'Ks Td 7h',
+                            ),
+                            IconButton.filledTonal(
+                              key: const Key('pick-board'),
+                              tooltip: 'Pick the cards',
+                              icon: const Icon(Icons.style),
+                              onPressed: _pickBoard,
                             ),
                             _field(
                               'pot',
@@ -167,24 +384,30 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        _field(
-                          'oop-range',
-                          'Out of position range',
-                          _input.oopRange,
-                          (v) => _input.oopRange = v,
-                          lines: 3,
-                          hint: 'QQ+, AKs, AQo:0.5, A5s-A2s',
-                        ),
+                        _rangeField(oop: true),
                         const SizedBox(height: 12),
-                        _field(
-                          'ip-range',
-                          'In position range',
-                          _input.ipRange,
-                          (v) => _input.ipRange = v,
-                          lines: 3,
-                        ),
+                        _rangeField(oop: false),
                       ]),
                       _section('Bet sizes, in % of the pot', [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            const Text('Fill in:'),
+                            for (final preset in treePresets)
+                              Tooltip(
+                                message: preset.description,
+                                child: OutlinedButton(
+                                  key: Key('preset-${preset.name}'),
+                                  onPressed: () =>
+                                      _filledIn(() => preset.applyTo(_input)),
+                                  child: Text(preset.name),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                         for (var street = firstStreet; street < 3; ++street)
                           _streetSizing(street),
                         const SizedBox(height: 4),
