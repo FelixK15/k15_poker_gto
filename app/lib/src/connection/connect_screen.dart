@@ -1,20 +1,21 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../gen/gto/v1/server.pb.dart';
+import '../api/gto_api.dart';
+import 'local_server.dart';
 import 'server_connection.dart';
 
 enum ConnectionMode { local, remote }
 
-/// Local solving needs the bundled server, which only exists on desktop.
-bool get localSolvingSupported =>
-    defaultTargetPlatform == TargetPlatform.windows;
-
-/// First screen: choose between solving locally and connecting to a server.
+/// First screen: choose between solving on this computer and connecting to a
+/// server.
 class ConnectScreen extends ConsumerStatefulWidget {
-  const ConnectScreen({super.key});
+  const ConnectScreen({super.key, this.localSupported});
+
+  /// Whether to offer solving on this computer. Defaults to what the
+  /// platform allows; tests set it.
+  final bool? localSupported;
 
   @override
   ConsumerState<ConnectScreen> createState() => _ConnectScreenState();
@@ -24,38 +25,55 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   final _formKey = GlobalKey<FormState>();
   final _hostController = TextEditingController(text: '127.0.0.1');
   final _portController = TextEditingController(text: '50051');
+  final _tokenController = TextEditingController();
 
-  ConnectionMode _mode = ConnectionMode.remote;
+  late final bool _localSupported =
+      widget.localSupported ?? localSolvingSupported;
+  late ConnectionMode _mode = _localSupported
+      ? ConnectionMode.local
+      : ConnectionMode.remote;
   bool _connecting = false;
   String? _error;
-  GetInfoResponse? _info;
 
   @override
   void dispose() {
     _hostController.dispose();
     _portController.dispose();
+    _tokenController.dispose();
     super.dispose();
   }
 
   Future<void> _connect() async {
-    if (!_formKey.currentState!.validate()) return;
-    final host = _hostController.text.trim();
-    final port = int.parse(_portController.text.trim());
-
+    if (_mode == ConnectionMode.remote && !_formKey.currentState!.validate()) {
+      return;
+    }
     setState(() {
       _connecting = true;
       _error = null;
-      _info = null;
     });
     try {
-      final info = await ref.read(serverInfoFetcherProvider)(host, port);
-      if (!mounted) return;
-      setState(() => _info = info);
+      final GtoApi api;
+      if (_mode == ConnectionMode.local) {
+        api = await ref.read(localConnectorProvider)();
+      } else {
+        api = await ref.read(remoteConnectorProvider)(
+          RemoteTarget(
+            host: _hostController.text.trim(),
+            port: int.parse(_portController.text.trim()),
+            token: _tokenController.text.trim(),
+          ),
+        );
+      }
+      // The app switches to the home screen when this is set.
+      ref.read(connectionProvider.notifier).connected(api);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = describeConnectionError(error));
-    } finally {
-      if (mounted) setState(() => _connecting = false);
+      setState(() {
+        _error = error is LocalServerException
+            ? error.message
+            : describeError(error);
+        _connecting = false;
+      });
     }
   }
 
@@ -87,7 +105,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         value: ConnectionMode.local,
                         icon: const Icon(Icons.computer),
                         label: const Text('This computer'),
-                        enabled: localSolvingSupported,
+                        enabled: _localSupported,
                       ),
                       const ButtonSegment(
                         value: ConnectionMode.remote,
@@ -101,14 +119,32 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         : (selection) => setState(() {
                             _mode = selection.first;
                             _error = null;
-                            _info = null;
                           }),
                   ),
                   const SizedBox(height: 24),
                   if (_mode == ConnectionMode.local)
-                    const _LocalPanel()
+                    Text(
+                      'Solves use this computer\'s processor and memory. '
+                      'They stop when you close the app and can be resumed later.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    )
                   else
-                    _buildRemotePanel(),
+                    _buildRemoteFields(),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    key: const Key('connect-button'),
+                    onPressed: _connecting ? null : _connect,
+                    child: _connecting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _mode == ConnectionMode.local ? 'Start' : 'Connect',
+                          ),
+                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -116,10 +152,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                       key: const Key('connect-error'),
                       style: TextStyle(color: theme.colorScheme.error),
                     ),
-                  ],
-                  if (_info != null) ...[
-                    const SizedBox(height: 16),
-                    ServerInfoCard(info: _info!),
                   ],
                 ],
               ),
@@ -130,7 +162,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     );
   }
 
-  Widget _buildRemotePanel() {
+  Widget _buildRemoteFields() {
     return Form(
       key: _formKey,
       child: Column(
@@ -175,107 +207,26 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         ? '1 to 65535'
                         : null;
                   },
-                  onFieldSubmitted: (_) => _connect(),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          FilledButton(
-            key: const Key('connect-button'),
-            onPressed: _connecting ? null : _connect,
-            child: _connecting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Connect'),
+          const SizedBox(height: 12),
+          TextFormField(
+            key: const Key('token-field'),
+            controller: _tokenController,
+            enabled: !_connecting,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(
+              labelText: 'Access token',
+              helperText: 'Leave empty if the server has none.',
+              border: OutlineInputBorder(),
+            ),
+            onFieldSubmitted: (_) => _connect(),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _LocalPanel extends StatelessWidget {
-  const _LocalPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Card(
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Text(
-          'Solving on this computer is not available yet. '
-          'Until then, start gto-server yourself and connect to it under "A server".',
-        ),
-      ),
-    );
-  }
-}
-
-/// What a server reported about itself.
-class ServerInfoCard extends StatelessWidget {
-  const ServerInfoCard({super.key, required this.info});
-
-  final GetInfoResponse info;
-
-  static String formatGigabytes(int bytes) =>
-      '${(bytes / (1 << 30)).toStringAsFixed(1)} GB';
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rows = <(String, String)>[
-      ('Server', info.serverVersion),
-      ('Engine', info.engineVersion),
-      ('System', info.os),
-      ('CPU threads', '${info.logicalCores}'),
-      (
-        'Memory',
-        '${formatGigabytes(info.availableMemoryBytes.toInt())} free of '
-            '${formatGigabytes(info.totalMemoryBytes.toInt())}',
-      ),
-    ];
-    return Card(
-      key: const Key('server-info'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: theme.colorScheme.primary,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text('Connected', style: theme.textTheme.titleMedium),
-              ],
-            ),
-            const SizedBox(height: 12),
-            for (final (label, value) in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 110,
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    Expanded(child: Text(value)),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
