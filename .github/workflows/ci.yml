@@ -31,14 +31,23 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
       # The runner images ship vcpkg; point VCPKG_ROOT at it.
+      # Building gRPC from source fills the small system drive on Windows runners
+      # if vcpkg keeps its build trees there, so keep them in the runner's temp
+      # directory (on the larger drive) and delete each one once it is built.
       - name: Locate vcpkg
         shell: bash
-        run: echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+        run: |
+          echo "VCPKG_ROOT=$VCPKG_INSTALLATION_ROOT" >> "$GITHUB_ENV"
+          buildtrees="$(echo "$RUNNER_TEMP" | tr '\\' '/')/vcpkg-buildtrees"
+          echo "VCPKG_INSTALL_OPTIONS=--clean-after-build;--x-buildtrees-root=$buildtrees" >> "$GITHUB_ENV"
 
       - name: Update vcpkg to a version that knows our baseline
         shell: bash
         run: |
-          git -C "$VCPKG_INSTALLATION_ROOT" pull --ff-only origin master
+          # The runner's checkout may have local changes, which a pull refuses to
+          # overwrite. It is thrown away after the job, so just reset it.
+          git -C "$VCPKG_INSTALLATION_ROOT" fetch origin master
+          git -C "$VCPKG_INSTALLATION_ROOT" reset --hard FETCH_HEAD
           if [ "$RUNNER_OS" = "Windows" ]; then
             "$VCPKG_INSTALLATION_ROOT/bootstrap-vcpkg.bat" -disableMetrics
           else
@@ -75,9 +84,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to the release the app is developed with. Newer ones deprecate
+      # package:flutter/material.dart and need a newer Android Gradle Plugin;
+      # move up deliberately, together with those changes.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.5
           cache: true
 
       - run: flutter pub get
