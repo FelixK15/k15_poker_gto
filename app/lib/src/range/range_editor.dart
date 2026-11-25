@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../common/info_button.dart';
 import 'hand_range.dart';
 import 'range_store.dart';
 
@@ -204,7 +205,18 @@ class _RangeEditorState extends State<RangeEditor> {
           style: theme.textTheme.titleMedium,
         ),
         const SizedBox(height: 12),
-        Text('Paint with weight ${(_brush * 100).round()}%'),
+        Row(
+          children: [
+            Flexible(
+              child: Text('Paint with weight ${(_brush * 100).round()}%'),
+            ),
+            const InfoButton(
+              'How often the hands you paint are in the range. 100% is '
+              'always; 50% means the player holds the hand only half of '
+              'the time, as after a mixed preflop decision.',
+            ),
+          ],
+        ),
         Slider(
           key: const Key('range-brush'),
           value: _brush,
@@ -239,12 +251,18 @@ class _RangeEditorState extends State<RangeEditor> {
           maxLines: 6,
           autocorrect: false,
           enableSuggestions: false,
-          decoration: InputDecoration(
-            labelText: 'As text',
-            helperText: 'Paste a range from PioSOLVER or GTO+ here.',
-            errorText: _textError,
-            errorMaxLines: 3,
-            border: const OutlineInputBorder(),
+          decoration: InfoButton.decorate(
+            InputDecoration(
+              labelText: 'As text',
+              helperText: 'Paste a range from PioSOLVER or GTO+ here.',
+              errorText: _textError,
+              errorMaxLines: 3,
+              border: const OutlineInputBorder(),
+            ),
+            'The same range as the grid, written out. Hands are separated '
+            'by commas: QQ+ is queens and better, A5s-A2s a run of suited '
+            'hands, s and o mean suited and offsuit, and AQo:0.5 is a hand '
+            'held half of the time. Typing here updates the grid.',
           ),
           onChanged: _textChanged,
         ),
@@ -286,10 +304,14 @@ class _RangeEditorState extends State<RangeEditor> {
               child: TextField(
                 key: const Key('range-save-name'),
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Save as',
-                  isDense: true,
-                  border: OutlineInputBorder(),
+                decoration: InfoButton.decorate(
+                  const InputDecoration(
+                    labelText: 'Save as',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  'A name to keep this range under. Saved ranges appear '
+                  'above and load with a tap.',
                 ),
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _save(),

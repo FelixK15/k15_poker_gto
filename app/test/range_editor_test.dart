@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:k15_gto/src/common/info_button.dart';
 import 'package:k15_gto/src/range/hand_range.dart';
 import 'package:k15_gto/src/range/range_editor.dart';
 import 'package:k15_gto/src/range/range_store.dart';
@@ -315,6 +316,46 @@ void main() {
       // A seat that cannot defend against the new opener is replaced.
       await choose(tester, 'opener', 'SB');
       expect(find.textContaining('OOP is SB, IP is BB'), findsOneWidget);
+    });
+
+    testWidgets('keeps ranges the user entered', (tester) async {
+      final api = await pumpSetup(tester);
+      await tester.enterText(find.byKey(const Key('field-oop-range')), 'AA');
+      await tester.pumpAndSettle();
+
+      await choose(tester, 'pot-type', '3-bet pot');
+      await choose(tester, 'stack', '200 BB');
+      expect(field(tester, 'oop-range'), 'AA');
+      expect(field(tester, 'pot'), '10');
+      expect(field(tester, 'stack'), '95');
+      expect(api.estimated.last.oopRange, 'AA');
+      expect(find.textContaining('were kept'), findsOneWidget);
+
+      // The line is still there for the asking.
+      await tester.tap(find.byKey(const Key('scenario-overwrite')));
+      await tester.pumpAndSettle();
+      expect(field(tester, 'pot'), '20.5');
+      expect(field(tester, 'stack'), '190');
+      expect(field(tester, 'oop-range'), startsWith('AA,'));
+      expect(find.byKey(const Key('scenario-overwrite')), findsNothing);
+
+      // Filled in by a line, the fields follow the next one again.
+      await choose(tester, 'stack', '100 BB');
+      expect(field(tester, 'stack'), '90');
+    });
+
+    testWidgets('explains a field on tapping its info button', (tester) async {
+      await pumpSetup(tester);
+      final info = find.descendant(
+        of: find.byKey(const Key('field-raise-cap')),
+        matching: find.byType(InfoButton),
+      );
+      expect(info, findsOneWidget);
+      await tester.tap(info);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('The most raises allowed'), findsOneWidget);
+      // Tooltips leave a timer running until they close.
+      await tester.pumpAndSettle(const Duration(seconds: 30));
     });
 
     testWidgets('offers nine-handed seats', (tester) async {

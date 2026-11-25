@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api/gto_api.dart';
 import '../common/format.dart';
+import '../common/info_button.dart';
 import 'action_style.dart';
 import 'matrix_model.dart';
 
@@ -141,7 +142,17 @@ class _LockDialogState extends State<LockDialog> {
                   ),
                 ),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text('How often', style: theme.textTheme.labelLarge),
+                const InfoButton(
+                  'Set how often the locked hands take each action. The '
+                  'sliders are weighed against each other: the shares on '
+                  'the right always add up to 100%.',
+                ),
+              ],
+            ),
             for (var a = 0; a < node.actions.length; ++a)
               Row(
                 children: [

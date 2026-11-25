@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../api/gto_api.dart';
 import '../common/format.dart';
+import '../common/info_button.dart';
 import '../range/preflop_library.dart';
 import '../range/range_editor.dart';
 import '../range/range_store.dart';
@@ -51,6 +53,13 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
   String _defender = 'BB';
   String? _scenarioDescription;
 
+  /// The ranges, pot and stack as the defaults or the last preflop line left
+  /// them. Anything else in those fields is the user's own.
+  late List<String> _filledSpot;
+
+  /// The chosen line was not filled in, to keep what the user entered.
+  bool _keptOwnSpot = false;
+
   Timer? _debounce;
   int _estimateRequest = 0;
   bool _estimating = false;
@@ -61,6 +70,7 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
   @override
   void initState() {
     super.initState();
+    _filledSpot = _spotFields();
     _scheduleEstimate(Duration.zero);
   }
 
@@ -148,7 +158,16 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     _changed();
   }
 
-  void _applyScenario() {
+  List<String> _spotFields() => [
+    _input.oopRange.trim(),
+    _input.ipRange.trim(),
+    _input.pot.trim(),
+    _input.stack.trim(),
+  ];
+
+  /// Fills in the chosen preflop line. Ranges, a pot or a stack the user
+  /// entered are only replaced when [overwrite] is set.
+  void _applyScenario({bool overwrite = false}) {
     // Changing the opener or the table can leave the other seat impossible.
     final openers = PreflopLibrary.openers(_format);
     if (!openers.contains(_opener)) _opener = openers.last;
@@ -162,6 +181,14 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
       opener: _opener,
       defender: _defender,
     );
+    if (!overwrite && !listEquals(_spotFields(), _filledSpot)) {
+      setState(() {
+        _keptOwnSpot = true;
+        // The seats on offer may have changed.
+        ++_formVersion;
+      });
+      return;
+    }
     _filledIn(() {
       _input
         ..oopRange = scenario.oopRange.toString()
@@ -171,6 +198,8 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
       _scenarioDescription =
           '${scenario.description}. '
           'OOP is ${scenario.oopPosition}, IP is ${scenario.ipPosition}.';
+      _filledSpot = _spotFields();
+      _keptOwnSpot = false;
     });
   }
 
@@ -231,7 +260,7 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     }
 
     final theme = Theme.of(context);
-    return _section('Preflop', [
+    return _section(info: _preflopInfo, 'Preflop', [
       Wrap(
         spacing: 12,
         runSpacing: 12,
@@ -284,12 +313,31 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
         ],
       ),
       const SizedBox(height: 8),
-      Text(
-        _scenarioDescription ??
-            'Pick a line to fill in both ranges, the pot and the stacks.',
-        key: const Key('scenario-description'),
-        style: theme.textTheme.bodyMedium,
-      ),
+      if (_keptOwnSpot)
+        Wrap(
+          spacing: 12,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'The ranges, pot and stack you entered were kept.',
+              key: const Key('scenario-description'),
+              style: theme.textTheme.bodyMedium,
+            ),
+            OutlinedButton(
+              key: const Key('scenario-overwrite'),
+              onPressed: () => _applyScenario(overwrite: true),
+              child: const Text('Replace them with this line'),
+            ),
+          ],
+        )
+      else
+        Text(
+          _scenarioDescription ??
+              'Pick a line to fill in both ranges, the pot and the stacks.',
+          key: const Key('scenario-description'),
+          style: theme.textTheme.bodyMedium,
+        ),
       Text(
         'These ranges are rough starting points built from simple rules, '
         'not solver output. Adjust them to your game.',
@@ -312,6 +360,13 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
             (v) => oop ? _input.oopRange = v : _input.ipRange = v,
             lines: 3,
             hint: oop ? 'QQ+, AKs, AQo:0.5, A5s-A2s' : null,
+            info:
+                'The hands the player who acts '
+                '${oop ? 'first' : 'last'} can hold here, separated by '
+                'commas. QQ+ is queens and better, A5s-A2s a run of suited '
+                'hands, s and o mean suited and offsuit, and AQo:0.5 is a '
+                'hand held half of the time. The grid button edits the same '
+                'range by painting.',
           ),
         ),
         const SizedBox(width: 8),
@@ -360,6 +415,11 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                               (v) => _input.board = v,
                               width: 220,
                               hint: 'Ks Td 7h',
+                              info:
+                                  'The cards on the table, each as a rank '
+                                  '(2-9, T, J, Q, K, A) and a suit (c, d, h, '
+                                  's). Three cards solve from the flop on, '
+                                  'four from the turn, five the river alone.',
                             ),
                             IconButton.filledTonal(
                               key: const Key('pick-board'),
@@ -373,6 +433,11 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                               _input.pot,
                               (v) => _input.pot = v,
                               width: 120,
+                              info:
+                                  'The chips in the middle when the spot '
+                                  'starts. Any unit works as long as the '
+                                  'stack uses the same one; big blinds are '
+                                  'usual.',
                             ),
                             _field(
                               'stack',
@@ -380,6 +445,11 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                               _input.stack,
                               (v) => _input.stack = v,
                               width: 160,
+                              info:
+                                  'The chips each player still has behind '
+                                  'when the spot starts, in the same unit as '
+                                  'the pot. Use the smaller stack if they '
+                                  'differ.',
                             ),
                           ],
                         ),
@@ -388,50 +458,63 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                         const SizedBox(height: 12),
                         _rangeField(oop: false),
                       ]),
-                      _section('Bet sizes, in % of the pot', [
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            const Text('Fill in:'),
-                            for (final preset in treePresets)
-                              Tooltip(
-                                message: preset.description,
-                                child: OutlinedButton(
-                                  key: Key('preset-${preset.name}'),
-                                  onPressed: () =>
-                                      _filledIn(() => preset.applyTo(_input)),
-                                  child: Text(preset.name),
+                      _section(
+                        info: _sizingInfo,
+                        'Bet sizes, in % of the pot',
+                        [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              const Text('Fill in:'),
+                              for (final preset in treePresets)
+                                Tooltip(
+                                  message: preset.description,
+                                  child: OutlinedButton(
+                                    key: Key('preset-${preset.name}'),
+                                    onPressed: () =>
+                                        _filledIn(() => preset.applyTo(_input)),
+                                    child: Text(preset.name),
+                                  ),
                                 ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          for (var street = firstStreet; street < 3; ++street)
+                            _streetSizing(street),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _field(
+                                'raise-cap',
+                                'Raises per street',
+                                _input.raiseCap,
+                                (v) => _input.raiseCap = v,
+                                width: 180,
+                                info:
+                                    'The most raises allowed on one street '
+                                    'after the first bet, 0 to 20. A lower '
+                                    'number makes a smaller tree that solves '
+                                    'faster.',
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        for (var street = firstStreet; street < 3; ++street)
-                          _streetSizing(street),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _field(
-                              'raise-cap',
-                              'Raises per street',
-                              _input.raiseCap,
-                              (v) => _input.raiseCap = v,
-                              width: 160,
-                            ),
-                            _field(
-                              'allin-threshold',
-                              'All-in from % of stack',
-                              _input.allinThreshold,
-                              (v) => _input.allinThreshold = v,
-                              width: 200,
-                            ),
-                          ],
-                        ),
-                      ]),
+                              _field(
+                                'allin-threshold',
+                                'All-in from % of stack',
+                                _input.allinThreshold,
+                                (v) => _input.allinThreshold = v,
+                                width: 220,
+                                info:
+                                    'A bet or raise that would put in at least '
+                                    'this share of the remaining stack is made '
+                                    'all-in instead. 0 turns the rule off.',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                       _section('Solve', [
                         Wrap(
                           spacing: 12,
@@ -442,14 +525,24 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                               'Iterations at most',
                               _input.maxIterations,
                               (v) => _input.maxIterations = v,
-                              width: 180,
+                              width: 200,
+                              info:
+                                  'The solver stops after this many rounds '
+                                  'even if the target next to it is not '
+                                  'reached. More rounds come closer to the '
+                                  'optimal strategy and take longer.',
                             ),
                             _field(
                               'target',
                               'Stop at % of pot exploitable',
                               _input.targetExploitability,
                               (v) => _input.targetExploitability = v,
-                              width: 240,
+                              width: 260,
+                              info:
+                                  'How much a perfect opponent could still '
+                                  'win against the solution, in % of the '
+                                  'pot. Solving stops once it is this low. '
+                                  'Smaller is more exact and takes longer.',
                             ),
                           ],
                         ),
@@ -535,7 +628,28 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     );
   }
 
-  Widget _section(String title, List<Widget> children) {
+  static const _preflopInfo =
+      'Picks how the hand got to the flop and fills in both ranges, the pot '
+      'and the effective stack from it.\n\n'
+      'Table: how many seats, which decides the positions and how wide '
+      'they play.\n\n'
+      'Stacks: what both players started with, in big blinds.\n\n'
+      'Pot: one raise and a call, a called 3-bet or a called 4-bet.\n\n'
+      'Opens: the seat that raises first.\n\n'
+      'Against: the seat that plays against the opener.\n\n'
+      'Once you have typed your own ranges, pot or stack, a new choice here '
+      'keeps them; a button then offers to replace them.';
+
+  static const _sizingInfo =
+      'The bets and raises each player may choose from on each street.\n\n'
+      'Bet: sizes in % of the pot, separated by commas; 50 is half the '
+      'pot.\n\n'
+      'Raise: sizes in % of the pot after calling; 100 is a pot-size '
+      'raise.\n\n'
+      'All-in: also offer all-in as a bet and as a raise.\n\n'
+      'Every size added makes the tree larger and the solve slower.';
+
+  Widget _section(String title, List<Widget> children, {String? info}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -543,7 +657,17 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (info != null) InfoButton(info),
+              ],
+            ),
             const SizedBox(height: 12),
             ...children,
           ],
@@ -617,6 +741,7 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     double? width,
     int lines = 1,
     String? hint,
+    String? info,
   }) {
     final field = TextFormField(
       key: Key('field-$key'),
@@ -625,11 +750,14 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
       maxLines: lines,
       autocorrect: false,
       enableSuggestions: false,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: const OutlineInputBorder(),
-        isDense: true,
+      decoration: InfoButton.decorate(
+        InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        info,
       ),
       onChanged: (text) {
         onChanged(text);
