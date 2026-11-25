@@ -41,6 +41,9 @@ class StrategyMatrix extends StatelessWidget {
     this.view = MatrixView.strategy,
     this.selected,
     this.onSelected,
+    this.hovered,
+    this.onHover,
+    this.highlightAction,
   });
 
   final MatrixModel model;
@@ -55,6 +58,14 @@ class StrategyMatrix extends StatelessWidget {
   final int? selected;
   final ValueChanged<int>? onSelected;
 
+  /// Cell under the mouse, outlined lightly; [onHover] reports it, null once
+  /// the mouse leaves the grid.
+  final int? hovered;
+  final ValueChanged<int?>? onHover;
+
+  /// In the strategy view, show only how often each class takes this action.
+  final int? highlightAction;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -63,15 +74,20 @@ class StrategyMatrix extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final side = constraints.biggest.shortestSide;
-          return GestureDetector(
+          int? indexAt(Offset position) {
+            final cell = side / 13;
+            final col = (position.dx / cell).floor();
+            final row = (position.dy / cell).floor();
+            if (row < 0 || row > 12 || col < 0 || col > 12) return null;
+            return row * 13 + col;
+          }
+
+          final grid = GestureDetector(
             onTapDown: onSelected == null
                 ? null
                 : (details) {
-                    final cell = side / 13;
-                    final col = (details.localPosition.dx / cell).floor();
-                    final row = (details.localPosition.dy / cell).floor();
-                    if (row < 0 || row > 12 || col < 0 || col > 12) return;
-                    onSelected!(row * 13 + col);
+                    final index = indexAt(details.localPosition);
+                    if (index != null) onSelected!(index);
                   },
             child: CustomPaint(
               size: Size.square(side),
@@ -80,12 +96,25 @@ class StrategyMatrix extends StatelessWidget {
                 colors: colors,
                 view: view,
                 selected: selected,
+                hovered: hovered,
+                highlightAction: highlightAction,
                 fontFamily: DefaultTextStyle.of(context).style.fontFamily,
-                emptyColor: scheme.surfaceContainerHighest,
-                gridColor: scheme.surface,
+                emptyColor: scheme.surfaceContainerHigh,
+                emptyLabelColor: scheme.onSurfaceVariant.withValues(
+                  alpha: 0.55,
+                ),
                 selectionColor: scheme.onSurface,
               ),
             ),
+          );
+          if (onHover == null) return grid;
+          return MouseRegion(
+            onHover: (event) {
+              final index = indexAt(event.localPosition);
+              if (index != hovered) onHover!(index);
+            },
+            onExit: (_) => onHover!(null),
+            child: grid,
           );
         },
       ),
@@ -99,9 +128,11 @@ class _MatrixPainter extends CustomPainter {
     required this.colors,
     required this.view,
     required this.selected,
+    required this.hovered,
+    required this.highlightAction,
     required this.fontFamily,
     required this.emptyColor,
-    required this.gridColor,
+    required this.emptyLabelColor,
     required this.selectionColor,
   });
 
@@ -109,9 +140,11 @@ class _MatrixPainter extends CustomPainter {
   final List<Color> colors;
   final MatrixView view;
   final int? selected;
+  final int? hovered;
+  final int? highlightAction;
   final String? fontFamily;
   final Color emptyColor;
-  final Color gridColor;
+  final Color emptyLabelColor;
   final Color selectionColor;
 
   @override
@@ -119,7 +152,13 @@ class _MatrixPainter extends CustomPainter {
     final cell = size.width / 13;
     final gap = cell > 24 ? 1.0 : 0.5;
     final paint = Paint();
-    final fontSize = (cell * 0.3).clamp(7.0, 15.0);
+    final fontSize = (cell * 0.28).clamp(7.0, 14.0);
+    final highlight =
+        view == MatrixView.strategy &&
+            highlightAction != null &&
+            highlightAction! < model.actionCount
+        ? highlightAction
+        : null;
 
     // EV is coloured relative to the hands on screen; equity runs 0 to 1.
     var low = 0.0, high = 1.0;
@@ -164,6 +203,15 @@ class _MatrixPainter extends CustomPainter {
               Rect.fromLTRB(rect.left, top, rect.right, rect.bottom),
               paint..color = rangeColor,
             );
+          } else if (highlight != null) {
+            // Only the chosen action, from the left, as wide as it is taken.
+            final width = rect.width * data.frequency(highlight);
+            if (width > 0) {
+              canvas.drawRect(
+                Rect.fromLTRB(rect.left, top, rect.left + width, rect.bottom),
+                paint..color = colors[highlight],
+              );
+            }
           } else {
             var left = rect.left;
             for (var a = 0; a < model.actionCount; ++a) {
@@ -203,9 +251,7 @@ class _MatrixPainter extends CustomPainter {
                 fontFamily: fontFamily,
                 fontSize: fontSize,
                 fontWeight: FontWeight.w600,
-                color: data.isEmpty
-                    ? const Color(0x66FFFFFF)
-                    : const Color(0xFFFFFFFF),
+                color: data.isEmpty ? emptyLabelColor : const Color(0xFFFFFFFF),
                 shadows: data.isEmpty
                     ? null
                     : const [Shadow(blurRadius: 2, color: Color(0xCC000000))],
@@ -242,6 +288,22 @@ class _MatrixPainter extends CustomPainter {
       }
     }
 
+    final over = hovered;
+    if (over != null && over != selected) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          (over % 13) * cell,
+          (over ~/ 13) * cell,
+          cell,
+          cell,
+        ).deflate(1),
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..color = selectionColor.withValues(alpha: 0.5),
+      );
+    }
+
     final index = selected;
     if (index != null) {
       final rect = Rect.fromLTWH(
@@ -265,6 +327,8 @@ class _MatrixPainter extends CustomPainter {
       old.model != model ||
       old.view != view ||
       old.selected != selected ||
+      old.hovered != hovered ||
+      old.highlightAction != highlightAction ||
       old.colors != colors ||
       old.emptyColor != emptyColor;
 }

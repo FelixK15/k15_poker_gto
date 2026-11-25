@@ -114,6 +114,12 @@ line such as "BTN opens, BB calls" at 6-max or 9-max and 100, 200 or 300BB. Thos
 rule-based starting points, not solver output: edit them on the grid (the button next to each
 range), paste your own in PioSOLVER or GTO+ text form, and save the ones you want to keep.
 
+A solution opens on its first decision. The strip along the top is the line played so far: tap an
+option in the last tile to move on, an option in an earlier tile to switch to that line, or a
+tile's heading to go back to it (Backspace or the left arrow key also goes back a step). The boxes
+beside the grid show what the player to act does; tap one to see only that action in the grid.
+Point at or tap a hand class for its combos. On a phone the same parts sit one under the other.
+
 In a solution, **Lock this decision…** fixes how the player to act plays there, for the whole
 range or for the hand class picked in the grid. **Re-solve with these locks** then queues a new
 solve that starts from this one and finds the best play around the locks; the original stays, and
