@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k15_gto/src/common/info_button.dart';
+import 'package:k15_gto/src/common/playing_card.dart';
 import 'package:k15_gto/src/range/hand_range.dart';
 import 'package:k15_gto/src/range/range_editor.dart';
 import 'package:k15_gto/src/range/range_store.dart';
@@ -354,8 +355,16 @@ void main() {
       await tester.tap(info);
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.textContaining('The most raises allowed'), findsOneWidget);
-      // Tooltips leave a timer running until they close.
-      await tester.pumpAndSettle(const Duration(seconds: 30));
+
+      // Clicking into the text keeps it open and readable.
+      await tester.tap(find.byKey(const Key('info-text')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('The most raises allowed'), findsOneWidget);
+
+      // The button again closes it.
+      await tester.tap(info);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('The most raises allowed'), findsNothing);
     });
 
     testWidgets('offers nine-handed seats', (tester) async {
@@ -408,7 +417,10 @@ void main() {
       await tester.tap(find.byKey(const Key('board-ok')));
       await tester.pumpAndSettle();
 
-      expect(field(tester, 'board'), 'Ks Td 7h');
+      expect(
+        tester.widget<CardRow>(find.byKey(const Key('board-cards'))).cards,
+        ['Ks', 'Td', '7h'],
+      );
       expect(api.estimated.last.board, 'Ks Td 7h');
       expect(find.text('Flop'), findsOneWidget);
     });

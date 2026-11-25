@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// A small "i" that explains the control next to it. The text pops up on a
-/// tap or click, and under the mouse where there is one.
+/// tap or click and stays open until a tap elsewhere or on the button again.
 class InfoButton extends StatefulWidget {
   const InfoButton(this.text, {super.key});
 
@@ -28,34 +28,57 @@ class InfoButton extends StatefulWidget {
 }
 
 class _InfoButtonState extends State<InfoButton> {
-  final _tooltip = GlobalKey<TooltipState>();
+  final _menu = MenuController();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Tooltip(
-      key: _tooltip,
-      message: widget.text,
-      // Opened by the tap below, which also keeps the tap from reaching
-      // the text field around the button.
-      triggerMode: TooltipTriggerMode.manual,
-      // Long enough to read; a tap anywhere else closes it sooner.
-      showDuration: const Duration(seconds: 20),
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      textStyle: theme.textTheme.bodyMedium?.copyWith(
-        color: theme.colorScheme.onInverseSurface,
+    // A pop-over rather than a tooltip: it stays open while it is read or
+    // clicked, and closes on a tap outside it or on the button again.
+    return MenuAnchor(
+      controller: _menu,
+      alignmentOffset: const Offset(-8, 4),
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(
+          theme.colorScheme.surfaceContainerHighest,
+        ),
+        padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          ),
+        ),
       ),
-      child: InkResponse(
-        radius: 16,
-        canRequestFocus: false,
-        onTap: () => _tooltip.currentState?.ensureTooltipVisible(),
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(
-            Icons.info_outline,
-            size: 18,
-            color: theme.colorScheme.onSurfaceVariant,
+      menuChildren: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Text(
+              widget.text,
+              key: const Key('info-text'),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ],
+      child: Tooltip(
+        message: 'More about this',
+        child: InkResponse(
+          radius: 16,
+          canRequestFocus: false,
+          // Also keeps the tap from reaching the text field around it.
+          onTap: () => _menu.isOpen ? _menu.close() : _menu.open(),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(
+              Icons.info_outline,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),

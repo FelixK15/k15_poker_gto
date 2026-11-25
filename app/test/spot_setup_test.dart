@@ -113,6 +113,10 @@ void main() {
     final api = FakeApi();
     await pumpSetup(tester, api);
 
+    // The board shows as cards; the keyboard button switches to typing.
+    expect(find.byKey(const Key('board-cards')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('board-type')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('field-board')), 'Ks Td 7h');
     await tester.pumpAndSettle();
 
