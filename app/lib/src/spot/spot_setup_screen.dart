@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../common/info_button.dart';
+import '../common/playing_card.dart';
 import '../range/preflop_library.dart';
 import '../range/range_editor.dart';
+import '../range/range_preview.dart';
 import '../range/range_store.dart';
 import 'board_picker.dart';
 import 'spot_form.dart';
@@ -66,6 +68,9 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
   EstimateTreeResponse? _estimate;
   String? _problem;
   bool _submitting = false;
+
+  /// The board is typed rather than shown as cards.
+  bool _typingBoard = false;
 
   @override
   void initState() {
@@ -348,6 +353,89 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     ]);
   }
 
+  static const _boardInfo =
+      'The cards on the table. Three cards solve from the flop on, four from '
+      'the turn, five the river alone. Tap the cards to pick them, or the '
+      'keyboard to type them, each as a rank (2-9, T, J, Q, K, A) and a suit '
+      '(c, d, h, s).';
+
+  /// The board as cards; tapping them opens the picker. The keyboard button
+  /// switches to typing them instead.
+  Widget _boardField() {
+    if (_typingBoard) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _field(
+            'board',
+            'Board',
+            _input.board,
+            (v) => _input.board = v,
+            width: 220,
+            hint: 'Ks Td 7h',
+            info: _boardInfo,
+          ),
+          IconButton(
+            key: const Key('board-show-cards'),
+            tooltip: 'Show as cards',
+            icon: const Icon(Icons.style_outlined),
+            onPressed: () => setState(() => _typingBoard = false),
+          ),
+        ],
+      );
+    }
+
+    final theme = Theme.of(context);
+    final cards = parseBoard(_input.board);
+    return SizedBox(
+      width: 260,
+      child: InkWell(
+        key: const Key('pick-board'),
+        borderRadius: BorderRadius.circular(6),
+        onTap: _pickBoard,
+        child: InputDecorator(
+          decoration: InputDecoration(
+            labelText: 'Board',
+            border: const OutlineInputBorder(),
+            isDense: true,
+            contentPadding: const EdgeInsets.fromLTRB(12, 10, 4, 8),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InfoButton(_boardInfo),
+                IconButton(
+                  key: const Key('board-type'),
+                  tooltip: 'Type the cards',
+                  icon: const Icon(Icons.keyboard_outlined, size: 20),
+                  onPressed: () => setState(() => _typingBoard = true),
+                ),
+              ],
+            ),
+          ),
+          child: cards.isEmpty
+              ? Text(
+                  _input.board.trim().isEmpty
+                      ? 'Pick the cards'
+                      : '${_input.board.trim()} · tap to fix',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: _input.board.trim().isEmpty
+                        ? theme.colorScheme.onSurfaceVariant
+                        : theme.colorScheme.error,
+                  ),
+                )
+              : Align(
+                  alignment: Alignment.centerLeft,
+                  child: CardRow(
+                    key: const Key('board-cards'),
+                    cards,
+                    width: 22,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _rangeField({required bool oop}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,16 +453,17 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                 '${oop ? 'first' : 'last'} can hold here, separated by '
                 'commas. QQ+ is queens and better, A5s-A2s a run of suited '
                 'hands, s and o mean suited and offsuit, and AQo:0.5 is a '
-                'hand held half of the time. The grid button edits the same '
-                'range by painting.',
+                'hand held half of the time. The grid next to it shows the '
+                'range; tap it to edit the range by painting.',
           ),
         ),
         const SizedBox(width: 8),
-        IconButton.filledTonal(
+        // The range at a glance; tapping it edits it on the full grid.
+        RangePreview(
           key: Key(oop ? 'edit-oop-range' : 'edit-ip-range'),
+          text: oop ? _input.oopRange : _input.ipRange,
           tooltip: 'Edit on the grid',
-          icon: const Icon(Icons.grid_on),
-          onPressed: () => _editRange(oop: oop),
+          onTap: () => _editRange(oop: oop),
         ),
       ],
     );
@@ -408,25 +497,7 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                           spacing: 12,
                           runSpacing: 12,
                           children: [
-                            _field(
-                              'board',
-                              'Board',
-                              _input.board,
-                              (v) => _input.board = v,
-                              width: 220,
-                              hint: 'Ks Td 7h',
-                              info:
-                                  'The cards on the table, each as a rank '
-                                  '(2-9, T, J, Q, K, A) and a suit (c, d, h, '
-                                  's). Three cards solve from the flop on, '
-                                  'four from the turn, five the river alone.',
-                            ),
-                            IconButton.filledTonal(
-                              key: const Key('pick-board'),
-                              tooltip: 'Pick the cards',
-                              icon: const Icon(Icons.style),
-                              onPressed: _pickBoard,
-                            ),
+                            _boardField(),
                             _field(
                               'pot',
                               'Pot',

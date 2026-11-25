@@ -14,6 +14,7 @@ import 'package:k15_gto/src/range/preflop_library.dart';
 import 'package:k15_gto/src/range/range_editor.dart';
 import 'package:k15_gto/src/range/range_store.dart';
 import 'package:k15_gto/src/solution/matrix_model.dart';
+import 'package:k15_gto/src/settings/theme_settings.dart';
 import 'package:k15_gto/src/solution/solution_screen.dart';
 import 'package:k15_gto/src/spot/spot_setup_screen.dart';
 
@@ -66,11 +67,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: const Color(0xFF2E7D5B),
-          brightness: Brightness.dark,
-          fontFamily: 'Segoe UI',
-        ),
+        theme: buildAppTheme(AppPalette.felt.seed, Brightness.dark),
         home: home,
       ),
     );
@@ -145,7 +142,12 @@ void main() {
           ),
       ),
       then: () async {
-        await tester.tap(find.text('EV'));
+        await tester.tap(
+          find.descendant(
+            of: find.byKey(const Key('matrix-view')),
+            matching: find.text('EV'),
+          ),
+        );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
       },

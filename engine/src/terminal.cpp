@@ -80,42 +80,81 @@ void TerminalEvaluator::prepare(ShowdownTable& table) const {
     const auto& opponent_strength = table.strength[1 - p];
     const auto& order = table.order[p];
     const auto& opponent_order = table.order[1 - p];
-    // Indices are stored in 16 bits.
-    if (order.size() > 0xFFFF || opponent_order.size() > 0xFFFF) return;
+    const std::size_t opponents = opponent_order.size();
 
-    auto& events = table.events[p];
-    events.clear();
-    events.reserve(2 * order.size() + opponent_order.size());
-    const auto add = [&](std::uint32_t opponent_hand) {
-      events.push_back({static_cast<std::uint16_t>(opponent_hand), 0, card1_[1 - p][opponent_hand],
-                        card2_[1 - p][opponent_hand], ShowdownEvent::kAdd});
+    // Where each sum starts: the total first, then one per card that some
+    // opponent hand holds. A card no opponent hand holds reads slot 0, the
+    // total's leading zero.
+    std::array<std::size_t, 64> held{};
+    for (std::size_t o = 0; o < opponents; ++o) {
+      ++held[card1_[1 - p][o]];
+      ++held[card2_[1 - p][o]];
+    }
+    std::array<std::size_t, 64> start{};
+    std::size_t size = opponents + 1;
+    std::vector<std::uint16_t> lengths = {static_cast<std::uint16_t>(opponents)};
+    for (std::size_t c = 0; c < 64; ++c) {
+      if (held[c] == 0) continue;
+      start[c] = size;
+      size += held[c] + 1;
+      lengths.push_back(static_cast<std::uint16_t>(held[c]));
+    }
+    // Slots are stored in 16 bits, and showdown() keeps the sums on the stack.
+    if (size > kMaxShowdownSlots) continue;
+
+    ShowdownPlan& plan = table.plans[p];
+    plan.size = size;
+    plan.lengths = std::move(lengths);
+    plan.source.assign(size - plan.lengths.size(), 0);
+    plan.slots.assign(order.size(), {});
+
+    // `added[c]` counts the opponent hands with card c summed so far, so the
+    // running sum for card c up to here sits at start[c] + added[c].
+    std::array<std::size_t, 64> added{};
+    std::array<std::size_t, 64> source_start{};
+    {
+      std::size_t at = opponents;
+      for (std::size_t c = 0; c < 64; ++c) {
+        if (held[c] == 0) continue;
+        source_start[c] = at;
+        at += held[c];
+      }
+    }
+    std::size_t j = 0;
+    const auto add = [&](std::uint32_t o) {
+      const auto source = static_cast<std::uint16_t>(o);
+      plan.source[j] = source;
+      for (const std::uint8_t c : {card1_[1 - p][o], card2_[1 - p][o]}) {
+        plan.source[source_start[c] + added[c]] = source;
+        ++added[c];
+      }
+      ++j;
     };
-    const auto emit = [&](std::uint32_t hand, std::uint8_t kind) {
-      const bool same = kind == ShowdownEvent::kBeatOrTie && same_weight_[p][hand] != 0;
-      events.push_back({static_cast<std::uint16_t>(same ? same_index_[p][hand] : 0u),
-                        static_cast<std::uint16_t>(hand), card1_[p][hand], card2_[p][hand],
-                        same ? static_cast<std::uint8_t>(ShowdownEvent::kBeatOrTieSame) : kind});
+    const auto here = [&](std::uint32_t h) {
+      const std::uint8_t c1 = card1_[p][h];
+      const std::uint8_t c2 = card2_[p][h];
+      return std::array<std::uint16_t, 3>{static_cast<std::uint16_t>(j),
+                                          static_cast<std::uint16_t>(start[c1] + added[c1]),
+                                          static_cast<std::uint16_t>(start[c2] + added[c2])};
     };
 
-    // The same walk the general path does, written down once instead of
-    // being rediscovered, with its unpredictable branches, at every showdown.
-    std::size_t j = 0, i = 0;
+    std::size_t i = 0;
     while (i < order.size()) {
       const HandStrength level = strength[order[i]];
       std::size_t end = i + 1;
       while (end < order.size() && strength[order[end]] == level) ++end;
 
-      while (j < opponent_order.size() && opponent_strength[opponent_order[j]] < level) {
-        add(opponent_order[j++]);
-      }
-      for (std::size_t k = i; k < end; ++k) emit(order[k], ShowdownEvent::kBeat);
-      while (j < opponent_order.size() && opponent_strength[opponent_order[j]] == level) {
-        add(opponent_order[j++]);
-      }
-      for (std::size_t k = i; k < end; ++k) emit(order[k], ShowdownEvent::kBeatOrTie);
+      while (j < opponents && opponent_strength[opponent_order[j]] < level) add(opponent_order[j]);
+      for (std::size_t k = i; k < end; ++k) plan.slots[order[k]].beat = here(order[k]);
+      while (j < opponents && opponent_strength[opponent_order[j]] == level) add(opponent_order[j]);
+      for (std::size_t k = i; k < end; ++k) plan.slots[order[k]].beat_or_tie = here(order[k]);
       i = end;
     }
-    while (j < opponent_order.size()) add(opponent_order[j++]);
+    while (j < opponents) add(opponent_order[j]);
+    for (std::size_t h = 0; h < order.size(); ++h) {
+      const auto last = here(static_cast<std::uint32_t>(h));
+      plan.slots[h].all = {last[1], last[2]};
+    }
   }
 }
 
@@ -197,78 +236,51 @@ void TerminalEvaluator::showdown(const ShowdownTable& table, int player, double 
   // beat or tie, and C of all of them:
   //   value = win·W + tie·(WT − W) + lose·(C − WT)
   //         = (win − tie)·W + (tie − lose)·WT + lose·C
-  // One walk up both players' hands in order of strength gives W and WT; C is
-  // what has been added up once the walk is over.
+  // Running sums of the opponent's reach in order of strength give W, WT and
+  // C for every hand: where to read them was worked out by prepare().
   const double beat = win - tie;
   const double beat_or_tie = tie - lose;
 
-  if (table.events[p].empty()) {
+  const ShowdownPlan& plan = table.plans[p];
+  if (plan.slots.empty()) {
     showdown_general(table, player, beat, beat_or_tie, lose, opponent_reach, out);
     return;
   }
 
-  const std::size_t count = card1_[p].size();
-  // Results are collected in a local buffer with one spare slot at the end.
-  constexpr std::size_t kMaxHands = 1326;
-  if (count > kMaxHands) {
-    showdown_general(table, player, beat, beat_or_tie, lose, opponent_reach, out);
-    return;
+  // The running sums: for each sum a zero, then the reach of every hand in
+  // it added up in order of strength. Each sum is one chain of additions,
+  // but different sums do not wait for one another.
+  double sums[kMaxShowdownSlots];
+  {
+    const std::uint16_t* source = plan.source.data();
+    double* slot = sums;
+    for (const std::uint16_t length : plan.lengths) {
+      double running = 0;
+      *slot++ = 0;
+      for (std::uint16_t k = 0; k < length; ++k) {
+        running += opponent_reach[*source++];
+        *slot++ = running;
+      }
+    }
   }
+  const double total = sums[plan.lengths[0]];
 
-  // Every event does the same arithmetic. Per kind of event, these tables
-  // say whether it adds an opponent hand, what it multiplies into a result
-  // and whether it keeps what the result already holds; the parts an event
-  // does not need become additions of zero.
-  //
-  // They also say where it writes. An addition updates the real sums and
-  // puts its (meaningless) result in the spare slot; a result is stored for
-  // real and its (unchanged) sums go to the spare halves of the sum tables.
-  // Writing somewhere harmless instead of not writing keeps the loop free of
-  // branches, and keeping those writes away from what later events read
-  // keeps the events from waiting for one another.
-  const double adds[4] = {1, 0, 0, 0};
-  const double same[4] = {0, 0, 0, 1};
-  const double factor[4] = {0, beat, beat_or_tie, beat_or_tie};
-  const float keeps[4] = {0, 0, 1, 1};
-  const std::size_t spare_sum[4] = {0, 1, 1, 1};
-  const std::size_t spare_cards[4] = {0, 64, 64, 64};
-  const std::size_t spare_result[4] = {count, 0, 0, 0};
-
-  float result[kMaxHands + 1];
-  std::fill(result, result + count + 1, 0.0f);
-  double sums[2] = {0, 0};
-  double card_sum[128] = {};
-
-  for (const ShowdownEvent& event : table.events[p]) {
-    const unsigned kind = event.kind;
-    const double reach = opponent_reach[event.source];
-    const double added = reach * adds[kind];
-
-    const double sum = sums[0] + added;
-    sums[spare_sum[kind]] = sum;
-    const double first = card_sum[event.card1] + added;
-    card_sum[event.card1 + spare_cards[kind]] = first;
-    const double second = card_sum[event.card2] + added;
-    card_sum[event.card2 + spare_cards[kind]] = second;
-
-    // The identical hand ties with ours; it was subtracted once per card.
-    const double value = sum - first - second + reach * same[kind];
-    result[event.target + spare_result[kind]] =
-        result[event.target] * keeps[kind] + static_cast<float>(factor[kind] * value);
-  }
-
-  if (lose == 0) {
-    std::copy(result, result + count, out);
-    return;
-  }
-  const std::uint8_t* card1 = card1_[p].data();
-  const std::uint8_t* card2 = card2_[p].data();
+  // Every hand now reads its totals off the sums, independently of the
+  // others. The hands that share a card with ours were subtracted per card;
+  // the opponent's identical hand, which ties with ours, shares both, so it
+  // was subtracted twice and goes back in once.
+  const ShowdownSlots* slots = plan.slots.data();
   const std::uint32_t* same_index = same_index_[p].data();
   const float* same_weight = same_weight_[p].data();
+  const std::size_t count = plan.slots.size();
   for (std::size_t h = 0; h < count; ++h) {
-    const double all = sums[0] - card_sum[card1[h]] - card_sum[card2[h]] +
-                       static_cast<double>(opponent_reach[same_index[h]]) * same_weight[h];
-    out[h] = result[h] + static_cast<float>(lose * all);
+    const ShowdownSlots& s = slots[h];
+    const double same = static_cast<double>(opponent_reach[same_index[h]]) * same_weight[h];
+    const double weaker = sums[s.beat[0]] - sums[s.beat[1]] - sums[s.beat[2]];
+    const double weaker_or_equal =
+        sums[s.beat_or_tie[0]] - sums[s.beat_or_tie[1]] - sums[s.beat_or_tie[2]] + same;
+    const double all = total - sums[s.all[0]] - sums[s.all[1]] + same;
+    out[h] = static_cast<float>(beat * weaker + beat_or_tie * weaker_or_equal + lose * all);
   }
 }
 

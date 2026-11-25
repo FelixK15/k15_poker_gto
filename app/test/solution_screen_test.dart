@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:k15_gto/src/api/gto_api.dart';
 import 'package:k15_gto/src/solution/action_style.dart';
@@ -142,17 +143,18 @@ void main() {
     final api = await pumpSolution(tester);
 
     expect(api.nodeRequests, ['']);
-    expect(find.text('OOP acts:'), findsOneWidget);
+    // The action line ends in OOP's decision, with the stack behind.
+    expect(find.text('OOP · 95'), findsOneWidget);
     expect(find.byKey(const Key('action-check')), findsOneWidget);
     expect(find.byKey(const Key('action-bet5')), findsOneWidget);
     expect(find.byKey(const Key('action-bet10')), findsOneWidget);
-    expect(find.text('Pot 10'), findsOneWidget);
+    expect(find.text('Pot 10'), findsNWidgets(2)); // line and summary
     expect(find.byType(StrategyMatrix), findsOneWidget);
     expect(find.textContaining('combos in OOP\'s range here'), findsOneWidget);
-    expect(
-      find.text('Tap a hand in the grid for its details.'),
-      findsOneWidget,
-    );
+    // One box per action, with how often and how many combos.
+    expect(find.byKey(const Key('summary-bet5')), findsOneWidget);
+    expect(find.text('26.7%'), findsOneWidget);
+    expect(find.byKey(const Key('details-hint')), findsOneWidget);
   });
 
   testWidgets('walks down a line and back up the breadcrumb', (tester) async {
@@ -161,22 +163,38 @@ void main() {
     await tester.tap(find.byKey(const Key('action-bet5')));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, 'bet5');
-    expect(find.text('IP acts:'), findsOneWidget);
-    expect(find.text('Pot 15'), findsOneWidget);
+    expect(find.text('IP · 95'), findsOneWidget);
+    expect(find.text('Pot 15'), findsNWidgets(2));
     expect(find.byKey(const Key('action-raise17')), findsOneWidget);
     expect(find.textContaining('Raise to 17'), findsWidgets);
-    expect(find.text('Bet 5'), findsOneWidget); // the breadcrumb step
+    // OOP's decision stays in the line, with the bet taken.
+    expect(find.text('OOP · 95'), findsOneWidget);
+    expect(find.text('Bet 5'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('action-fold')));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, 'bet5/fold');
     expect(find.text('IP folds. The hand is over.'), findsOneWidget);
 
+    // Another option of an earlier decision jumps to that line.
+    await tester.tap(find.text('Check').first);
+    await tester.pumpAndSettle();
+    expect(api.nodeRequests.last, 'check');
+    expect(find.text('IP · 95'), findsOneWidget);
+
     // Back to the start.
     await tester.tap(find.byKey(const Key('crumb-0')));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, '');
-    expect(find.text('OOP acts:'), findsOneWidget);
+    expect(find.byKey(const Key('action-bet10')), findsOneWidget);
+
+    // Backspace goes back one step.
+    await tester.tap(find.byKey(const Key('action-bet5')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pumpAndSettle();
+    expect(api.nodeRequests.last, '');
+    expect(find.byKey(const Key('action-bet10')), findsOneWidget);
   });
 
   testWidgets('deals a card at a chance node', (tester) async {
@@ -187,7 +205,7 @@ void main() {
     await tester.tap(find.byKey(const Key('action-check')));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, 'check/check');
-    expect(find.text('Pick the next card:'), findsOneWidget);
+    expect(find.text('DEAL THE NEXT CARD'), findsOneWidget);
     // Cards on the board are not offered.
     expect(find.byKey(const Key('card-Ks')), findsNothing);
     expect(find.byKey(const Key('card-As')), findsOneWidget);
@@ -195,7 +213,8 @@ void main() {
     await tester.tap(find.byKey(const Key('card-2c')));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, 'check/check/2c');
-    expect(find.text('2♣'), findsOneWidget); // in the breadcrumb
+    // The card shows in the line as the river.
+    expect(find.text('River'), findsOneWidget);
     expect(find.byKey(const Key('action-bet7.5')), findsOneWidget);
   });
 
@@ -237,7 +256,12 @@ void main() {
   testWidgets('switches to the other player\'s range', (tester) async {
     await pumpSolution(tester);
 
-    await tester.tap(find.text('IP range'));
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('player-view')),
+        matching: find.text('IP'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('combos in IP\'s range here'), findsOneWidget);
 
@@ -265,7 +289,7 @@ void main() {
     await tester.tap(find.text('Back to the start'));
     await tester.pumpAndSettle();
     expect(api.nodeRequests.last, '');
-    expect(find.text('OOP acts:'), findsOneWidget);
+    expect(find.byKey(const Key('action-bet10')), findsOneWidget);
   });
 
   testWidgets('shows equity and switches the grid to EV and equity', (
@@ -273,19 +297,49 @@ void main() {
   ) async {
     await pumpSolution(tester);
     expect(find.byKey(const Key('node-equity')), findsOneWidget);
-    expect(find.textContaining('Equity: OOP 38.1%'), findsOneWidget);
+    expect(find.text('38.1%'), findsOneWidget);
     StrategyMatrix matrix() =>
         tester.widget<StrategyMatrix>(find.byType(StrategyMatrix));
     expect(matrix().view, MatrixView.strategy);
 
-    await tester.tap(find.text('EV'));
+    Finder viewButton(String label) => find.descendant(
+      of: find.byKey(const Key('matrix-view')),
+      matching: find.text(label),
+    );
+    await tester.tap(viewButton('EV'));
     await tester.pumpAndSettle();
     expect(matrix().view, MatrixView.ev);
 
-    await tester.tap(find.text('Equity'));
+    await tester.tap(viewButton('Equity'));
     await tester.pumpAndSettle();
     expect(matrix().view, MatrixView.equity);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows one action in the grid from its summary box', (
+    tester,
+  ) async {
+    await pumpSolution(tester);
+    StrategyMatrix matrix() =>
+        tester.widget<StrategyMatrix>(find.byType(StrategyMatrix));
+    expect(matrix().highlightAction, isNull);
+
+    await tester.tap(find.byKey(const Key('summary-bet5')));
+    await tester.pumpAndSettle();
+    expect(matrix().highlightAction, 1);
+
+    // Tapping it again shows every action.
+    await tester.tap(find.byKey(const Key('summary-bet5')));
+    await tester.pumpAndSettle();
+    expect(matrix().highlightAction, isNull);
+
+    // Moving on starts with every action again.
+    await tester.tap(find.byKey(const Key('summary-bet10')));
+    await tester.pumpAndSettle();
+    expect(matrix().highlightAction, 2);
+    await tester.tap(find.byKey(const Key('action-bet5')));
+    await tester.pumpAndSettle();
+    expect(matrix().highlightAction, isNull);
   });
 
   test('valueColor runs from red through yellow to green', () {
@@ -351,7 +405,14 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(StrategyMatrix), findsOneWidget);
     expect(find.byKey(const Key('action-check')), findsOneWidget);
-    await tester.scrollUntilVisible(find.byKey(const Key('node-ev')), 200);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('node-ev')),
+      200,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
+    );
     expect(find.byKey(const Key('node-ev')), findsOneWidget);
   });
 

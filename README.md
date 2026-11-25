@@ -88,10 +88,12 @@ build\windows\cli\Release\gto-cli.exe solve examples\turn_srp.json --node check 
 It prints the tree size and memory, the convergence, both players' EV and a strategy table per hand
 class for the root and for each `--node` line. A line is a `/`-separated list of actions and dealt
 cards, e.g. `bet5/call/Ah/check`. If a step does not exist, the error lists what is available
-there. `--threads <n>` limits the threads used (default: all).
+there. `--threads <n>` limits the threads used (default: all). `--compress` keeps regrets and
+strategies in 16 bits, which halves the memory and makes large trees faster; the server does this
+by itself for large trees.
 
 Flop trees grow quickly with ranges and bet sizes; the tool prints the memory it needs before it
-starts. `examples/flop_3bet.json` is a small one.
+starts. `examples/flop_3bet.json` is a small one, `examples/flop_srp_wide.json` a large one.
 
 ## Running the app
 
@@ -113,6 +115,12 @@ When setting up a solve, the **Preflop** row fills in both ranges, the pot and t
 line such as "BTN opens, BB calls" at 6-max or 9-max and 100, 200 or 300BB. Those ranges are rough,
 rule-based starting points, not solver output: edit them on the grid (the button next to each
 range), paste your own in PioSOLVER or GTO+ text form, and save the ones you want to keep.
+
+A solution opens on its first decision. The strip along the top is the line played so far: tap an
+option in the last tile to move on, an option in an earlier tile to switch to that line, or a
+tile's heading to go back to it (Backspace or the left arrow key also goes back a step). The boxes
+beside the grid show what the player to act does; tap one to see only that action in the grid.
+Point at or tap a hand class for its combos. On a phone the same parts sit one under the other.
 
 In a solution, **Lock this decision…** fixes how the player to act plays there, for the whole
 range or for the hand class picked in the grid. **Re-solve with these locks** then queues a new

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api/gto_api.dart';
 import '../common/format.dart';
+import '../common/playing_card.dart';
 
 /// "Running", "Paused", … for a job state.
 String jobStateLabel(JobState state) {
@@ -158,8 +159,29 @@ class _JobsScreenState extends State<JobsScreen> {
       );
     }
     if (jobs.isEmpty) {
-      return const Center(
-        child: Text('No solves yet. Set one up under "New solve".'),
+      final theme = Theme.of(context);
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.grid_view_rounded,
+                size: 48,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No solves yet. Set one up under "New solve".',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     return Column(
@@ -173,7 +195,7 @@ class _JobsScreenState extends State<JobsScreen> {
           ),
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
             itemCount: jobs.length,
             itemBuilder: (context, index) => Center(
               child: ConstrainedBox(
@@ -215,6 +237,7 @@ class _JobCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final state = job.state;
     final running = state == JobState.JOB_STATE_RUNNING;
     final waiting = state == JobState.JOB_STATE_QUEUED;
@@ -222,121 +245,161 @@ class _JobCard extends StatelessWidget {
         state == JobState.JOB_STATE_PAUSED ||
         state == JobState.JOB_STATE_CANCELLED;
     final failed = state == JobState.JOB_STATE_FAILED;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
 
-    final Color chipColor = switch (state) {
-      JobState.JOB_STATE_RUNNING => theme.colorScheme.primaryContainer,
-      JobState.JOB_STATE_DONE => theme.colorScheme.secondaryContainer,
-      JobState.JOB_STATE_FAILED => theme.colorScheme.errorContainer,
-      _ => theme.colorScheme.surfaceContainerHighest,
+    final Color stateColor = switch (state) {
+      JobState.JOB_STATE_RUNNING => scheme.primary,
+      JobState.JOB_STATE_DONE => const Color(0xFF45A36B),
+      JobState.JOB_STATE_FAILED => scheme.error,
+      JobState.JOB_STATE_QUEUED => const Color(0xFFE0B94F),
+      _ => scheme.onSurfaceVariant,
     };
+    final narrow = MediaQuery.sizeOf(context).width < 560;
 
+    final controls = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (running || waiting)
+          IconButton(
+            key: Key('pause-${job.id}'),
+            tooltip: 'Pause',
+            icon: const Icon(Icons.pause),
+            onPressed: onPause,
+          ),
+        if (stopped)
+          IconButton(
+            key: Key('resume-${job.id}'),
+            tooltip: 'Continue solving',
+            icon: const Icon(Icons.play_arrow),
+            onPressed: onResume,
+          ),
+        if (running || waiting)
+          IconButton(
+            key: Key('cancel-${job.id}'),
+            tooltip: 'Stop for good',
+            icon: const Icon(Icons.stop),
+            onPressed: onCancel,
+          ),
+        IconButton(
+          key: Key('delete-${job.id}'),
+          tooltip: 'Delete',
+          icon: const Icon(Icons.delete_outline),
+          onPressed: onDelete,
+        ),
+      ],
+    );
+
+    final open = job.hasSolution
+        ? FilledButton.tonalIcon(
+            key: Key('open-${job.id}'),
+            onPressed: onOpen,
+            icon: const Icon(Icons.grid_on, size: 18),
+            label: Text(running ? 'Browse so far' : 'Browse solution'),
+          )
+        : null;
+
+    final board = splitCards(job.spot.board);
     return Card(
       key: Key('job-${job.id}'),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    job.name.isEmpty ? job.spot.board : job.name,
-                    style: theme.textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
+      margin: const EdgeInsets.only(bottom: 8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: job.hasSolution ? onOpen : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (board.isNotEmpty) ...[
+                    CardRow(board, width: narrow ? 22 : 26),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          job.name.isEmpty ? job.spot.board : job.name,
+                          style: theme.textTheme.titleSmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: stateColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              jobStateLabel(state),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: stateColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
+                  if (!narrow && open != null) ...[
+                    open,
+                    const SizedBox(width: 4),
+                  ],
+                  controls,
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                failed ? job.error : jobProgress(job),
+                style: failed
+                    ? theme.textTheme.bodySmall?.copyWith(color: scheme.error)
+                    : muted,
+              ),
+              if (job.locks.isNotEmpty)
+                Text(
+                  'Re-solve with ${job.locks.length} locked '
+                  '${job.locks.length == 1 ? 'decision' : 'decisions'}',
+                  key: Key('locks-${job.id}'),
+                  style: muted,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: chipColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    jobStateLabel(state),
-                    style: theme.textTheme.labelMedium,
-                  ),
+              if (job.measured)
+                Text(
+                  'EV: OOP ${job.oopEv.toStringAsFixed(2)}, '
+                  'IP ${job.ipEv.toStringAsFixed(2)} · '
+                  '${formatBytes(job.memoryBytes.toInt())}',
+                  style: muted,
                 ),
-                const SizedBox(width: 4),
-                if (running || waiting)
-                  IconButton(
-                    key: Key('pause-${job.id}'),
-                    tooltip: 'Pause',
-                    icon: const Icon(Icons.pause),
-                    onPressed: onPause,
+              if (running) ...[
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      minHeight: 5,
+                      value: job.settings.maxIterations == 0
+                          ? null
+                          : job.iteration / job.settings.maxIterations,
+                    ),
                   ),
-                if (stopped)
-                  IconButton(
-                    key: Key('resume-${job.id}'),
-                    tooltip: 'Continue solving',
-                    icon: const Icon(Icons.play_arrow),
-                    onPressed: onResume,
-                  ),
-                if (running || waiting)
-                  IconButton(
-                    key: Key('cancel-${job.id}'),
-                    tooltip: 'Stop for good',
-                    icon: const Icon(Icons.stop),
-                    onPressed: onCancel,
-                  ),
-                IconButton(
-                  key: Key('delete-${job.id}'),
-                  tooltip: 'Delete',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: onDelete,
                 ),
               ],
-            ),
-            Text(
-              failed ? job.error : jobProgress(job),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: failed
-                    ? theme.colorScheme.error
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (job.locks.isNotEmpty)
-              Text(
-                'Re-solve with ${job.locks.length} locked '
-                '${job.locks.length == 1 ? 'decision' : 'decisions'}',
-                key: Key('locks-${job.id}'),
-                style: theme.textTheme.bodySmall,
-              ),
-            if (running) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: LinearProgressIndicator(
-                  value: job.settings.maxIterations == 0
-                      ? null
-                      : job.iteration / job.settings.maxIterations,
-                ),
-              ),
+              if (narrow && open != null) ...[
+                const SizedBox(height: 8),
+                SizedBox(width: double.infinity, child: open),
+              ],
             ],
-            if (job.measured) ...[
-              const SizedBox(height: 4),
-              Text(
-                'EV: OOP ${job.oopEv.toStringAsFixed(2)}, '
-                'IP ${job.ipEv.toStringAsFixed(2)} · '
-                '${formatBytes(job.memoryBytes.toInt())}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (job.hasSolution)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  key: Key('open-${job.id}'),
-                  onPressed: onOpen,
-                  icon: const Icon(Icons.grid_on, size: 18),
-                  label: Text(running ? 'Browse so far' : 'Browse solution'),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

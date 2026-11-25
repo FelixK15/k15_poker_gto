@@ -359,13 +359,15 @@ Error JobManager::estimate(const v1::Spot& spot, v1::EstimateTreeResponse* out) 
   out->set_decision_nodes(estimate->tree.action_nodes);
   out->set_oop_hands(static_cast<std::uint32_t>(estimate->hands[kOop]));
   out->set_ip_hands(static_cast<std::uint32_t>(estimate->hands[kIp]));
-  out->set_strategy_bytes(estimate->strategy_bytes);
+  // The memory reported is what the solve will take, packed or not.
+  const bool compress = should_compress(*estimate, config_.memory_budget_bytes);
+  out->set_strategy_bytes(estimate->strategy_bytes_for(compress));
   out->set_tree_bytes(estimate->tree.tree_bytes());
   out->set_too_large(estimate->tree.too_large);
   out->set_memory_budget_bytes(config_.memory_budget_bytes);
   out->set_can_solve(!estimate->tree.too_large &&
                      (config_.memory_budget_bytes == 0 ||
-                      estimate->total_bytes() <= config_.memory_budget_bytes));
+                      estimate->total_bytes(compress) <= config_.memory_budget_bytes));
   return {};
 }
 
@@ -568,12 +570,16 @@ std::shared_ptr<JobManager::Solution> JobManager::load_solution(
   auto config = to_spot_config(job.spot(), error);
   if (!config) return nullptr;
   config->tree.max_nodes = config_.max_nodes;
+  // Decided the same way as for the estimate the job was accepted on.
+  const auto estimate = estimate_spot(*config, error);
+  if (!estimate) return nullptr;
   auto game = make_game(*config, error);
   if (!game) return nullptr;
 
   auto solution = std::make_shared<Solution>();
   SolverConfig solver_config;
   solver_config.threads = config_.threads;
+  solver_config.compress = should_compress(*estimate, config_.memory_budget_bytes);
   solution->solver = std::make_unique<Solver>(std::move(*game), solver_config);
 
   Solver& solver = *solution->solver;
@@ -919,7 +925,17 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
                       "the job is still solving; pause it or wait until it is done");
   }
 
-  // Check the locks against the parent's tree and take a copy of its state.
+  std::string id;
+  {
+    const std::lock_guard lock(mutex_);
+    if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+    id = new_id();
+  }
+
+  // Check the locks against the parent's tree and copy its state for the new
+  // job. With a data directory the state goes straight to the new job's file:
+  // states can be several GB, more than an in-memory string stream holds
+  // (MSVC's stops growing at 2 GB and only sets failbit).
   std::shared_ptr<Solution> solution;
   if (Error error = acquire_solution(parent.id(), &solution)) return error;
   std::string state;
@@ -935,18 +951,34 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
         return make_error(ErrorKind::InvalidArgument, error);
       }
     }
-    std::ostringstream buffer(std::ios::binary);
-    solution->solver->save(buffer);
-    state = std::move(buffer).str();
+    if (config_.data_dir.empty()) {
+      std::ostringstream buffer(std::ios::binary);
+      solution->solver->save(buffer);
+      if (!buffer) {
+        return make_error(ErrorKind::ResourceExhausted,
+                          "the solution is too large to copy in memory; start the server "
+                          "with a data directory to re-solve it");
+      }
+      state = std::move(buffer).str();
+    } else {
+      const bool ok = write_atomically(state_file(id), [&](std::ostream& file) {
+        solution->solver->save(file);
+        return static_cast<bool>(file);
+      });
+      if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
+    }
     parent_iterations = solution->solver->iterations();
   }
 
   const std::lock_guard lock(mutex_);
-  if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+  if (stopping_) {
+    erase_files(id);
+    return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+  }
 
   Entry entry;
   v1::Job& job = entry.job;
-  job.set_id(new_id());
+  job.set_id(id);
   job.set_name(request.name().empty() ? parent.name() + " (locked)" : request.name());
   job.set_state(v1::JOB_STATE_QUEUED);
   *job.mutable_spot() = parent.spot();
@@ -961,15 +993,7 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
   *job.mutable_locks() = request.locks();
   job.set_warm_start_pending(true);
 
-  if (config_.data_dir.empty()) {
-    entry.initial_state = std::move(state);
-  } else {
-    const bool ok = write_atomically(state_file(job.id()), [&](std::ostream& file) {
-      file.write(state.data(), static_cast<std::streamsize>(state.size()));
-      return static_cast<bool>(file);
-    });
-    if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
-  }
+  entry.initial_state = std::move(state);
   write_job(job);
   *out = job;
   queue_.push_back(job.id());

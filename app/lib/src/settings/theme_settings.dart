@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app_theme.dart';
 import 'theme_store.dart';
+
+export 'app_theme.dart';
 
 /// The colour families the app can be themed in. Each one seeds a full
 /// Material colour scheme, for light and for dark.
@@ -48,7 +51,7 @@ class ThemeSettings {
       ThemeSettings(palette: palette ?? this.palette, mode: mode ?? this.mode);
 
   ThemeData theme(Brightness brightness) =>
-      ThemeData(colorSchemeSeed: palette.seed, brightness: brightness);
+      buildAppTheme(palette.seed, brightness);
 
   Map<String, Object?> toJson() => {'palette': palette.name, 'mode': mode.name};
 

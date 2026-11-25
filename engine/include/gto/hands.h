@@ -33,22 +33,32 @@ std::string holdem_hand_name(const Hand& hand);
 /// Both players' private hands, indexed by player.
 using Hands = std::array<std::vector<Hand>, 2>;
 
-/// One step of a showdown, worked out in advance for a board: either add an
-/// opponent hand to the running totals, or read off a result for one of ours.
-struct ShowdownEvent {
-  enum Kind : std::uint8_t {
-    kAdd = 0,            // add opponent hand `source`
-    kBeat = 1,           // our hand `target` beats everything added so far
-    kBeatOrTie = 2,      // … beats or ties it
-    kBeatOrTieSame = 3,  // … and the opponent's identical hand is `source`
-  };
+/// Where one hand of ours reads its showdown totals in the running sums a
+/// ShowdownPlan describes (see TerminalEvaluator::showdown).
+struct ShowdownSlots {
+  /// Opponent hands weaker than ours: the running total, minus the running
+  /// totals of the hands holding our first and our second card.
+  std::array<std::uint16_t, 3> beat{};
+  /// The same up to and including the hands as strong as ours.
+  std::array<std::uint16_t, 3> beat_or_tie{};
+  /// End of the running totals of the hands holding each of our cards.
+  std::array<std::uint16_t, 2> all{};
+};
 
-  std::uint16_t source = 0;
-  std::uint16_t target = 0;
-  /// Cards of the hand the event is about.
-  std::uint8_t card1 = 0;
-  std::uint8_t card2 = 0;
-  std::uint8_t kind = kAdd;
+/// One player's showdown on one board, worked out in advance.
+///
+/// The opponent's hands, in order of strength, are summed up once in total
+/// and once per card; each sum starts with a zero. `source` names the
+/// opponent hand behind each entry of those sums after the leading zeros,
+/// sum by sum, and `lengths` how many entries each sum has. The first sum is
+/// the total; the rest belong to cards.
+struct ShowdownPlan {
+  std::vector<std::uint16_t> source;
+  std::vector<std::uint16_t> lengths;
+  /// Per hand of ours.
+  std::vector<ShowdownSlots> slots;
+  /// Entries in all the sums together, leading zeros included.
+  std::size_t size = 0;
 };
 
 /// Who beats whom on one complete board.
@@ -58,9 +68,9 @@ struct ShowdownTable {
   std::array<std::vector<HandStrength>, 2> strength;
   /// Hand indices ordered by ascending strength.
   std::array<std::vector<std::uint32_t>, 2> order;
-  /// Per player, the showdown as a fixed list of steps. Filled in by
+  /// Per player, the showdown worked out in advance. Filled in by
   /// TerminalEvaluator::prepare(); empty means "work it out each time".
-  std::array<std::vector<ShowdownEvent>, 2> events;
+  std::array<ShowdownPlan, 2> plans;
 };
 
 ShowdownTable make_showdown_table(std::array<std::vector<HandStrength>, 2> strength);

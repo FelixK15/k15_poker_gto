@@ -6,6 +6,10 @@
 #include <istream>
 #include <ostream>
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 namespace gto {
 
 namespace {
@@ -19,6 +23,155 @@ std::size_t block_size(const Game& game, const Node& node) {
   return static_cast<std::size_t>(node.num_children) * game.hands[node.player].size();
 }
 
+// 16-bit storage. Values are scaled so that a node's largest magnitude uses
+// the whole range; the scale that turns a stored value back into a real one
+// is kept per node.
+//
+// Rounding is stochastic: up with a probability equal to the fraction left
+// over, down otherwise, so that a stored value is right on average. Rounding
+// to the nearest step would be biased, and the bias adds up: a small value
+// that is discounted a little every iteration would round back to where it
+// was and never move, and the solve would stall well short of its target.
+// The random numbers come from hashing a seed and the position, so results
+// do not depend on the number of threads.
+
+/// A well-mixed 32-bit hash (Chris Wellons' lowbias32).
+inline std::uint32_t mix32(std::uint32_t x) {
+  x ^= x >> 16;
+  x *= 0x7FEB352Du;
+  x ^= x >> 15;
+  x *= 0x846CA68Bu;
+  x ^= x >> 16;
+  return x;
+}
+
+/// A number in [0, 1) for position `i` under `seed`.
+inline float noise(std::uint32_t seed, std::size_t i) {
+  return static_cast<float>(mix32(seed + static_cast<std::uint32_t>(i)) >> 8) * 0x1p-24f;
+}
+
+#if defined(__AVX2__)
+/// The same for positions i .. i + 7.
+inline __m256 noise8(std::uint32_t seed, std::size_t i) {
+  __m256i x = _mm256_add_epi32(_mm256_set1_epi32(static_cast<int>(seed + static_cast<std::uint32_t>(i))),
+                               _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7));
+  x = _mm256_xor_si256(x, _mm256_srli_epi32(x, 16));
+  x = _mm256_mullo_epi32(x, _mm256_set1_epi32(0x7FEB352D));
+  x = _mm256_xor_si256(x, _mm256_srli_epi32(x, 15));
+  x = _mm256_mullo_epi32(x, _mm256_set1_epi32(static_cast<int>(0x846CA68Bu)));
+  x = _mm256_xor_si256(x, _mm256_srli_epi32(x, 16));
+  return _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_srli_epi32(x, 8)), _mm256_set1_ps(0x1p-24f));
+}
+
+/// Values i .. i + 7 scaled and rounded down after adding noise.
+inline __m256i round8(const float* values, __m256 factor, std::uint32_t seed, std::size_t i) {
+  const __m256 scaled = _mm256_mul_ps(_mm256_loadu_ps(values + i), factor);
+  return _mm256_cvtps_epi32(_mm256_floor_ps(_mm256_add_ps(scaled, noise8(seed, i))));
+}
+#endif
+
+/// Stores `values` in 16 bits and returns the scale.
+float encode_signed(const float* values, std::int16_t* out, std::size_t count,
+                    std::uint32_t seed) {
+  std::size_t i = 0;
+  float largest = 0;
+#if defined(__AVX2__)
+  const __m256 magnitude_bits = _mm256_castsi256_ps(_mm256_set1_epi32(0x7FFFFFFF));
+  __m256 widest = _mm256_setzero_ps();
+  for (; i + 8 <= count; i += 8) {
+    widest = _mm256_max_ps(widest, _mm256_and_ps(_mm256_loadu_ps(values + i), magnitude_bits));
+  }
+  alignas(32) float lanes[8];
+  _mm256_store_ps(lanes, widest);
+  for (const float lane : lanes) largest = std::max(largest, lane);
+#endif
+  for (; i < count; ++i) largest = std::max(largest, std::abs(values[i]));
+
+  const float inverse = largest > 0 ? 32767.0f / largest : 0.0f;
+  i = 0;
+#if defined(__AVX2__)
+  const __m256 factor = _mm256_set1_ps(inverse);
+  for (; i + 16 <= count; i += 16) {
+    // Packing saturates, which also catches a value that rounding pushed
+    // just past the end of the range, and works within 128-bit halves: the
+    // permutation puts the quarters back in order.
+    const __m256i packed = _mm256_packs_epi32(round8(values, factor, seed, i),
+                                              round8(values, factor, seed, i + 8));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i),
+                        _mm256_permute4x64_epi64(packed, 0xD8));
+  }
+#endif
+  for (; i < count; ++i) {
+    const float rounded = std::floor(values[i] * inverse + noise(seed, i));
+    out[i] = static_cast<std::int16_t>(std::clamp(rounded, -32767.0f, 32767.0f));
+  }
+  return largest / 32767.0f;
+}
+
+/// The same for values that are never negative.
+float encode_unsigned(const float* values, std::uint16_t* out, std::size_t count,
+                      std::uint32_t seed) {
+  std::size_t i = 0;
+  float largest = 0;
+#if defined(__AVX2__)
+  __m256 widest = _mm256_setzero_ps();
+  for (; i + 8 <= count; i += 8) widest = _mm256_max_ps(widest, _mm256_loadu_ps(values + i));
+  alignas(32) float lanes[8];
+  _mm256_store_ps(lanes, widest);
+  for (const float lane : lanes) largest = std::max(largest, lane);
+#endif
+  for (; i < count; ++i) largest = std::max(largest, values[i]);
+
+  const float inverse = largest > 0 ? 65535.0f / largest : 0.0f;
+  i = 0;
+#if defined(__AVX2__)
+  const __m256 factor = _mm256_set1_ps(inverse);
+  for (; i + 16 <= count; i += 16) {
+    const __m256i packed = _mm256_packus_epi32(round8(values, factor, seed, i),
+                                               round8(values, factor, seed, i + 8));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i),
+                        _mm256_permute4x64_epi64(packed, 0xD8));
+  }
+#endif
+  for (; i < count; ++i) {
+    const float rounded = std::floor(values[i] * inverse + noise(seed, i));
+    out[i] = static_cast<std::uint16_t>(std::clamp(rounded, 0.0f, 65535.0f));
+  }
+  return largest / 65535.0f;
+}
+
+/// Seed for storing one node's values in one iteration.
+inline std::uint32_t storage_seed(std::uint32_t node, int iteration, std::uint32_t kind) {
+  return mix32(node * 0x9E3779B9u ^ mix32(static_cast<std::uint32_t>(iteration) * 2 + kind));
+}
+
+/// Real values of `count` stored ones.
+void decode(const std::int16_t* stored, float scale, float* out, std::size_t count) {
+  std::size_t i = 0;
+#if defined(__AVX2__)
+  const __m256 factor = _mm256_set1_ps(scale);
+  for (; i + 8 <= count; i += 8) {
+    const __m256i wide = _mm256_cvtepi16_epi32(
+        _mm_loadu_si128(reinterpret_cast<const __m128i*>(stored + i)));
+    _mm256_storeu_ps(out + i, _mm256_mul_ps(_mm256_cvtepi32_ps(wide), factor));
+  }
+#endif
+  for (; i < count; ++i) out[i] = static_cast<float>(stored[i]) * scale;
+}
+
+void decode(const std::uint16_t* stored, float scale, float* out, std::size_t count) {
+  std::size_t i = 0;
+#if defined(__AVX2__)
+  const __m256 factor = _mm256_set1_ps(scale);
+  for (; i + 8 <= count; i += 8) {
+    const __m256i wide = _mm256_cvtepu16_epi32(
+        _mm_loadu_si128(reinterpret_cast<const __m128i*>(stored + i)));
+    _mm256_storeu_ps(out + i, _mm256_mul_ps(_mm256_cvtepi32_ps(wide), factor));
+  }
+#endif
+  for (; i < count; ++i) out[i] = static_cast<float>(stored[i]) * scale;
+}
+
 std::uint64_t mapped_mask(const Hand& hand, const CardMap& map) {
   std::uint64_t mask = 0;
   for (int c = 0; c < hand.num_cards; ++c) mask |= std::uint64_t{1} << map[hand.cards[c]];
@@ -28,7 +181,10 @@ std::uint64_t mapped_mask(const Hand& hand, const CardMap& map) {
 }  // namespace
 
 Solver::Solver(Game game, const SolverConfig& config)
-    : game_(std::move(game)), terminal_(game_.hands), pool_(config.threads) {
+    : game_(std::move(game)),
+      terminal_(game_.hands),
+      pool_(config.threads),
+      compressed_(config.compress) {
   const GameTree& tree = game_.tree;
   const auto& nodes = tree.nodes;
 
@@ -41,8 +197,15 @@ Solver::Solver(Game game, const SolverConfig& config)
     offset_[i] = total;
     total += block_size(game_, nodes[i]);
   }
-  regrets_.assign(total, 0.0f);
-  strategy_sum_.assign(total, 0.0f);
+  if (compressed_) {
+    regrets16_.assign(total, 0);
+    strategy_sum16_.assign(total, 0);
+    regret_scale_.assign(nodes.size(), 0.0f);
+    strategy_sum_scale_.assign(nodes.size(), 0.0f);
+  } else {
+    regrets_.assign(total, 0.0f);
+    strategy_sum_.assign(total, 0.0f);
+  }
 
   // Find the chance nodes that have no chance node above them.
   top_level_chance_.assign(tree.chances.size(), false);
@@ -105,22 +268,66 @@ std::size_t Solver::scratch_need(std::uint32_t node_index) const {
   }
   const std::size_t max_hands = std::max(num_hands(0), num_hands(1));
   const std::size_t children = node.num_children;
-  // Action: a strategy and the action values. Chance: one value vector per
-  // card and a reach vector.
-  const std::size_t here = node.type == NodeType::Action ? 2 * children + 2 : children + 1;
+  // Action: a strategy and the action values, and when compressed the
+  // opponent's decoded strategy sums. Chance: one value vector per card and
+  // a reach vector.
+  const std::size_t action_need = (compressed_ ? 3 : 2) * children + 2;
+  const std::size_t here = node.type == NodeType::Action ? action_need : children + 1;
   return here * max_hands + below;
 }
 
-std::size_t Solver::estimate_memory_bytes(const Game& game) noexcept {
+std::size_t Solver::estimate_memory_bytes(const Game& game, bool compressed) noexcept {
   std::size_t total = 0;
   for (const Node& node : game.tree.nodes) {
     if (node.type == NodeType::Action) total += block_size(game, node);
   }
-  return total * 2 * sizeof(float);
+  if (!compressed) return total * 2 * sizeof(float);
+  return total * 2 * sizeof(std::uint16_t) + game.tree.nodes.size() * 2 * sizeof(float);
 }
 
 std::size_t Solver::memory_bytes() const noexcept {
-  return (regrets_.size() + strategy_sum_.size()) * sizeof(float);
+  return (regrets_.size() + strategy_sum_.size()) * sizeof(float) +
+         (regrets16_.size() + strategy_sum16_.size()) * sizeof(std::uint16_t) +
+         (regret_scale_.size() + strategy_sum_scale_.size()) * sizeof(float);
+}
+
+void Solver::read_regrets(std::uint32_t node, float* out) const {
+  const std::size_t count = block_size(game_, game_.tree.nodes[node]);
+  if (!compressed_) {
+    std::copy_n(regrets_.data() + offset_[node], count, out);
+    return;
+  }
+  decode(regrets16_.data() + offset_[node], regret_scale_[node], out, count);
+}
+
+void Solver::read_strategy_sums(std::uint32_t node, float* out) const {
+  const std::size_t count = block_size(game_, game_.tree.nodes[node]);
+  if (!compressed_) {
+    std::copy_n(strategy_sum_.data() + offset_[node], count, out);
+    return;
+  }
+  decode(strategy_sum16_.data() + offset_[node], strategy_sum_scale_[node], out, count);
+}
+
+void Solver::write_regrets(std::uint32_t node, float* values) const {
+  const std::size_t count = block_size(game_, game_.tree.nodes[node]);
+  if (!compressed_) {
+    std::copy_n(values, count, regrets_.data() + offset_[node]);
+    return;
+  }
+  regret_scale_[node] = encode_signed(values, regrets16_.data() + offset_[node], count,
+                                      storage_seed(node, iteration_, 0));
+}
+
+void Solver::write_strategy_sums(std::uint32_t node, float* values) const {
+  const std::size_t count = block_size(game_, game_.tree.nodes[node]);
+  if (!compressed_) {
+    std::copy_n(values, count, strategy_sum_.data() + offset_[node]);
+    return;
+  }
+  strategy_sum_scale_[node] =
+      encode_unsigned(values, strategy_sum16_.data() + offset_[node], count,
+                      storage_seed(node, iteration_, 1));
 }
 
 namespace {
@@ -256,7 +463,11 @@ void Solver::clear_locks() {
   lock_slot_.clear();
 }
 
-void Solver::warm_restart() { std::fill(strategy_sum_.begin(), strategy_sum_.end(), 0.0f); }
+void Solver::warm_restart() {
+  std::fill(strategy_sum_.begin(), strategy_sum_.end(), 0.0f);
+  std::fill(strategy_sum16_.begin(), strategy_sum16_.end(), std::uint16_t{0});
+  std::fill(strategy_sum_scale_.begin(), strategy_sum_scale_.end(), 0.0f);
+}
 
 void Solver::save(std::ostream& out) const {
   StateHeader header{};
@@ -266,12 +477,32 @@ void Solver::save(std::ostream& out) const {
   header.nodes = game_.tree.nodes.size();
   header.hands[0] = num_hands(0);
   header.hands[1] = num_hands(1);
-  header.values = regrets_.size();
-
-  const auto bytes = static_cast<std::streamsize>(regrets_.size() * sizeof(float));
+  header.values = compressed_ ? regrets16_.size() : regrets_.size();
   out.write(reinterpret_cast<const char*>(&header), sizeof(header));
-  out.write(reinterpret_cast<const char*>(regrets_.data()), bytes);
-  out.write(reinterpret_cast<const char*>(strategy_sum_.data()), bytes);
+
+  if (!compressed_) {
+    const auto bytes = static_cast<std::streamsize>(regrets_.size() * sizeof(float));
+    out.write(reinterpret_cast<const char*>(regrets_.data()), bytes);
+    out.write(reinterpret_cast<const char*>(strategy_sum_.data()), bytes);
+    return;
+  }
+  // Saved as floats either way, node by node in the order they are stored,
+  // so that a state loads whether or not the loading solver compresses.
+  std::vector<float> block;
+  for (const bool sums : {false, true}) {
+    for (std::uint32_t i = 0; i < game_.tree.nodes.size(); ++i) {
+      const Node& node = game_.tree.nodes[i];
+      if (node.type != NodeType::Action) continue;
+      block.resize(block_size(game_, node));
+      if (sums) {
+        read_strategy_sums(i, block.data());
+      } else {
+        read_regrets(i, block.data());
+      }
+      out.write(reinterpret_cast<const char*>(block.data()),
+                static_cast<std::streamsize>(block.size() * sizeof(float)));
+    }
+  }
 }
 
 bool Solver::load(std::istream& in, std::string* error) {
@@ -287,12 +518,44 @@ bool Solver::load(std::istream& in, std::string* error) {
   }
   if (header.version != kStateVersion) return fail("saved by an incompatible version");
   if (header.nodes != game_.tree.nodes.size() || header.hands[0] != num_hands(0) ||
-      header.hands[1] != num_hands(1) || header.values != regrets_.size() ||
+      header.hands[1] != num_hands(1) ||
+      header.values != (compressed_ ? regrets16_.size() : regrets_.size()) ||
       header.iteration < 0) {
     return fail("the saved state belongs to a different spot");
   }
 
   // Read into copies so that a truncated file leaves this solver as it was.
+  if (compressed_) {
+    std::vector<std::int16_t> regrets(regrets16_.size());
+    std::vector<std::uint16_t> strategy_sum(strategy_sum16_.size());
+    std::vector<float> regret_scale(regret_scale_.size(), 0.0f);
+    std::vector<float> strategy_sum_scale(strategy_sum_scale_.size(), 0.0f);
+    std::vector<float> block;
+    for (const bool sums : {false, true}) {
+      for (std::uint32_t i = 0; i < game_.tree.nodes.size(); ++i) {
+        const Node& node = game_.tree.nodes[i];
+        if (node.type != NodeType::Action) continue;
+        block.resize(block_size(game_, node));
+        in.read(reinterpret_cast<char*>(block.data()),
+                static_cast<std::streamsize>(block.size() * sizeof(float)));
+        if (!in) return fail("the saved state is incomplete");
+        if (sums) {
+          strategy_sum_scale[i] =
+              encode_unsigned(block.data(), strategy_sum.data() + offset_[i], block.size(),
+                              storage_seed(i, header.iteration, 1));
+        } else {
+          regret_scale[i] = encode_signed(block.data(), regrets.data() + offset_[i],
+                                          block.size(), storage_seed(i, header.iteration, 0));
+        }
+      }
+    }
+    regrets16_ = std::move(regrets);
+    strategy_sum16_ = std::move(strategy_sum);
+    regret_scale_ = std::move(regret_scale);
+    strategy_sum_scale_ = std::move(strategy_sum_scale);
+    iteration_ = header.iteration;
+    return true;
+  }
   std::vector<float> regrets(regrets_.size());
   std::vector<float> strategy_sum(strategy_sum_.size());
   const auto bytes = static_cast<std::streamsize>(regrets.size() * sizeof(float));
@@ -368,11 +631,17 @@ void Solver::current_strategy(std::uint32_t node_index, float* out, float* scrat
   const Node& node = game_.tree.nodes[node_index];
   const std::size_t actions = node.num_children;
   const std::size_t hands = num_hands(node.player);
-  const float* regrets = regrets_.data() + offset_[node_index];
-
   // Regret matching: play each action in proportion to its positive regret.
+  // A compressed node's scale is the same for all its values and positive,
+  // so it drops out.
   const std::size_t count = actions * hands;
-  for (std::size_t i = 0; i < count; ++i) out[i] = std::max(regrets[i], 0.0f);
+  if (compressed_) {
+    decode(regrets16_.data() + offset_[node_index], 1.0f, out, count);
+    for (std::size_t i = 0; i < count; ++i) out[i] = std::max(out[i], 0.0f);
+  } else {
+    const float* regrets = regrets_.data() + offset_[node_index];
+    for (std::size_t i = 0; i < count; ++i) out[i] = std::max(regrets[i], 0.0f);
+  }
   normalise(out, scratch, actions, hands);
 
   if (const NodeLock* lock = lock_at(node_index)) {
@@ -387,9 +656,14 @@ void Solver::average_strategy(std::uint32_t node_index, float* out, float* scrat
   const Node& node = game_.tree.nodes[node_index];
   const std::size_t actions = node.num_children;
   const std::size_t hands = num_hands(node.player);
-  const float* sums = strategy_sum_.data() + offset_[node_index];
-
-  std::copy(sums, sums + actions * hands, out);
+  // As above, a compressed node's scale drops out.
+  const std::size_t count = actions * hands;
+  if (compressed_) {
+    decode(strategy_sum16_.data() + offset_[node_index], 1.0f, out, count);
+  } else {
+    const float* sums = strategy_sum_.data() + offset_[node_index];
+    std::copy(sums, sums + count, out);
+  }
   normalise(out, scratch, actions, hands);
 
   // A locked hand's average is the lock itself, exactly.
@@ -484,7 +758,29 @@ void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const flo
       }
     }
 
-    if (mode == Mode::Train) {
+    if (mode == Mode::Train && compressed_) {
+      // As below, but the new regrets are worked out in place of the action
+      // values and then stored in 16 bits.
+      float* regrets = arena.alloc(actions * my_hands);
+      read_regrets(node_index, regrets);
+      const NodeLock* lock = lock_at(node_index);
+      const float positive = positive_discount_;
+      const float negative = negative_discount_;
+      for (std::size_t a = 0; a < actions; ++a) {
+        const float* row = regrets + a * my_hands;
+        float* values = action_values + a * my_hands;
+        for (std::size_t h = 0; h < my_hands; ++h) {
+          const float regret = row[h];
+          values[h] = regret * (regret > 0 ? positive : negative) + values[h] - out[h];
+        }
+        if (lock != nullptr) {
+          for (std::size_t h = 0; h < my_hands; ++h) {
+            if (lock->locked[h]) values[h] = row[h];
+          }
+        }
+      }
+      write_regrets(node_index, action_values);
+    } else if (mode == Mode::Train) {
       // Move regrets towards the actions that did better than the mix.
       float* regrets = regrets_.data() + offset_[node_index];
       const NodeLock* lock = lock_at(node_index);
@@ -516,14 +812,30 @@ void Solver::traverse(Mode mode, std::uint32_t node_index, int player, const flo
     // hand gets here.
     float* child_reach = arena.alloc(actor_hands);
     float* child_values = arena.alloc(my_hands);
-    float* sums = strategy_sum_.data() + offset_[node_index];
+    const bool update_floats = mode == Mode::Train && !compressed_;
+    float* sums = update_floats ? strategy_sum_.data() + offset_[node_index] : nullptr;
+
+    if (mode == Mode::Train && compressed_) {
+      // The whole node at once, so that it can be scaled to its new largest
+      // value; the same arithmetic as the float update below.
+      float* updated = arena.alloc(actions * actor_hands);
+      read_strategy_sums(node_index, updated);
+      for (std::size_t a = 0; a < actions; ++a) {
+        float* row = updated + a * actor_hands;
+        const float* frequencies = strategy + a * actor_hands;
+        for (std::size_t h = 0; h < actor_hands; ++h) {
+          row[h] = row[h] * strategy_discount_ + opponent_reach[h] * frequencies[h];
+        }
+      }
+      write_strategy_sums(node_index, updated);
+    }
 
     std::fill(out, out + my_hands, 0.0f);
     for (std::size_t a = 0; a < actions; ++a) {
       for (std::size_t h = 0; h < actor_hands; ++h) {
         child_reach[h] = opponent_reach[h] * strategy[a * actor_hands + h];
       }
-      if (mode == Mode::Train) {
+      if (update_floats) {
         for (std::size_t h = 0; h < actor_hands; ++h) {
           float& sum = sums[a * actor_hands + h];
           sum = sum * strategy_discount_ + child_reach[h];

@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/gto_api.dart';
 import '../common/format.dart';
+import '../common/playing_card.dart';
 import '../jobs/jobs_screen.dart';
+import 'action_line.dart';
 import 'action_style.dart';
 import 'lock_dialog.dart';
 import 'matrix_model.dart';
+import 'solution_panels.dart';
 import 'strategy_matrix.dart';
 
 /// Walks through a job's solution: pick actions and cards to move down the
@@ -46,6 +50,15 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// player to act.
   int? _selected;
   Player? _view;
+
+  /// Cell under the mouse, shown in the details while it is there.
+  int? _hovered;
+
+  /// Action picked in the summary, the only one the grid then shows.
+  int? _highlight;
+
+  /// Nodes read so far by path, for the tiles of the action line.
+  final Map<String, GetNodeResponse> _nodes = {};
   MatrixView _matrixView = MatrixView.strategy;
 
   /// The runout report of the chance node on screen, once asked for.
@@ -111,6 +124,10 @@ class _SolutionScreenState extends State<SolutionScreen> {
       }
       if (!mounted || request != _request) return;
       setState(() {
+        // A solve that is still running changes everywhere; keep only what
+        // was just read.
+        if (_running) _nodes.clear();
+        _nodes[path] = node;
         _node = node;
         _parentNode = parentNode;
         _error = null;
@@ -126,15 +143,27 @@ class _SolutionScreenState extends State<SolutionScreen> {
   }
 
   void _go(List<String> path) {
+    final cached = _nodes[path.join('/')];
     setState(() {
       _path
         ..clear()
         ..addAll(path);
       _selected = null;
+      _hovered = null;
+      _highlight = null;
       _view = null;
       _runouts = null;
+      // A node seen before shows at once, and is read again behind it.
+      if (cached != null) {
+        _node = cached;
+        _error = null;
+      }
     });
-    _load();
+    _load(quiet: cached != null);
+  }
+
+  void _back() {
+    if (_path.isNotEmpty) _go(_path.sublist(0, _path.length - 1));
   }
 
   Future<void> _loadRunouts() async {
@@ -205,71 +234,69 @@ class _SolutionScreenState extends State<SolutionScreen> {
   Widget _locksCard(BuildContext context) {
     final theme = Theme.of(context);
     final changed = !sameLocks(_locks, widget.job.locks);
-    return Card(
+    return PanelSection(
       key: const Key('locks-card'),
-      margin: const EdgeInsets.only(top: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Locks', style: theme.textTheme.titleSmall),
-            for (final lock in _locks)
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => _go(
-                        lock.path.isEmpty ? const [] : lock.path.split('/'),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          '${lock.path.isEmpty ? 'Start' : lock.path.split('/').map(pathStepTitle).join(' › ')}'
-                          ' · ${lock.hands.length} hands',
-                        ),
+      title: 'Locks',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final lock in _locks)
+            Row(
+              children: [
+                const Icon(Icons.lock_outline, size: 16),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _go(
+                      lock.path.isEmpty ? const [] : lock.path.split('/'),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        '${lock.path.isEmpty ? 'Start' : lock.path.split('/').map(pathStepTitle).join(' › ')}'
+                        ' · ${lock.hands.length} hands',
                       ),
                     ),
                   ),
-                  IconButton(
-                    key: Key('remove-lock-${lock.path}'),
-                    tooltip: 'Remove',
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () => setState(
-                      () => _locks = [
-                        for (final other in _locks)
-                          if (!identical(other, lock)) other,
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            const SizedBox(height: 4),
-            if (!changed)
-              Text(
-                'These locks are in force in this solve.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-              )
-            else ...[
-              FilledButton.icon(
-                key: const Key('resolve-button'),
-                onPressed: _running || _resolving ? null : _resolve,
-                icon: const Icon(Icons.lock, size: 18),
-                label: const Text('Re-solve with these locks'),
-              ),
-              if (_running)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Pause this solve first, or wait until it is done.',
-                    style: theme.textTheme.bodySmall,
+                IconButton(
+                  key: Key('remove-lock-${lock.path}'),
+                  tooltip: 'Remove',
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => setState(
+                    () => _locks = [
+                      for (final other in _locks)
+                        if (!identical(other, lock)) other,
+                    ],
                   ),
                 ),
-            ],
+              ],
+            ),
+          const SizedBox(height: 4),
+          if (!changed)
+            Text(
+              'These locks are in force in this solve.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else ...[
+            FilledButton.icon(
+              key: const Key('resolve-button'),
+              onPressed: _running || _resolving ? null : _resolve,
+              icon: const Icon(Icons.lock, size: 18),
+              label: const Text('Re-solve with these locks'),
+            ),
+            if (_running)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Pause this solve first, or wait until it is done.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -277,39 +304,30 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// How this node differs from the same node in the parent solve.
   Widget _compareCard(BuildContext context, GetNodeResponse node) {
     final parent = _parentNode!;
-    final theme = Theme.of(context);
     String signed(double value) =>
         '${value >= 0 ? '+' : '−'}${value.abs().toStringAsFixed(2)}';
     final parentFrequency = {
       for (final action in parent.actions) action.label: action.frequency,
     };
-    return Card(
+    return PanelSection(
       key: const Key('compare-card'),
-      margin: const EdgeInsets.only(top: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Compared with the solve it started from',
-              style: theme.textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'EV: OOP ${signed(node.oop.rangeEv - parent.oop.rangeEv)} · '
-              'IP ${signed(node.ip.rangeEv - parent.ip.rangeEv)}',
-              key: const Key('compare-ev'),
-            ),
-            for (final action in node.actions)
-              if (parentFrequency.containsKey(action.label))
-                Text(
-                  '${actionTitle(action)}: '
-                  '${formatPercent(parentFrequency[action.label]!)} → '
-                  '${formatPercent(action.frequency)}',
-                ),
-          ],
-        ),
+      title: 'Compared with the solve it started from',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'EV: OOP ${signed(node.oop.rangeEv - parent.oop.rangeEv)} · '
+            'IP ${signed(node.ip.rangeEv - parent.ip.rangeEv)}',
+            key: const Key('compare-ev'),
+          ),
+          for (final action in node.actions)
+            if (parentFrequency.containsKey(action.label))
+              Text(
+                '${actionTitle(action)}: '
+                '${formatPercent(parentFrequency[action.label]!)} → '
+                '${formatPercent(action.frequency)}',
+              ),
+        ],
       ),
     );
   }
@@ -323,39 +341,63 @@ class _SolutionScreenState extends State<SolutionScreen> {
   @override
   Widget build(BuildContext context) {
     final node = _node;
+    final theme = Theme.of(context);
+    final board = splitCards(_job.spot.board);
     return Scaffold(
       appBar: AppBar(
-        title: Text(_job.name.isEmpty ? _job.spot.board : _job.name),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Center(
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            if (board.isNotEmpty) ...[
+              CardRow(board, width: 20, gap: 2),
+              const SizedBox(width: 10),
+            ],
+            Flexible(
               child: Text(
-                _running
-                    ? '${jobStateLabel(_job.state)} · iteration ${_job.iteration}'
-                    : jobStateLabel(_job.state),
-                style: Theme.of(context).textTheme.bodySmall,
+                _job.name.isEmpty ? _job.spot.board : _job.name,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+          ],
+        ),
+        actions: [
+          _StatusChip(
+            label: _running
+                ? '${jobStateLabel(_job.state)} · iteration ${_job.iteration}'
+                : jobStateLabel(_job.state),
+            active: _running,
           ),
           IconButton(
             tooltip: 'Read again',
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : () => _load(quiet: true),
           ),
+          const SizedBox(width: 4),
         ],
-        bottom: _loading
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(2),
-                child: LinearProgressIndicator(minHeight: 2),
-              )
-            : null,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(2),
+          child: _loading
+              ? const LinearProgressIndicator(minHeight: 2)
+              : const SizedBox(height: 2),
+        ),
       ),
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       body: _error != null
           ? _ErrorView(message: _error!, onBack: () => _go(const []))
           : node == null
           ? const Center(child: CircularProgressIndicator())
-          : _buildNode(context, node),
+          : CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.backspace): _back,
+                const SingleActivator(LogicalKeyboardKey.arrowLeft): _back,
+                const SingleActivator(LogicalKeyboardKey.escape): () =>
+                    setState(() {
+                      _selected = null;
+                      _highlight = null;
+                    }),
+              },
+              child: Focus(autofocus: true, child: _buildNode(context, node)),
+            ),
     );
   }
 
@@ -371,138 +413,377 @@ class _SolutionScreenState extends State<SolutionScreen> {
       locked: acting ? node.locked : const [],
     );
     final colors = actionColors(node.actions);
-    final lockedHere = node.locked.where((flag) => flag).length;
-
-    final header = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _Breadcrumb(
-          path: _path,
-          onTap: (length) => _go(_path.sublist(0, length)),
-        ),
-        const SizedBox(height: 12),
-        _NextStep(
-          node: node,
-          colors: colors,
-          onStep: (step) => _go([..._path, step]),
-        ),
-        if (node.type == NodeType.NODE_TYPE_CHANCE) ...[
-          const SizedBox(height: 8),
-          if (_runouts == null)
-            OutlinedButton.icon(
-              key: const Key('runouts-button'),
-              onPressed: _loadingRunouts ? null : _loadRunouts,
-              icon: _loadingRunouts
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.bar_chart, size: 18),
-              label: const Text('Compare the cards'),
-            )
-          else
-            _RunoutReport(
-              runouts: _runouts!,
-              onPick: (card) => _go([..._path, card]),
-            ),
-        ],
-        if (node.type == NodeType.NODE_TYPE_ACTION) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                key: const Key('lock-button'),
-                onPressed: () => _addLock(node),
-                icon: const Icon(Icons.lock_outline, size: 18),
-                label: const Text('Lock this decision…'),
-              ),
-              if (lockedHere > 0)
-                Text(
-                  '$lockedHere of ${node.locked.length} hands are locked here',
-                  key: const Key('locked-here'),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-            ],
-          ),
-        ],
-      ],
-    );
-    final matrix = StrategyMatrix(
-      key: const Key('matrix'),
-      model: model,
-      colors: colors,
-      view: _matrixView,
-      selected: _selected,
-      onSelected: (index) =>
-          setState(() => _selected = _selected == index ? null : index),
-    );
-    final details = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _Details(
-          node: node,
-          viewed: viewed,
-          model: model,
-          colors: colors,
-          selected: _selected,
-          onView: (player) => setState(() {
-            _view = player;
-            _selected = null;
-          }),
-          matrixView: _matrixView,
-          onMatrixView: (view) => setState(() => _matrixView = view),
-        ),
-        if (_locks.isNotEmpty) _locksCard(context),
-        if (_parentNode != null && node.type == NodeType.NODE_TYPE_ACTION)
-          _compareCard(context, node),
-      ],
-    );
+    final shown = _hovered ?? _selected;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth >= 900) {
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      header,
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: matrix,
+        final wide = constraints.maxWidth >= 960;
+        final line = ActionLine(
+          path: List.unmodifiable(_path),
+          board: splitCards(_job.spot.board),
+          current: node,
+          nodeAt: (depth) => _nodes[_path.sublist(0, depth).join('/')],
+          effectiveStack: _job.spot.effectiveStack,
+          onGo: _go,
+          compact: !wide,
+        );
+
+        final toolbar = _MatrixToolbar(
+          viewed: viewed,
+          acting: node.type == NodeType.NODE_TYPE_ACTION ? node.player : null,
+          onView: (player) => setState(() {
+            _view = player;
+            _selected = null;
+            _highlight = null;
+          }),
+          matrixView: _matrixView,
+          onMatrixView: (view) => setState(() => _matrixView = view),
+          compact: !wide,
+        );
+        final matrix = StrategyMatrix(
+          key: const Key('matrix'),
+          model: model,
+          colors: colors,
+          view: _matrixView,
+          selected: _selected,
+          hovered: wide ? _hovered : null,
+          highlightAction: _highlight,
+          onSelected: (index) =>
+              setState(() => _selected = _selected == index ? null : index),
+          onHover: wide ? (index) => setState(() => _hovered = index) : null,
+        );
+
+        final deal = node.type == NodeType.NODE_TYPE_CHANCE
+            ? _dealSection(context, node, compact: !wide)
+            : null;
+        final summary = ActionSummary(
+          node: node,
+          model: model,
+          colors: colors,
+          viewed: viewed,
+          highlight: _highlight,
+          onHighlight: (action) => setState(() => _highlight = action),
+        );
+        final details = shown == null
+            ? _hint(
+                context,
+                wide
+                    ? 'Point at or click a hand in the grid for its combos.'
+                    : 'Tap a hand in the grid for its combos.',
+              )
+            : HandDetails(
+                cell: model.cells[shown],
+                node: node,
+                colors: colors,
+                actionCount: model.actionCount,
+              );
+        final lockRow = node.type == NodeType.NODE_TYPE_ACTION
+            ? _lockRow(context, node)
+            : null;
+        // Locking is one task: the button, then what is locked so far.
+        final locking = [?lockRow, if (_locks.isNotEmpty) _locksCard(context)];
+        final extras = [
+          NodeSummary(node: node),
+          if (_parentNode != null && node.type == NodeType.NODE_TYPE_ACTION)
+            _compareCard(context, node),
+        ];
+
+        if (wide) {
+          final panelWidth = constraints.maxWidth >= 1280 ? 420.0 : 360.0;
+          final panel = [?deal, summary, ...locking, details, ...extras];
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              line,
+              const Divider(),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 8, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            toolbar,
+                            const SizedBox(height: 10),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.topCenter,
+                                child: matrix,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    SizedBox(
+                      width: panelWidth,
+                      child: _ScrollStack(
+                        padding: const EdgeInsets.fromLTRB(8, 12, 16, 16),
+                        children: panel,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 340,
-                  child: SingleChildScrollView(child: details),
-                ),
-              ],
-            ),
+              ),
+            ],
           );
         }
-        return ListView(
-          padding: const EdgeInsets.all(12),
+
+        // Phones: the line stays at the top; everything else scrolls.
+        final items = [
+          ?deal,
+          toolbar,
+          matrix,
+          summary,
+          details,
+          ...locking,
+          ...extras,
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            header,
-            const SizedBox(height: 12),
-            matrix,
-            const SizedBox(height: 12),
-            details,
+            line,
+            const Divider(),
+            Expanded(
+              child: _ScrollStack(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 24),
+                children: items,
+              ),
+            ),
           ],
         );
       },
+    );
+  }
+
+  Widget _hint(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            Icons.touch_app_outlined,
+            size: 16,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              key: const Key('details-hint'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _lockRow(BuildContext context, GetNodeResponse node) {
+    final lockedHere = node.locked.where((flag) => flag).length;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          key: const Key('lock-button'),
+          onPressed: () => _addLock(node),
+          icon: const Icon(Icons.lock_outline, size: 18),
+          label: const Text('Lock this decision…'),
+        ),
+        if (lockedHere > 0)
+          Text(
+            '$lockedHere of ${node.locked.length} hands are locked here',
+            key: const Key('locked-here'),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+      ],
+    );
+  }
+
+  Widget _dealSection(
+    BuildContext context,
+    GetNodeResponse node, {
+    required bool compact,
+  }) {
+    return PanelSection(
+      title: 'Deal the next card',
+      trailing: _runouts != null
+          ? null
+          : TextButton.icon(
+              key: const Key('runouts-button'),
+              onPressed: _loadingRunouts ? null : _loadRunouts,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              icon: _loadingRunouts
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.bar_chart, size: 16),
+              label: const Text('Compare the cards'),
+            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CardPicker(
+            cards: node.nextCards,
+            compact: compact,
+            onPick: (card) => _go([..._path, card]),
+          ),
+          if (_runouts != null) ...[
+            const SizedBox(height: 10),
+            RunoutReport(
+              runouts: _runouts!,
+              onPick: (card) => _go([..._path, card]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Blocks one under the other, scrolling together.
+class _ScrollStack extends StatelessWidget {
+  const _ScrollStack({required this.padding, required this.children});
+
+  final EdgeInsets padding;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; ++i) ...[
+            if (i > 0) const SizedBox(height: 10),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The range shown in the grid and what its colours mean.
+class _MatrixToolbar extends StatelessWidget {
+  const _MatrixToolbar({
+    required this.viewed,
+    required this.acting,
+    required this.onView,
+    required this.matrixView,
+    required this.onMatrixView,
+    this.compact = false,
+  });
+
+  final Player viewed;
+  final bool compact;
+
+  /// The player to act, marked in the toggle; null if nobody acts here.
+  final Player? acting;
+  final ValueChanged<Player> onView;
+  final MatrixView matrixView;
+  final ValueChanged<MatrixView> onMatrixView;
+
+  @override
+  Widget build(BuildContext context) {
+    ButtonSegment<Player> player(Player value, String label) => ButtonSegment(
+      value: value,
+      label: Text(label),
+      icon: acting == value && !compact
+          ? const Icon(Icons.play_arrow_rounded, size: 16)
+          : null,
+    );
+    // Tighter segments on a phone, so the labels fit on one line.
+    final style = compact
+        ? const ButtonStyle(
+            padding: WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 4),
+            ),
+          )
+        : null;
+    final players = SegmentedButton<Player>(
+      style: style,
+      key: const Key('player-view'),
+      showSelectedIcon: false,
+      segments: [
+        player(Player.PLAYER_OOP, 'OOP'),
+        player(Player.PLAYER_IP, 'IP'),
+      ],
+      selected: {viewed},
+      onSelectionChanged: (selection) => onView(selection.first),
+    );
+    final views = SegmentedButton<MatrixView>(
+      style: style,
+      key: const Key('matrix-view'),
+      showSelectedIcon: false,
+      segments: [
+        for (final view in MatrixView.values)
+          ButtonSegment(value: view, label: Text(view.label)),
+      ],
+      selected: {matrixView},
+      onSelectionChanged: (selection) => onMatrixView(selection.first),
+    );
+    if (compact) {
+      // One row on a phone, sharing the width.
+      return Row(
+        children: [
+          Expanded(flex: 3, child: players),
+          const SizedBox(width: 8),
+          Expanded(flex: 7, child: views),
+        ],
+      );
+    }
+    return Wrap(spacing: 8, runSpacing: 8, children: [players, views]);
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.label, required this.active});
+
+  final String label;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(color: color),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -534,512 +815,6 @@ class _ErrorView extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// The line taken so far; tapping a step goes back to it.
-class _Breadcrumb extends StatelessWidget {
-  const _Breadcrumb({required this.path, required this.onTap});
-
-  final List<String> path;
-
-  /// Called with the number of steps to keep.
-  final ValueChanged<int> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget crumb(int length, String label, {Color? color}) {
-      final current = length == path.length;
-      return InkWell(
-        key: Key('crumb-$length'),
-        borderRadius: BorderRadius.circular(6),
-        onTap: current ? null : () => onTap(length),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Text(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: current ? FontWeight.w700 : FontWeight.w400,
-              color: color ?? (current ? null : theme.colorScheme.primary),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        crumb(0, 'Start'),
-        for (var i = 0; i < path.length; ++i) ...[
-          Icon(
-            Icons.chevron_right,
-            size: 16,
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-          crumb(
-            i + 1,
-            pathStepTitle(path[i]),
-            color: cardTitle(path[i]) != null ? suitColor(path[i]) : null,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-/// What can happen next at a node: the actions, the cards, or nothing.
-class _NextStep extends StatelessWidget {
-  const _NextStep({
-    required this.node,
-    required this.colors,
-    required this.onStep,
-  });
-
-  final GetNodeResponse node;
-  final List<Color> colors;
-
-  /// Called with the path step of the chosen action or card.
-  final ValueChanged<String> onStep;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    switch (node.type) {
-      case NodeType.NODE_TYPE_ACTION:
-        return Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              node.player == Player.PLAYER_OOP ? 'OOP acts:' : 'IP acts:',
-              style: theme.textTheme.titleSmall,
-            ),
-            for (var i = 0; i < node.actions.length; ++i)
-              OutlinedButton(
-                key: Key('action-${node.actions[i].label}'),
-                onPressed: () => onStep(node.actions[i].label),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: colors[i], width: 2),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                ),
-                child: Text(
-                  '${actionTitle(node.actions[i])}  '
-                  '${formatPercent(node.actions[i].frequency)}',
-                ),
-              ),
-          ],
-        );
-      case NodeType.NODE_TYPE_CHANCE:
-        return _CardPicker(cards: node.nextCards, onPick: onStep);
-      case NodeType.NODE_TYPE_FOLD:
-        return Text(
-          '${node.player == Player.PLAYER_OOP ? 'OOP' : 'IP'} folds. '
-          'The hand is over.',
-          style: theme.textTheme.titleSmall,
-        );
-      default:
-        return Text(
-          'The hand goes to showdown.',
-          style: theme.textTheme.titleSmall,
-        );
-    }
-  }
-}
-
-/// One tile per card that can come: what the spot is worth after it and what
-/// the next player does. Tapping a tile deals the card.
-class _RunoutReport extends StatelessWidget {
-  const _RunoutReport({required this.runouts, required this.onPick});
-
-  final List<Runout> runouts;
-  final ValueChanged<String> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // Best cards for the out-of-position player first.
-    final sorted = [...runouts]..sort((a, b) => b.oopEv.compareTo(a.oopEv));
-    final lowest = sorted.isEmpty ? 0.0 : sorted.last.oopEv;
-    final highest = sorted.isEmpty ? 1.0 : sorted.first.oopEv;
-
-    return Column(
-      key: const Key('runout-report'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Cards by OOP\'s value after them. The bar shows what the next '
-          'player does.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final runout in sorted)
-              InkWell(
-                key: Key('runout-${runout.card}'),
-                onTap: () => onPick(runout.card),
-                child: Container(
-                  width: 104,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border(
-                      left: BorderSide(
-                        width: 4,
-                        color: valueColor(runout.oopEv, lowest, highest),
-                      ),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        cardTitle(runout.card) ?? runout.card,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: suitColor(runout.card),
-                        ),
-                      ),
-                      Text(
-                        'EV ${runout.oopEv.toStringAsFixed(2)}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      Text(
-                        'Eq ${formatPercent(runout.oopEquity, digits: 0)}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      if (runout.actions.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: _ActionBar(actions: runout.actions),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// A thin bar split by how often each action is taken.
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({required this.actions});
-
-  final List<NodeAction> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = actionColors(actions);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        height: 6,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var a = 0; a < actions.length; ++a)
-              if (actions[a].frequency > 0.0005)
-                Expanded(
-                  flex: (actions[a].frequency * 1000).round(),
-                  child: ColoredBox(color: colors[a]),
-                ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The cards that can come next, one row per suit.
-class _CardPicker extends StatelessWidget {
-  const _CardPicker({required this.cards, required this.onPick});
-
-  final List<String> cards;
-  final ValueChanged<String> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Pick the next card:', style: theme.textTheme.titleSmall),
-        const SizedBox(height: 8),
-        for (final suit in const ['s', 'h', 'd', 'c'])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                // Ace first, like the matrix.
-                for (final rank in matrixRanks.split(''))
-                  if (cards.contains('$rank$suit'))
-                    SizedBox(
-                      width: 44,
-                      height: 34,
-                      child: OutlinedButton(
-                        key: Key('card-$rank$suit'),
-                        onPressed: () => onPick('$rank$suit'),
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          foregroundColor: suitColor(suit),
-                        ),
-                        child: Text(cardTitle('$rank$suit')!),
-                      ),
-                    ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// Numbers for the node and for the hand class picked in the matrix.
-class _Details extends StatelessWidget {
-  const _Details({
-    required this.node,
-    required this.viewed,
-    required this.model,
-    required this.colors,
-    required this.selected,
-    required this.onView,
-    required this.matrixView,
-    required this.onMatrixView,
-  });
-
-  final GetNodeResponse node;
-  final Player viewed;
-  final MatrixModel model;
-  final List<Color> colors;
-  final int? selected;
-  final ValueChanged<Player> onView;
-  final MatrixView matrixView;
-  final ValueChanged<MatrixView> onMatrixView;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final cell = selected == null ? null : model.cells[selected!];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SegmentedButton<Player>(
-          segments: const [
-            ButtonSegment(value: Player.PLAYER_OOP, label: Text('OOP range')),
-            ButtonSegment(value: Player.PLAYER_IP, label: Text('IP range')),
-          ],
-          selected: {viewed},
-          onSelectionChanged: (selection) => onView(selection.first),
-        ),
-        const SizedBox(height: 8),
-        SegmentedButton<MatrixView>(
-          key: const Key('matrix-view'),
-          showSelectedIcon: false,
-          segments: [
-            for (final view in MatrixView.values)
-              ButtonSegment(value: view, label: Text(view.label)),
-          ],
-          selected: {matrixView},
-          onSelectionChanged: (selection) => onMatrixView(selection.first),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          margin: EdgeInsets.zero,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Pot ${formatChips(node.pot)}',
-                  key: const Key('node-pot'),
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'EV: OOP ${node.oop.rangeEv.toStringAsFixed(2)} · '
-                  'IP ${node.ip.rangeEv.toStringAsFixed(2)}',
-                  key: const Key('node-ev'),
-                ),
-                Text(
-                  'Equity: OOP ${formatPercent(node.oop.rangeEquity)} · '
-                  'IP ${formatPercent(node.ip.rangeEquity)}',
-                  key: const Key('node-equity'),
-                ),
-                Text(
-                  '${model.totalReach.toStringAsFixed(1)} combos in '
-                  '${viewed == Player.PLAYER_OOP ? 'OOP' : 'IP'}\'s range here',
-                  style: muted,
-                ),
-                if (model.actionCount > 0) ...[
-                  const SizedBox(height: 12),
-                  for (var i = 0; i < node.actions.length; ++i)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        children: [
-                          Container(width: 12, height: 12, color: colors[i]),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(actionTitle(node.actions[i]))),
-                          Text(formatPercent(node.actions[i].frequency)),
-                        ],
-                      ),
-                    ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (cell == null)
-          Text('Tap a hand in the grid for its details.', style: muted)
-        else
-          _CellDetails(cell: cell, node: node, colors: colors),
-      ],
-    );
-  }
-}
-
-class _CellDetails extends StatelessWidget {
-  const _CellDetails({
-    required this.cell,
-    required this.node,
-    required this.colors,
-  });
-
-  final MatrixCell cell;
-  final GetNodeResponse node;
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final muted = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final present = [
-      for (final hand in cell.hands)
-        if (hand.reach > 0) hand,
-    ];
-
-    return Card(
-      key: const Key('cell-details'),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(cell.label, style: theme.textTheme.titleMedium),
-            if (cell.isEmpty)
-              Text('Not in the range here.', style: muted)
-            else ...[
-              Text(
-                '${cell.reach.toStringAsFixed(2)} of ${cell.combos} combos · '
-                'EV ${cell.ev.toStringAsFixed(2)} · '
-                'equity ${formatPercent(cell.equity, digits: 0)}',
-                style: muted,
-              ),
-              const SizedBox(height: 8),
-              for (final hand in present) _handRow(context, hand),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _handRow(BuildContext context, HandView hand) {
-    final first = hand.name.substring(0, 2);
-    final second = hand.name.substring(2, 4);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: cardTitle(first),
-                      style: TextStyle(color: suitColor(first)),
-                    ),
-                    TextSpan(
-                      text: cardTitle(second),
-                      style: TextStyle(color: suitColor(second)),
-                    ),
-                  ],
-                ),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${hand.locked ? 'Locked · ' : ''}'
-                  'EV ${hand.ev.toStringAsFixed(2)}'
-                  '${hand.reach < 0.995 ? ' · ${formatPercent(hand.reach, digits: 0)} here' : ''}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ],
-          ),
-          if (hand.frequencies.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: SizedBox(
-                  height: 8,
-                  child: Row(
-                    // Without this the coloured boxes have no height.
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var a = 0; a < hand.frequencies.length; ++a)
-                        if (hand.frequencies[a] > 0.0005)
-                          Expanded(
-                            flex: (hand.frequencies[a] * 1000).round(),
-                            child: ColoredBox(color: colors[a]),
-                          ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (hand.frequencies.isNotEmpty)
-            Text(
-              [
-                for (var a = 0; a < hand.frequencies.length; ++a)
-                  if (hand.frequencies[a] >= 0.005)
-                    '${actionTitle(node.actions[a])} '
-                        '${formatPercent(hand.frequencies[a], digits: 0)}',
-              ].join(' · '),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-        ],
       ),
     );
   }

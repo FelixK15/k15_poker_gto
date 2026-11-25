@@ -101,6 +101,20 @@ TEST(Lock, AlwaysFoldingMakesTheOpponentBluffEverything) {
   EXPECT_NEAR(result.evaluation.exploitability, 0.0, 0.05);
 }
 
+TEST(Lock, WorksWithCompressedStorage) {
+  SolverConfig config;
+  config.compress = true;
+  Solver solver(*make_game(polarised_river()), config);
+  lock_all(solver, "check/allin", {1.0f, 0.0f});
+  const SolveResult result = solve(solver, 1000);
+
+  const NodeReport ip = solver.report(*solver.game().tree.find("check"));
+  EXPECT_NEAR(frequency(solver, ip, 1, is_air), 1.0, 0.01);
+  EXPECT_NEAR(result.evaluation.ev[kIp], 100.0, 0.2);
+  const NodeReport oop = solver.report(*solver.game().tree.find("check/allin"));
+  for (std::size_t h = 0; h < oop.locked.size(); ++h) EXPECT_EQ(oop.frequency(0, h), 1.0f);
+}
+
 TEST(Lock, AlwaysCallingStopsTheBluffs) {
   Solver solver(*make_game(polarised_river()));
   lock_all(solver, "check/allin", {0.0f, 1.0f});

@@ -474,6 +474,62 @@ TEST(HoldemTurn, ThreadsDoNotChangeTheSolution) {
   EXPECT_EQ(single.report(GameTree::kRoot).strategy, multi.report(GameTree::kRoot).strategy);
 }
 
+SolverConfig compressed(unsigned threads = 0) {
+  SolverConfig config;
+  config.threads = threads;
+  config.compress = true;
+  return config;
+}
+
+TEST(HoldemTurn, CompressedStorageHalvesMemoryAndSolvesAlike) {
+  auto float_game = make_game(turn_spot());
+  auto packed_game = make_game(turn_spot());
+  ASSERT_TRUE(float_game && packed_game);
+  const std::size_t estimate = Solver::estimate_memory_bytes(*packed_game, true);
+  EXPECT_LT(estimate, Solver::estimate_memory_bytes(*float_game) / 1.9);
+
+  Solver floats(std::move(*float_game));
+  Solver packed(std::move(*packed_game), compressed());
+  EXPECT_FALSE(floats.compressed());
+  EXPECT_TRUE(packed.compressed());
+  EXPECT_EQ(packed.memory_bytes(), estimate);
+
+  const SolveResult a = solve(floats, 200);
+  const SolveResult b = solve(packed, 200);
+  EXPECT_LT(b.evaluation.exploitability_pct, 0.5);
+  EXPECT_NEAR(a.evaluation.ev[0], b.evaluation.ev[0], 0.1);
+  EXPECT_NEAR(b.evaluation.ev[0] + b.evaluation.ev[1], 100.0, 0.05);
+}
+
+TEST(HoldemTurn, CompressedStorageKeepsConverging) {
+  // Rounding to the nearest 16-bit step used to stall solves at a few tenths
+  // of a percent of the pot; with stochastic rounding they keep pace with
+  // floats.
+  auto float_game = make_game(turn_spot());
+  auto packed_game = make_game(turn_spot());
+  ASSERT_TRUE(float_game && packed_game);
+  Solver floats(std::move(*float_game));
+  Solver packed(std::move(*packed_game), compressed());
+
+  const SolveResult a = solve(floats, 600);
+  const SolveResult b = solve(packed, 600);
+  EXPECT_LT(b.evaluation.exploitability_pct, 1.5 * a.evaluation.exploitability_pct + 0.01);
+}
+
+TEST(HoldemTurn, CompressedStorageIsTheSameOnEveryThreadCount) {
+  auto game_a = make_game(turn_spot());
+  auto game_b = make_game(turn_spot());
+  ASSERT_TRUE(game_a && game_b);
+  Solver single(std::move(*game_a), compressed(1));
+  Solver multi(std::move(*game_b), compressed(4));
+
+  const SolveResult a = solve(single, 30);
+  const SolveResult b = solve(multi, 30);
+  EXPECT_EQ(a.evaluation.ev[0], b.evaluation.ev[0]);
+  EXPECT_EQ(a.evaluation.exploitability, b.evaluation.exploitability);
+  EXPECT_EQ(single.report(GameTree::kRoot).strategy, multi.report(GameTree::kRoot).strategy);
+}
+
 TEST(HoldemTurn, EquityIgnoresTheBettingAndMatchesBruteForce) {
   for (const bool isomorphism : {true, false}) {
     SCOPED_TRACE(isomorphism ? "with isomorphism" : "without isomorphism");
