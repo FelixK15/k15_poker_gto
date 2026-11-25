@@ -13,6 +13,7 @@ class RemoteTarget {
     this.token = '',
     this.tls = false,
     this.certificatePath = '',
+    this.certificate,
   });
 
   final String host;
@@ -26,6 +27,10 @@ class RemoteTarget {
   /// whose certificate no public authority signed. Empty to rely on the
   /// system's trusted authorities.
   final String certificatePath;
+
+  /// With [tls]: that certificate's PEM bytes when the app already has them.
+  /// Used when [certificatePath] is empty.
+  final List<int>? certificate;
 }
 
 typedef RemoteConnector = Future<GtoApi> Function(RemoteTarget target);
@@ -34,7 +39,7 @@ typedef LocalConnector = Future<GtoApi> Function();
 /// How the app reaches a remote server. Overridden in tests.
 final remoteConnectorProvider = Provider<RemoteConnector>(
   (ref) => (target) async {
-    List<int>? certificate;
+    var certificate = target.tls ? target.certificate : null;
     if (target.tls && target.certificatePath.isNotEmpty) {
       try {
         certificate = await File(target.certificatePath).readAsBytes();

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/gto_api.dart';
 import '../common/info_button.dart';
+import 'built_in_server.dart';
 import 'local_server.dart';
 import 'server_connection.dart';
 
@@ -24,17 +25,28 @@ class ConnectScreen extends ConsumerStatefulWidget {
 
 class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _hostController = TextEditingController(text: '127.0.0.1');
-  final _portController = TextEditingController(text: '50051');
-  final _tokenController = TextEditingController();
+  // A server compiled into this build fills in the form.
+  late final BuiltInServer? _builtIn = ref.read(builtInServerProvider);
+  late final _hostController = TextEditingController(
+    text: _builtIn?.host ?? '127.0.0.1',
+  );
+  late final _portController = TextEditingController(
+    text: '${_builtIn?.port ?? 50051}',
+  );
+  late final _tokenController = TextEditingController(text: _builtIn?.token);
   final _certificateController = TextEditingController();
-  bool _tls = false;
+  late bool _tls = _builtIn?.tls ?? false;
 
   late final bool _localSupported =
       widget.localSupported ?? localSolvingSupported;
-  late ConnectionMode _mode = _localSupported
+  late ConnectionMode _mode = _localSupported && _builtIn == null
       ? ConnectionMode.local
       : ConnectionMode.remote;
+
+  /// The built-in certificate belongs to the built-in server only.
+  bool get _usesBuiltInCertificate =>
+      _builtIn?.certificate != null &&
+      _hostController.text.trim() == _builtIn!.host;
   bool _connecting = false;
   String? _error;
 
@@ -67,6 +79,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             token: _tokenController.text.trim(),
             tls: _tls,
             certificatePath: _certificateController.text.trim(),
+            certificate: _usesBuiltInCertificate ? _builtIn!.certificate : null,
           ),
         );
       }
@@ -275,13 +288,15 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
               enabled: !_connecting,
               autocorrect: false,
               enableSuggestions: false,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Server certificate file',
-                helperText:
-                    'Only for a self-signed certificate: the path of its '
-                    '.pem file on this device.',
+                helperText: _usesBuiltInCertificate
+                    ? 'Leave empty to use the certificate that comes with '
+                          'this build.'
+                    : 'Only for a self-signed certificate: the path of its '
+                          '.pem file on this device.',
                 helperMaxLines: 2,
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
         ],

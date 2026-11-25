@@ -29,3 +29,6 @@ gto-data/
 
 # Release packages
 /dist/
+
+# A private build's server address and token (see tools/server.defines.example.json)
+server.defines.json

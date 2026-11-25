@@ -1,0 +1,7 @@
+{
+  "GTO_BUILTIN_HOST": "solver.example.com",
+  "GTO_BUILTIN_PORT": 50051,
+  "GTO_BUILTIN_TOKEN": "the server's access token",
+  "GTO_BUILTIN_TLS": true,
+  "GTO_BUILTIN_CERT": "base64 of the server's .pem file, only for a self-signed certificate"
+}
