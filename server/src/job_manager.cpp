@@ -919,7 +919,17 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
                       "the job is still solving; pause it or wait until it is done");
   }
 
-  // Check the locks against the parent's tree and take a copy of its state.
+  std::string id;
+  {
+    const std::lock_guard lock(mutex_);
+    if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+    id = new_id();
+  }
+
+  // Check the locks against the parent's tree and copy its state for the new
+  // job. With a data directory the state goes straight to the new job's file:
+  // states can be several GB, more than an in-memory string stream holds
+  // (MSVC's stops growing at 2 GB and only sets failbit).
   std::shared_ptr<Solution> solution;
   if (Error error = acquire_solution(parent.id(), &solution)) return error;
   std::string state;
@@ -935,18 +945,34 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
         return make_error(ErrorKind::InvalidArgument, error);
       }
     }
-    std::ostringstream buffer(std::ios::binary);
-    solution->solver->save(buffer);
-    state = std::move(buffer).str();
+    if (config_.data_dir.empty()) {
+      std::ostringstream buffer(std::ios::binary);
+      solution->solver->save(buffer);
+      if (!buffer) {
+        return make_error(ErrorKind::ResourceExhausted,
+                          "the solution is too large to copy in memory; start the server "
+                          "with a data directory to re-solve it");
+      }
+      state = std::move(buffer).str();
+    } else {
+      const bool ok = write_atomically(state_file(id), [&](std::ostream& file) {
+        solution->solver->save(file);
+        return static_cast<bool>(file);
+      });
+      if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
+    }
     parent_iterations = solution->solver->iterations();
   }
 
   const std::lock_guard lock(mutex_);
-  if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+  if (stopping_) {
+    erase_files(id);
+    return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
+  }
 
   Entry entry;
   v1::Job& job = entry.job;
-  job.set_id(new_id());
+  job.set_id(id);
   job.set_name(request.name().empty() ? parent.name() + " (locked)" : request.name());
   job.set_state(v1::JOB_STATE_QUEUED);
   *job.mutable_spot() = parent.spot();
@@ -961,15 +987,7 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
   *job.mutable_locks() = request.locks();
   job.set_warm_start_pending(true);
 
-  if (config_.data_dir.empty()) {
-    entry.initial_state = std::move(state);
-  } else {
-    const bool ok = write_atomically(state_file(job.id()), [&](std::ostream& file) {
-      file.write(state.data(), static_cast<std::streamsize>(state.size()));
-      return static_cast<bool>(file);
-    });
-    if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
-  }
+  entry.initial_state = std::move(state);
   write_job(job);
   *out = job;
   queue_.push_back(job.id());
