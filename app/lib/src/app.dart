@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'connection/connect_screen.dart';
 import 'connection/server_connection.dart';
 import 'home/home_screen.dart';
+import 'settings/theme_picker.dart';
+import 'settings/theme_settings.dart';
 
 class GtoApp extends ConsumerStatefulWidget {
   const GtoApp({super.key});
@@ -38,17 +40,34 @@ class _GtoAppState extends ConsumerState<GtoApp> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2E7D5B);
+    final look = ref.watch(themeSettingsProvider);
     final api = ref.watch(connectionProvider);
     return MaterialApp(
       title: 'K15 GTO',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.light),
-      darkTheme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark),
-      themeMode: ThemeMode.dark,
+      theme: look.theme(Brightness.light),
+      darkTheme: look.theme(Brightness.dark),
+      themeMode: look.mode,
       // A new key per connection, so nothing from the last server lingers.
       home: api == null
-          ? const ConnectScreen()
+          ? const Stack(
+              children: [
+                ConnectScreen(),
+                // The connect screen has no app bar to put this in.
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: ThemeButton(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
           : HomeScreen(key: ObjectKey(api), api: api),
     );
   }

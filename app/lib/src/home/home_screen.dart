@@ -6,6 +6,7 @@ import '../common/format.dart';
 import '../connection/server_connection.dart';
 import '../jobs/jobs_screen.dart';
 import '../range/range_store.dart';
+import '../settings/theme_picker.dart';
 import '../solution/solution_screen.dart';
 import '../spot/spot_setup_screen.dart';
 
@@ -69,6 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+          const ThemeButton(),
           IconButton(
             key: const Key('disconnect-button'),
             tooltip: api.isLocal ? 'Stop the solver' : 'Disconnect',
