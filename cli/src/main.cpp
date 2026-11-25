@@ -20,14 +20,16 @@ namespace {
 void print_usage() {
   std::puts(
       "Usage:\n"
-      "  gto-cli solve <spot.json> [--node <path>]... [--threads <n>]\n"
+      "  gto-cli solve <spot.json> [--node <path>]... [--threads <n>] [--compress]\n"
       "  gto-cli --version\n\n"
       "solve  Solves the spot described in the JSON file (see examples/) and\n"
       "       prints the strategy at the root.\n"
       "  --node <path>  Also print the node reached by this line of actions and\n"
       "                 dealt cards, e.g. --node check/bet50/call/Ts. May be\n"
       "                 given several times.\n"
-      "  --threads <n>  Threads to use (default: all).");
+      "  --threads <n>  Threads to use (default: all).\n"
+      "  --compress     Keep regrets and strategies in 16 bits: half the\n"
+      "                 memory, slightly less precise.");
 }
 
 /// Sort key that lists hand classes from AA down: pairs and high cards first.
@@ -116,7 +118,7 @@ void print_node(const gto::Solver& solver, const gto::NodeRef& ref, const std::s
 }
 
 int run_solve(const std::string& config_path, const std::vector<std::string>& node_paths,
-              unsigned threads) {
+              unsigned threads, bool compress) {
   std::string error;
   auto loaded = gto::cli::load_spot(config_path, &error);
   if (!loaded) {
@@ -145,11 +147,12 @@ int run_solve(const std::string& config_path, const std::vector<std::string>& no
               game->tree.nodes.size(), game->tree.num_action_nodes(), game->hands[0].size(),
               game->hands[1].size());
   std::printf("Memory: %.1f MB for strategies, %.1f MB for the tree\n",
-              static_cast<double>(gto::Solver::estimate_memory_bytes(*game)) / megabyte,
+              static_cast<double>(gto::Solver::estimate_memory_bytes(*game, compress)) / megabyte,
               static_cast<double>(game->tree.memory_bytes()) / megabyte);
 
   gto::SolverConfig solver_config;
   solver_config.threads = threads;
+  solver_config.compress = compress;
   gto::Solver solver(std::move(*game), solver_config);
   std::printf("Threads: %u\n", solver.threads());
   loaded->solve.on_progress = [](const gto::Progress& progress) {
@@ -194,7 +197,12 @@ int main(int argc, char** argv) {
     std::string config_path;
     std::vector<std::string> node_paths;
     unsigned threads = 0;
+    bool compress = false;
     for (std::size_t i = 1; i < args.size(); ++i) {
+      if (args[i] == "--compress") {
+        compress = true;
+        continue;
+      }
       if (args[i] == "--threads") {
         const int value = i + 1 < args.size() ? std::atoi(args[++i].c_str()) : 0;
         if (value < 1 || value > 1024) {
@@ -221,7 +229,7 @@ int main(int argc, char** argv) {
       std::fputs("error: solve needs a spot file\n", stderr);
       return EXIT_FAILURE;
     }
-    return run_solve(config_path, node_paths, threads);
+    return run_solve(config_path, node_paths, threads, compress);
   }
 
   std::fprintf(stderr, "error: unknown command '%s'\n", args[0].c_str());

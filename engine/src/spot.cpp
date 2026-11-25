@@ -90,9 +90,18 @@ std::optional<SpotEstimate> estimate_spot(const SpotConfig& config, std::string*
   for (std::size_t player = 0; player < 2; ++player) {
     estimate.hands[player] = hands[player].size();
     // One regret and one strategy value per action and hand.
-    estimate.strategy_bytes += stats->actions[player] * hands[player].size() * 2 * sizeof(float);
+    const std::uint64_t values = stats->actions[player] * hands[player].size() * 2;
+    estimate.strategy_bytes += values * sizeof(float);
+    estimate.compressed_strategy_bytes += values * sizeof(std::uint16_t);
   }
+  // Compressed, each node also keeps two scales.
+  estimate.compressed_strategy_bytes += stats->nodes * 2 * sizeof(float);
   return estimate;
+}
+
+bool should_compress(const SpotEstimate& estimate, std::uint64_t memory_budget) noexcept {
+  if (estimate.strategy_bytes >= kCompressFromBytes) return true;
+  return memory_budget != 0 && estimate.total_bytes(false) > memory_budget;
 }
 
 std::optional<Game> make_game(const SpotConfig& config, std::string* error) {

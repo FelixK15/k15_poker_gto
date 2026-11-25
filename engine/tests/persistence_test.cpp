@@ -58,6 +58,38 @@ TEST(SolverState, RoundTripsExactly) {
   EXPECT_EQ(saved_state(original), saved_state(restored));
 }
 
+TEST(SolverState, MovesBetweenFloatAndCompressedStorage) {
+  SolverConfig packed;
+  packed.compress = true;
+  for (const bool from_compressed : {false, true}) {
+    SCOPED_TRACE(from_compressed ? "compressed to floats" : "floats to compressed");
+    SolverConfig from;
+    from.compress = from_compressed;
+    SolverConfig to;
+    to.compress = !from_compressed;
+
+    Solver original(*make_game(spot_on("KsTs7h4h")), from);
+    for (int i = 0; i < 25; ++i) original.iterate();
+    const std::string state = saved_state(original);
+
+    Solver restored(*make_game(spot_on("KsTs7h4h")), to);
+    std::istringstream in(state, std::ios::binary);
+    std::string error;
+    ASSERT_TRUE(restored.load(in, &error)) << error;
+    EXPECT_EQ(restored.iterations(), 25);
+
+    // Equal up to 16-bit rounding.
+    const Evaluation a = original.evaluate();
+    const Evaluation b = restored.evaluate();
+    EXPECT_NEAR(a.ev[0], b.ev[0], 0.05);
+    EXPECT_NEAR(a.exploitability, b.exploitability, 0.05);
+    const auto x = original.report(GameTree::kRoot).strategy;
+    const auto y = restored.report(GameTree::kRoot).strategy;
+    ASSERT_EQ(x.size(), y.size());
+    for (std::size_t i = 0; i < x.size(); ++i) EXPECT_NEAR(x[i], y[i], 1e-3) << i;
+  }
+}
+
 TEST(SolverState, RejectsForeignAndDamagedData) {
   Solver source(*make_game(spot_on("KsTs7h4h")));
   for (int i = 0; i < 5; ++i) source.iterate();
@@ -114,6 +146,7 @@ TEST_P(Estimate, MatchesTheBuiltGame) {
     EXPECT_EQ(estimate->hands[kOop], game->hands[kOop].size());
     EXPECT_EQ(estimate->hands[kIp], game->hands[kIp].size());
     EXPECT_EQ(estimate->strategy_bytes, Solver::estimate_memory_bytes(*game));
+    EXPECT_EQ(estimate->compressed_strategy_bytes, Solver::estimate_memory_bytes(*game, true));
     // The tree estimate covers its three large arrays.
     EXPECT_EQ(estimate->tree.tree_bytes(),
               game->tree.nodes.size() * sizeof(Node) +

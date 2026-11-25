@@ -88,10 +88,12 @@ build\windows\cli\Release\gto-cli.exe solve examples\turn_srp.json --node check 
 It prints the tree size and memory, the convergence, both players' EV and a strategy table per hand
 class for the root and for each `--node` line. A line is a `/`-separated list of actions and dealt
 cards, e.g. `bet5/call/Ah/check`. If a step does not exist, the error lists what is available
-there. `--threads <n>` limits the threads used (default: all).
+there. `--threads <n>` limits the threads used (default: all). `--compress` keeps regrets and
+strategies in 16 bits, which halves the memory and makes large trees faster; the server does this
+by itself for large trees.
 
 Flop trees grow quickly with ranges and bet sizes; the tool prints the memory it needs before it
-starts. `examples/flop_3bet.json` is a small one.
+starts. `examples/flop_3bet.json` is a small one, `examples/flop_srp_wide.json` a large one.
 
 ## Running the app
 

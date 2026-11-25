@@ -359,13 +359,15 @@ Error JobManager::estimate(const v1::Spot& spot, v1::EstimateTreeResponse* out) 
   out->set_decision_nodes(estimate->tree.action_nodes);
   out->set_oop_hands(static_cast<std::uint32_t>(estimate->hands[kOop]));
   out->set_ip_hands(static_cast<std::uint32_t>(estimate->hands[kIp]));
-  out->set_strategy_bytes(estimate->strategy_bytes);
+  // The memory reported is what the solve will take, packed or not.
+  const bool compress = should_compress(*estimate, config_.memory_budget_bytes);
+  out->set_strategy_bytes(estimate->strategy_bytes_for(compress));
   out->set_tree_bytes(estimate->tree.tree_bytes());
   out->set_too_large(estimate->tree.too_large);
   out->set_memory_budget_bytes(config_.memory_budget_bytes);
   out->set_can_solve(!estimate->tree.too_large &&
                      (config_.memory_budget_bytes == 0 ||
-                      estimate->total_bytes() <= config_.memory_budget_bytes));
+                      estimate->total_bytes(compress) <= config_.memory_budget_bytes));
   return {};
 }
 
@@ -568,12 +570,16 @@ std::shared_ptr<JobManager::Solution> JobManager::load_solution(
   auto config = to_spot_config(job.spot(), error);
   if (!config) return nullptr;
   config->tree.max_nodes = config_.max_nodes;
+  // Decided the same way as for the estimate the job was accepted on.
+  const auto estimate = estimate_spot(*config, error);
+  if (!estimate) return nullptr;
   auto game = make_game(*config, error);
   if (!game) return nullptr;
 
   auto solution = std::make_shared<Solution>();
   SolverConfig solver_config;
   solver_config.threads = config_.threads;
+  solver_config.compress = should_compress(*estimate, config_.memory_budget_bytes);
   solution->solver = std::make_unique<Solver>(std::move(*game), solver_config);
 
   Solver& solver = *solution->solver;

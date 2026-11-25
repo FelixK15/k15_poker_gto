@@ -59,15 +59,32 @@ struct SpotEstimate {
   TreeStats tree;
   /// Hands in each player's range that are possible on the board.
   std::array<std::size_t, 2> hands{0, 0};
-  /// Memory for regrets and strategies.
+  /// Memory for regrets and strategies, as floats and in 16 bits
+  /// (SolverConfig::compress).
   std::uint64_t strategy_bytes = 0;
+  std::uint64_t compressed_strategy_bytes = 0;
 
-  std::uint64_t total_bytes() const noexcept { return strategy_bytes + tree.tree_bytes(); }
+  std::uint64_t strategy_bytes_for(bool compressed) const noexcept {
+    return compressed ? compressed_strategy_bytes : strategy_bytes;
+  }
+  std::uint64_t total_bytes(bool compressed = false) const noexcept {
+    return strategy_bytes_for(compressed) + tree.tree_bytes();
+  }
 };
 
 /// Sizes up a spot. Counting stops at config.tree.max_nodes, in which case
 /// `tree.too_large` is set and the numbers are lower bounds.
 std::optional<SpotEstimate> estimate_spot(const SpotConfig& config, std::string* error = nullptr);
+
+/// Float strategies from this size on are kept in 16 bits instead: there,
+/// moving less memory more than pays for packing and unpacking it. Below it
+/// the trees are small enough that the packing costs a few percent.
+constexpr std::uint64_t kCompressFromBytes = std::uint64_t{256} << 20;
+
+/// Whether to solve a spot with SolverConfig::compress: when it is large
+/// (see kCompressFromBytes), or when only the 16-bit version fits within
+/// `memory_budget` bytes (0 for no limit).
+bool should_compress(const SpotEstimate& estimate, std::uint64_t memory_budget) noexcept;
 
 /// How good the current average strategies are.
 struct Evaluation {
@@ -89,6 +106,10 @@ struct Progress {
 struct SolverConfig {
   /// Threads to use; 0 means one per hardware thread.
   unsigned threads = 0;
+  /// Keep regrets and average strategies in 16 bits instead of 32, each
+  /// node's values scaled to its largest. Halves the solver's main memory
+  /// at a small cost in precision.
+  bool compress = false;
 };
 
 struct SolveOptions {
@@ -193,6 +214,7 @@ class Solver {
 
   /// Memory held for regrets and strategies.
   std::size_t memory_bytes() const noexcept;
+  bool compressed() const noexcept { return compressed_; }
 
   /// Writes everything learned so far. The game itself is not written: load()
   /// must be called on a solver built from the same spot.
@@ -203,7 +225,7 @@ class Solver {
   bool load(std::istream& in, std::string* error = nullptr);
 
   /// The same number before constructing a solver.
-  static std::size_t estimate_memory_bytes(const Game& game) noexcept;
+  static std::size_t estimate_memory_bytes(const Game& game, bool compressed = false) noexcept;
 
  private:
   /// Bump allocator for the scratch vectors of one tree traversal, so that the
@@ -255,6 +277,12 @@ class Solver {
   /// `scratch` is room for one value per hand of the acting player.
   void current_strategy(std::uint32_t node, float* out, float* scratch) const;
   void average_strategy(std::uint32_t node, float* out, float* scratch) const;
+  /// Values of one node as floats, whichever way they are stored.
+  void read_regrets(std::uint32_t node, float* out) const;
+  void read_strategy_sums(std::uint32_t node, float* out) const;
+  /// Stores one node's values; `values` may be overwritten.
+  void write_regrets(std::uint32_t node, float* values) const;
+  void write_strategy_sums(std::uint32_t node, float* values) const;
 
   struct NodeLock {
     std::vector<std::uint8_t> locked;  // per hand
@@ -303,9 +331,16 @@ class Solver {
   /// Start of each action node's block in regrets_ and strategy_sum_.
   std::vector<std::uint64_t> offset_;
   // Written during Train traversals, which are logically non-const but share
-  // the traversal code with the read-only modes.
+  // the traversal code with the read-only modes. Either the float vectors are
+  // in use or, when compressed, the 16-bit ones with one scale per node: a
+  // stored value times its node's scale is the real value.
+  bool compressed_ = false;
   mutable std::vector<float> regrets_;
   mutable std::vector<float> strategy_sum_;
+  mutable std::vector<std::int16_t> regrets16_;
+  mutable std::vector<std::uint16_t> strategy_sum16_;
+  mutable std::vector<float> regret_scale_;
+  mutable std::vector<float> strategy_sum_scale_;
   /// Chance nodes without a chance node above them: their children run in parallel.
   std::vector<bool> top_level_chance_;
   std::vector<NodeLock> locks_;

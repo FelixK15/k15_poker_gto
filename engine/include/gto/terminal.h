@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -44,6 +45,9 @@ class TerminalEvaluator {
 
  private:
   static constexpr std::uint8_t kSpareCard = 63;
+  /// Most entries a prepared showdown's running sums may have: the total
+  /// and two per opponent hand for a full range, plus a zero for each.
+  static constexpr std::size_t kMaxShowdownSlots = 4096;
 
   void scaled_compatible_reach(int player, double scale, const float* opponent_reach,
                                float* out) const;

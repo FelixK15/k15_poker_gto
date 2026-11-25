@@ -72,15 +72,28 @@ server can reject or queue a job that does not fit.
 
 ### 3.3 Performance and memory
 - Flat arrays for regrets and strategy sums, one block per node, no per-node heap allocation.
-- 32-bit floats. **16-bit compressed storage** (halves memory, standard in commercial solvers) is
-  still to do.
+- 32-bit floats, or **16-bit storage** (`SolverConfig::compress`, `--compress` in `gto-cli`):
+  regrets as signed and strategy sums as unsigned 16-bit integers, each node scaled to its largest
+  value. Halves the memory. Rounding is stochastic (up with the probability of the remainder),
+  seeded from node and iteration so results do not depend on the thread count. Rounding to the
+  nearest step stalled solves at 0.2-0.3% of the pot, because small, slowly discounted values kept
+  rounding back to where they were; stochastic rounding converges like floats (0.012% against
+  0.011% of the pot on `turn_srp` after 1500 iterations). Packing and unpacking are AVX2 kernels.
+  Large trees solve faster this way (less memory traffic), small ones a few percent slower, so the
+  server compresses when the float version would need 256 MB or more (`kCompressFromBytes`), or
+  when only the 16-bit version fits its memory limit. Saved states are written as floats either
+  way.
 - Multithreading: every first-dealt card of a pass (flop → turn cards, or turn → river cards) is
   one task, and all of them run as a single parallel batch. Thread pool, no locks on the hot path.
 - Built for AVX2 by default (`GTO_ENABLE_AVX2`); the programs refuse to start on a processor
   without it. The per-hand loops are written so that the compiler vectorises them; there are no
   hand-written SIMD kernels and no runtime dispatch yet.
-- Showdowns, which are most of the work, run from a list of steps prepared once per board, so the
-  inner loop has no data-dependent branches.
+- Showdowns run from running sums prepared once per board: the opponent's reach in order of
+  strength, summed up once in total and once per card. Each of our hands then reads its totals
+  (weaker, weaker or equal, all compatible) at precomputed positions, independently of the other
+  hands. This replaced one long list of steps whose every step waited for the one before. An
+  AVX2 version with eight interleaved sums and gathered reads was faster on one P-core but slower
+  on all 32 threads (the E-cores are slow at gathers), so the plain version stays.
 - 300BB trees grow fast because more raises fit before all-in. The raise cap, all-in threshold
   and the memory estimate are what keep these solvable; default tree presets per stack depth will
   be tuned for this.
@@ -88,17 +101,22 @@ server can reject or queue a job that does not fit.
 Measured on an i9-14900K (8 fast and 16 slow cores, 32 threads), best of three, single-thread runs
 pinned to a fast core:
 
-| Spot | Before M8 | After M8 |
-|---|---|---|
-| `examples/turn_srp.json`, 1 thread | 7.5 s | 4.4 s |
-| `examples/turn_srp.json`, 32 threads | 0.78 s | 0.30 s |
-| `examples/flop_3bet.json`, 1 thread | 15.4 s | 9.3 s |
-| `examples/flop_3bet.json`, 32 threads | 1.41 s | 0.68 s |
+| Spot | Before M8 | First round | Second round |
+|---|---|---|---|
+| `examples/turn_srp.json`, 1 thread | 7.5 s | 4.4 s | 2.9 s |
+| `examples/turn_srp.json`, 32 threads | 0.78 s | 0.30 s | 0.22 s |
+| `examples/flop_3bet.json`, 1 thread | 15.4 s | 9.3 s | 6.7 s |
+| `examples/flop_3bet.json`, 32 threads | 1.41 s | 0.68 s | 0.58 s |
+| `examples/flop_srp_wide.json` (60 iterations), 32 threads | | 9.8 s, 2.6 GB | 7.0 s, 1.3 GB (compressed) |
 
-Where the time goes now, single-threaded: about 60% showdowns, 15% folds, 13% computing
-strategies, the rest in the action nodes. The showdown loop is the place to look next. These
-figures come from temporary timing counters, not from a profiler: the Superluminal command-line
-tool at hand only records captures for its GUI and needs administrator rights.
+The second round is the showdown rewrite and, for the large spot, 16-bit storage; with floats the
+large spot takes 8.4 s. The example spots are below 256 MB and run with floats.
+
+Before the second round, single-threaded, about 60% of the time went into showdowns, 15% into
+folds and 13% into computing strategies; the showdown rewrite cut that 60% to roughly a third of
+a now shorter run. These figures come from temporary timing counters and from timing a run with
+parts of the work skipped, not from a profiler: the Superluminal command-line tool at hand only
+records captures for its GUI and needs administrator rights.
 
 ### 3.4 Correctness
 1. CFR core verified on Kuhn and Leduc poker, where exact equilibria are known.
@@ -253,7 +271,7 @@ Durations are rough guesses for one focused developer, not commitments.
 | M5 | Range library | **Done.** Preflop line picker for 6-max and 9-max at 100/200/300BB (single-raised, 3-bet and 4-bet pots) that fills in ranges, pot and stacks; range editor on the 13×13 grid with weights, text import (PioSOLVER and GTO+ forms) and saved ranges; tree presets; board picker. The ranges are rule-based approximations, see section 6. Not done: editing single suit combinations on the grid (they can be typed) | 2–3 weeks |
 | M6 | Node locking | **Done.** Per-hand locks in the engine; a re-solve is a new job that starts from the parent's solution with the locks in force; lock dialog (whole range or one hand class), lock list, and a comparison with the parent in the client. Not done: painting different frequencies per hand in one go, and a side-by-side compare view | 3–4 weeks |
 | M7 | Android + polish | **Done in part.** TLS on server and client; equity per hand and range; EV and equity views of the grid; runout report at deals; the app returns to the connect screen when its own solver stops; the solver ships inside the Windows app; packaging script; Android debug build. Not done: running on an Android device, an installer (zip only), building the Docker image (written, untested), compression of saved solutions | 3–4 weeks |
-| M8 | Performance | **First round done.** Single-pass showdown from steps prepared per board; flat, branch-free fold evaluation; vectorisable strategy loops; AVX2 build; all first-card deals of a pass run as one parallel batch. Not done: 16-bit storage, hand-written SIMD kernels, profiler-guided tuning (see section 3.3) | ongoing |
+| M8 | Performance | **Two rounds done.** First: single-pass showdown from steps prepared per board; flat, branch-free fold evaluation; vectorisable strategy loops; AVX2 build; all first-card deals of a pass run as one parallel batch. Second: showdowns from running sums with independent per-hand reads; 16-bit storage with stochastic rounding, chosen automatically for large trees. Not done: profiler-guided tuning, the fold and strategy loops (see section 3.3) | ongoing |
 
 The lock hook in the CFR traversal and the un-merge support in the tree builder are designed in
 during M1–M2, so M6 adds the feature without reworking the engine.
