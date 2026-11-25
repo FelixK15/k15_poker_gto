@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/gto_api.dart';
+import '../common/info_button.dart';
 import 'local_server.dart';
 import 'server_connection.dart';
 
@@ -196,9 +197,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   enabled: !_connecting,
                   autocorrect: false,
                   keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    labelText: 'Host',
-                    border: OutlineInputBorder(),
+                  decoration: InfoButton.decorate(
+                    const InputDecoration(
+                      labelText: 'Host',
+                      border: OutlineInputBorder(),
+                    ),
+                    'The name or IP address of the computer the solver '
+                    'server runs on, such as 192.168.1.20 or '
+                    'solver.example.com.',
                   ),
                   validator: (value) => (value == null || value.trim().isEmpty)
                       ? 'Enter a host name or IP'
@@ -214,9 +220,13 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                   enabled: !_connecting,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: 'Port',
-                    border: OutlineInputBorder(),
+                  decoration: InfoButton.decorate(
+                    const InputDecoration(
+                      labelText: 'Port',
+                      border: OutlineInputBorder(),
+                    ),
+                    'The port the server listens on, 1 to 65535. Whoever '
+                    'started the server chose it.',
                   ),
                   validator: (value) {
                     final port = int.tryParse(value?.trim() ?? '');
@@ -236,10 +246,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             obscureText: true,
             autocorrect: false,
             enableSuggestions: false,
-            decoration: const InputDecoration(
-              labelText: 'Access token',
-              helperText: 'Leave empty if the server has none.',
-              border: OutlineInputBorder(),
+            decoration: InfoButton.decorate(
+              const InputDecoration(
+                labelText: 'Access token',
+                helperText: 'Leave empty if the server has none.',
+                border: OutlineInputBorder(),
+              ),
+              'The password the server was started with. It keeps others '
+              'from using the server. Without TLS it is sent unencrypted.',
             ),
             onFieldSubmitted: (_) => _connect(),
           ),
