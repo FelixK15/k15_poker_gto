@@ -17,7 +17,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          # windows-latest now has only Visual Studio 2026; the windows preset
+          # builds with Visual Studio 2022.
+          - os: windows-2022
             preset: windows
           - os: ubuntu-latest
             preset: linux

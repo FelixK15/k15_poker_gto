@@ -47,7 +47,9 @@ jobs:
   windows:
     name: Windows packages
     needs: version
-    runs-on: windows-latest
+    # windows-latest now has only Visual Studio 2026; the windows preset builds
+    # with Visual Studio 2022.
+    runs-on: windows-2022
     env:
       VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite
     steps:
