@@ -209,6 +209,18 @@ void main() {
     expect(submitted.single.id, 'job1');
   });
 
+  testWidgets('says when the server reuses an existing job', (tester) async {
+    final api = FakeApi()
+      ..reuseJob = Job(id: 'old', name: 'Ks Td 7h 4c · pot 6');
+    final submitted = await pumpSetup(tester, api);
+
+    await tester.tap(find.byKey(const Key('solve-button')));
+    await tester.pumpAndSettle();
+
+    expect(submitted.single.id, 'old');
+    expect(find.textContaining('already solves this spot'), findsOneWidget);
+  });
+
   testWidgets('reports a refused submission', (tester) async {
     final api = FakeApi()
       ..submitError = const GrpcError.resourceExhausted(

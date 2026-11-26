@@ -182,6 +182,13 @@ keeps the client stateless and makes deep links and "copy line" trivial.
 - **Resources:** configurable RAM and thread budget. One solve at a time by default, others queue.
 - **Persistence:** solutions saved in a versioned binary format (zstd-compressed). The job list
   survives a restart.
+- **Reuse:** a submit of a spot that an existing job already answers returns that job (marked
+  `reused`) instead of solving again: one that is done and reached the requested target or
+  iteration count, or one queued or running with settings at least as strict. Spots match when
+  they make the same game: the flop in any order, ranges by their weights with combos the board
+  blocks ignored, tree defaults filled in. Re-solves under locks are never handed out, and
+  `force_new` always queues a new job. Suit-isomorphic boards do not match, since browsing paths
+  name the actual cards.
 - **Deployment:** single executable + config file; Windows zip/service and a Linux Docker image.
 
 ## 5. Client (Flutter)

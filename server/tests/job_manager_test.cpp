@@ -33,8 +33,14 @@ v1::SubmitJobRequest request_for(const v1::Spot& spot, std::uint32_t max_iterati
   return request;
 }
 
-/// A job that only stops when told to.
-v1::SubmitJobRequest endless_request() { return request_for(slow_spot(), 1'000'000, 0); }
+/// The same request, but always queued as a new job.
+v1::SubmitJobRequest fresh(v1::SubmitJobRequest request) {
+  request.set_force_new(true);
+  return request;
+}
+
+/// A job that only stops when told to. Each one is a new job.
+v1::SubmitJobRequest endless_request() { return fresh(request_for(slow_spot(), 1'000'000, 0)); }
 
 v1::Job job_of(const JobManager& jobs, const std::string& id) {
   v1::Job job;
@@ -262,6 +268,99 @@ TEST(JobManager, RefusesWhatDoesNotFit) {
   }
 }
 
+TEST(JobManager, ReusesAFinishedJobForTheSameSpot) {
+  JobManager jobs(memory_config());
+  v1::SubmitJobRequest first_request = request_for(quick_spot(), 300, 0);
+  first_request.set_name("first");
+  v1::Job first;
+  ASSERT_FALSE(jobs.submit(first_request, &first));
+  EXPECT_FALSE(first.reused());
+  ASSERT_TRUE(wait_for_state(jobs, first.id(), v1::JOB_STATE_DONE));
+
+  // The same spot written differently, asking for less: the finished job.
+  v1::Spot same = quick_spot();
+  same.set_board("8d 5h Kc 3s 2d");
+  same.set_ip_range("QJo,KK");
+  v1::SubmitJobRequest again = request_for(same, 200, 0);
+  again.set_name("second");
+  v1::Job answer;
+  ASSERT_FALSE(jobs.submit(again, &answer));
+  EXPECT_TRUE(answer.reused());
+  EXPECT_EQ(answer.id(), first.id());
+  EXPECT_EQ(answer.name(), "first");
+  EXPECT_EQ(answer.state(), v1::JOB_STATE_DONE);
+  EXPECT_EQ(jobs.list().size(), 1u);
+  // The flag belongs to the reply only.
+  EXPECT_FALSE(job_of(jobs, first.id()).reused());
+
+  // Combos the board blocks do not matter: Kc is on the board.
+  same.set_ip_range("QJo,KK,KcKd");
+  ASSERT_FALSE(jobs.submit(request_for(same, 300, 0), &answer));
+  EXPECT_EQ(answer.id(), first.id());
+
+  // Another bet size is another spot.
+  v1::Spot other = quick_spot();
+  other.mutable_tree()->mutable_river()->mutable_ip()->set_bet_pct(0, 50);
+  ASSERT_FALSE(jobs.submit(request_for(other, 300, 0), &answer));
+  EXPECT_FALSE(answer.reused());
+  EXPECT_NE(answer.id(), first.id());
+
+  // More iterations than the finished job ran: only if it met the target.
+  const bool met = job_of(jobs, first.id()).exploitability_pct() <= 0.0;
+  ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 400, 0), &answer));
+  EXPECT_EQ(answer.reused(), met);
+
+  // Asked for a new job, it gets one.
+  ASSERT_FALSE(jobs.submit(fresh(request_for(quick_spot(), 300, 0)), &answer));
+  EXPECT_FALSE(answer.reused());
+  EXPECT_NE(answer.id(), first.id());
+}
+
+TEST(JobManager, ReusesARunningJobWithStricterSettings) {
+  JobManager jobs(memory_config());
+  v1::Job running;
+  ASSERT_FALSE(jobs.submit(fresh(request_for(slow_spot(), 500'000, 0)), &running));
+  ASSERT_TRUE(wait_for_state(jobs, running.id(), v1::JOB_STATE_RUNNING));
+
+  v1::Job answer;
+  ASSERT_FALSE(jobs.submit(request_for(slow_spot(), 1000, 0.5), &answer));
+  EXPECT_TRUE(answer.reused());
+  EXPECT_EQ(answer.id(), running.id());
+
+  // It would stop before reaching what this one asks for.
+  ASSERT_FALSE(jobs.submit(request_for(slow_spot(), 1'000'000, 0), &answer));
+  EXPECT_FALSE(answer.reused());
+  const std::string queued = answer.id();
+
+  // A job being cancelled is not handed out.
+  v1::Job unused;
+  ASSERT_FALSE(jobs.pause(queued, &unused));
+  ASSERT_FALSE(jobs.cancel(running.id(), &unused));
+  ASSERT_FALSE(jobs.submit(request_for(slow_spot(), 1000, 0.5), &answer));
+  EXPECT_FALSE(answer.reused());
+  ASSERT_FALSE(jobs.cancel(answer.id(), &unused));
+  ASSERT_TRUE(wait_for_state(jobs, answer.id(), v1::JOB_STATE_CANCELLED));
+}
+
+TEST(JobManager, ReusesJobsAfterARestart) {
+  const TempDir dir;
+  JobManagerConfig config = memory_config();
+  config.data_dir = dir.path();
+  std::string id;
+  {
+    JobManager jobs(config);
+    v1::Job job;
+    ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 100, 0), &job));
+    ASSERT_TRUE(wait_for_state(jobs, job.id(), v1::JOB_STATE_DONE));
+    id = job.id();
+  }
+  JobManager jobs(config);
+  v1::Job answer;
+  ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 100, 0), &answer));
+  EXPECT_TRUE(answer.reused());
+  EXPECT_EQ(answer.id(), id);
+}
+
 TEST(JobManager, RunsOneJobAtATimeAndCanPause) {
   JobManager jobs(memory_config());
   v1::Job first, second;
@@ -405,7 +504,7 @@ TEST(JobManager, KeepsJobsAndSolutionsAcrossRestarts) {
 
     // One job caught mid-solve and one still waiting when the server stops.
     ASSERT_FALSE(jobs.submit(endless_request(), &paused));
-    ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 100, 0), &queued));
+    ASSERT_FALSE(jobs.submit(fresh(request_for(quick_spot(), 100, 0)), &queued));
     ASSERT_TRUE(wait_until([&] { return job_of(jobs, paused.id()).iteration() >= 5; }));
 
     done_id = done.id();
@@ -470,7 +569,7 @@ TEST(JobManager, ReloadsEvictedSolutionsFromDisk) {
   std::vector<v1::GetNodeResponse> first_read;
   for (int i = 0; i < 3; ++i) {
     v1::Job job;
-    ASSERT_FALSE(jobs.submit(request_for(quick_spot(), 100 + 50 * i, 0), &job));
+    ASSERT_FALSE(jobs.submit(fresh(request_for(quick_spot(), 100 + 50 * i, 0)), &job));
     ASSERT_TRUE(wait_for_state(jobs, job.id(), v1::JOB_STATE_DONE));
     ids.push_back(job.id());
     ASSERT_FALSE(jobs.node(job.id(), "check", &first_read.emplace_back()));

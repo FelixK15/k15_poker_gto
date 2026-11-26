@@ -49,7 +49,9 @@ build\windows\server\Release\gto-server.exe --port 50051
 ```
 
 The server solves one job at a time and keeps jobs and their solutions in `./gto-data`
-(`--data-dir` changes that), so they survive a restart. `--help` lists all options.
+(`--data-dir` changes that), so they survive a restart. Submitting a spot that an existing job
+already solves returns that job instead of solving it again (`force_new` in the request turns
+this off). `--help` lists all options.
 
 It listens on `127.0.0.1` unless `--host` says otherwise. To accept clients from other machines it
 needs an access token, which clients send with every call:

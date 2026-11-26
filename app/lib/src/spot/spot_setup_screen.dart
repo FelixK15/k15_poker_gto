@@ -145,6 +145,15 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
         '${spot.spot!.board} · pot ${_input.pot.trim()}',
       );
       if (!mounted) return;
+      if (job.reused) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job "${job.name}" already solves this spot, so no new one was queued.',
+            ),
+          ),
+        );
+      }
       widget.onSubmitted(job);
     } catch (error) {
       if (!mounted) return;

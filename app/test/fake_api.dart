@@ -55,6 +55,10 @@ class FakeApi implements GtoApi {
   /// If set, the next matching call fails with it.
   Object? estimateError;
   Object? submitError;
+
+  /// Set: submit answers with this job, marked as reused, as the server does
+  /// for a spot it already solves.
+  Job? reuseJob;
   Object? listError;
   bool closed = false;
 
@@ -74,6 +78,7 @@ class FakeApi implements GtoApi {
   Future<Job> submit(Spot spot, SolveSettings settings, String name) async {
     if (submitError != null) throw submitError!;
     submitted.add((spot: spot, settings: settings, name: name));
+    if (reuseJob != null) return reuseJob!.deepCopy()..reused = true;
     final job = Job(
       id: 'job${jobs.length + 1}',
       name: name,

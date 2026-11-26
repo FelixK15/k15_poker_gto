@@ -92,6 +92,7 @@ const Job$json = {
       '5': 8,
       '10': 'warmStartPending'
     },
+    {'1': 'reused', '3': 20, '4': 1, '5': 8, '10': 'reused'},
   ],
 };
 
@@ -108,7 +109,7 @@ final $typed_data.Uint8List jobDescriptor = $convert.base64Decode(
     'bW9yeV9ieXRlcxgPIAEoBFILbWVtb3J5Qnl0ZXMSIQoMaGFzX3NvbHV0aW9uGBAgASgIUgtoYX'
     'NTb2x1dGlvbhIbCglwYXJlbnRfaWQYESABKAlSCHBhcmVudElkEiYKBWxvY2tzGBIgAygLMhAu'
     'Z3RvLnYxLk5vZGVMb2NrUgVsb2NrcxIsChJ3YXJtX3N0YXJ0X3BlbmRpbmcYEyABKAhSEHdhcm'
-    '1TdGFydFBlbmRpbmc=');
+    '1TdGFydFBlbmRpbmcSFgoGcmV1c2VkGBQgASgIUgZyZXVzZWQ=');
 
 @$core.Deprecated('Use submitJobRequestDescriptor instead')
 const SubmitJobRequest$json = {
@@ -124,6 +125,7 @@ const SubmitJobRequest$json = {
       '10': 'settings'
     },
     {'1': 'name', '3': 3, '4': 1, '5': 9, '10': 'name'},
+    {'1': 'force_new', '3': 4, '4': 1, '5': 8, '10': 'forceNew'},
   ],
 };
 
@@ -131,7 +133,7 @@ const SubmitJobRequest$json = {
 final $typed_data.Uint8List submitJobRequestDescriptor = $convert.base64Decode(
     'ChBTdWJtaXRKb2JSZXF1ZXN0EiAKBHNwb3QYASABKAsyDC5ndG8udjEuU3BvdFIEc3BvdBIxCg'
     'hzZXR0aW5ncxgCIAEoCzIVLmd0by52MS5Tb2x2ZVNldHRpbmdzUghzZXR0aW5ncxISCgRuYW1l'
-    'GAMgASgJUgRuYW1l');
+    'GAMgASgJUgRuYW1lEhsKCWZvcmNlX25ldxgEIAEoCFIIZm9yY2VOZXc=');
 
 @$core.Deprecated('Use listJobsRequestDescriptor instead')
 const ListJobsRequest$json = {

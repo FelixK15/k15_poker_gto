@@ -12,6 +12,12 @@ namespace gto::server {
 /// the tree: the board and both ranges must be readable.
 std::optional<SpotConfig> to_spot_config(const v1::Spot& spot, std::string* error);
 
+/// A key that two spots share exactly when they make the same game: the flop
+/// cards in any order, ranges compared by their weights (combos the board
+/// blocks ignored), tree defaults filled in. Bet sizes count in the order
+/// given, since that is the order of the actions.
+std::string spot_key(const SpotConfig& config);
+
 /// Solve settings with the documented defaults filled in.
 struct ResolvedSettings {
   int max_iterations = 1000;

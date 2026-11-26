@@ -119,6 +119,9 @@ class JobManager {
     /// Without a data directory: the parent's state a re-solve starts from,
     /// held until the job has been loaded.
     std::string initial_state;
+    /// spot_key() of the job's spot. Empty for re-solves under locks, which
+    /// are never handed out for a plain submit.
+    std::string spot_key;
   };
 
   void worker_loop();
@@ -136,6 +139,11 @@ class JobManager {
   void changed(Entry& entry);
   void evict_idle_solutions();
   std::string new_id();
+  /// A job whose solution already answers a submit of the spot with this key
+  /// and these settings: one that is done and got there, or failing that one
+  /// queued or running with settings at least as strict. Newest wins.
+  const Entry* find_reusable(const std::string& spot_key,
+                             int max_iterations, double target_exploitability_pct) const;
 
   void load_from_disk();
   void write_job(const v1::Job& job) const;

@@ -284,6 +284,12 @@ void JobManager::load_from_disk() {
 
     Entry entry;
     entry.job = std::move(job);
+    if (entry.job.locks().empty()) {
+      std::string error;
+      if (const auto config = to_spot_config(entry.job.spot(), &error)) {
+        entry.spot_key = spot_key(*config);
+      }
+    }
     jobs_.emplace(entry.job.id(), std::move(entry));
   }
   if (!jobs_.empty()) spdlog::info("loaded {} job(s) from {}", jobs_.size(),
@@ -325,6 +331,40 @@ std::string JobManager::new_id() {
     // Jobs loaded from disk may already hold an id from this millisecond.
     if (jobs_.find(buffer) == jobs_.end()) return buffer;
   }
+}
+
+const JobManager::Entry* JobManager::find_reusable(const std::string& key, int max_iterations,
+                                                   double target_exploitability_pct) const {
+  if (key.empty()) return nullptr;
+  const Entry* best = nullptr;
+  int best_rank = 0;
+  // Oldest first, so that among equals the newest one wins.
+  for (const auto& [id, entry] : jobs_) {
+    const v1::Job& job = entry.job;
+    // A job about to be paused, cancelled or deleted will not get there.
+    if (entry.spot_key != key || entry.request != Request::None || !job.error().empty()) {
+      continue;
+    }
+    int rank = 0;
+    if (job.state() == v1::JOB_STATE_DONE) {
+      // Got as far as a new solve with these settings would.
+      const bool reached =
+          (job.measured() && job.exploitability_pct() <= target_exploitability_pct) ||
+          job.iteration() >= static_cast<std::uint32_t>(max_iterations);
+      if (reached && job.has_solution()) rank = 2;
+    } else if (job.state() == v1::JOB_STATE_QUEUED || job.state() == v1::JOB_STATE_RUNNING) {
+      const ResolvedSettings settings = gto::server::resolve(job.settings());
+      if (settings.target_exploitability_pct <= target_exploitability_pct &&
+          settings.max_iterations >= max_iterations) {
+        rank = 1;
+      }
+    }
+    if (rank > 0 && rank >= best_rank) {
+      best = &entry;
+      best_rank = rank;
+    }
+  }
+  return best;
 }
 
 void JobManager::evict_idle_solutions() {
@@ -389,11 +429,29 @@ Error JobManager::submit(const v1::SubmitJobRequest& request, v1::Job* out) {
   if (request.name().size() > 200) {
     return make_error(ErrorKind::InvalidArgument, "the name is longer than 200 characters");
   }
+  std::string key;
+  {
+    // Read once already by the estimate, so this cannot fail.
+    std::string error;
+    if (const auto config = to_spot_config(request.spot(), &error)) key = spot_key(*config);
+  }
+  const ResolvedSettings settings = gto::server::resolve(request.settings());
 
   const std::lock_guard lock(mutex_);
   if (stopping_) return make_error(ErrorKind::FailedPrecondition, "the server is shutting down");
 
+  if (!request.force_new()) {
+    if (const Entry* existing = find_reusable(key, settings.max_iterations,
+                                              settings.target_exploitability_pct)) {
+      *out = existing->job;
+      out->set_reused(true);
+      spdlog::info("submit answered by job {}, which solves the same spot", existing->job.id());
+      return {};
+    }
+  }
+
   Entry entry;
+  entry.spot_key = std::move(key);
   v1::Job& job = entry.job;
   job.set_id(new_id());
   job.set_name(request.name());
@@ -401,7 +459,6 @@ Error JobManager::submit(const v1::SubmitJobRequest& request, v1::Job* out) {
   *job.mutable_spot() = request.spot();
   // Store the settings with defaults filled in, so a job always shows what
   // it will actually do.
-  const ResolvedSettings settings = gto::server::resolve(request.settings());
   job.mutable_settings()->set_max_iterations(static_cast<std::uint32_t>(settings.max_iterations));
   job.mutable_settings()->set_target_exploitability_pct(settings.target_exploitability_pct);
   job.set_created_ms(now_ms());

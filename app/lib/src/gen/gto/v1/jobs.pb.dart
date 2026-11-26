@@ -43,6 +43,7 @@ class Job extends $pb.GeneratedMessage {
     $core.String? parentId,
     $core.Iterable<$1.NodeLock>? locks,
     $core.bool? warmStartPending,
+    $core.bool? reused,
   }) {
     final result = Job._();
     if (id != null) result.id = id;
@@ -64,6 +65,7 @@ class Job extends $pb.GeneratedMessage {
     if (parentId != null) result.parentId = parentId;
     if (locks != null) result.locks.addAll(locks);
     if (warmStartPending != null) result.warmStartPending = warmStartPending;
+    if (reused != null) result.reused = reused;
     return result;
   }
 
@@ -105,6 +107,7 @@ class Job extends $pb.GeneratedMessage {
     ..pPM<$1.NodeLock>(18, _omitFieldNames ? '' : 'locks',
         subBuilder: $1.NodeLock.$_createMessage)
     ..aOB(19, _omitFieldNames ? '' : 'warmStartPending')
+    ..aOB(20, _omitFieldNames ? '' : 'reused')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -306,6 +309,17 @@ class Job extends $pb.GeneratedMessage {
   $core.bool hasWarmStartPending() => $_has(18);
   @$pb.TagNumber(19)
   void clearWarmStartPending() => $_clearField(19);
+
+  /// Only in the reply to Submit: this is an existing job for the same spot,
+  /// returned instead of queuing a new one.
+  @$pb.TagNumber(20)
+  $core.bool get reused => $_getBF(19);
+  @$pb.TagNumber(20)
+  set reused($core.bool value) => $_setBool(19, value);
+  @$pb.TagNumber(20)
+  $core.bool hasReused() => $_has(19);
+  @$pb.TagNumber(20)
+  void clearReused() => $_clearField(20);
 }
 
 class SubmitJobRequest extends $pb.GeneratedMessage {
@@ -313,11 +327,13 @@ class SubmitJobRequest extends $pb.GeneratedMessage {
     $1.Spot? spot,
     $1.SolveSettings? settings,
     $core.String? name,
+    $core.bool? forceNew,
   }) {
     final result = SubmitJobRequest._();
     if (spot != null) result.spot = spot;
     if (settings != null) result.settings = settings;
     if (name != null) result.name = name;
+    if (forceNew != null) result.forceNew = forceNew;
     return result;
   }
 
@@ -339,6 +355,7 @@ class SubmitJobRequest extends $pb.GeneratedMessage {
     ..aOM<$1.SolveSettings>(2, _omitFieldNames ? '' : 'settings',
         subBuilder: $1.SolveSettings.$_createMessage)
     ..aOS(3, _omitFieldNames ? '' : 'name')
+    ..aOB(4, _omitFieldNames ? '' : 'forceNew')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -393,6 +410,16 @@ class SubmitJobRequest extends $pb.GeneratedMessage {
   $core.bool hasName() => $_has(2);
   @$pb.TagNumber(3)
   void clearName() => $_clearField(3);
+
+  /// Always queue a new job, even if one for the same spot exists.
+  @$pb.TagNumber(4)
+  $core.bool get forceNew => $_getBF(3);
+  @$pb.TagNumber(4)
+  set forceNew($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasForceNew() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearForceNew() => $_clearField(4);
 }
 
 class ListJobsRequest extends $pb.GeneratedMessage {

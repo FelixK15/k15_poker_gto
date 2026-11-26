@@ -10,6 +10,10 @@ import "gto/v1/common.proto";
 
 service JobService {
   // Queues a spot for solving. The server solves one job at a time.
+  //
+  // If a job for the same spot is already done, or queued or running with
+  // settings at least as strict, the server returns that job instead of
+  // queuing a new one, with `reused` set. See SubmitJobRequest.force_new.
   rpc Submit(SubmitJobRequest) returns (Job);
 
   // All jobs, newest first.
@@ -81,12 +85,18 @@ message Job {
   repeated NodeLock locks = 18;
   // Server bookkeeping: the job still has to start from its parent's state.
   bool warm_start_pending = 19;
+
+  // Only in the reply to Submit: this is an existing job for the same spot,
+  // returned instead of queuing a new one.
+  bool reused = 20;
 }
 
 message SubmitJobRequest {
   Spot spot = 1;
   SolveSettings settings = 2;
   string name = 3;
+  // Always queue a new job, even if one for the same spot exists.
+  bool force_new = 4;
 }
 
 message ListJobsRequest {}

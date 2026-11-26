@@ -33,6 +33,10 @@ class JobServiceClient extends $grpc.Client {
   JobServiceClient(super.channel, {super.options, super.interceptors});
 
   /// Queues a spot for solving. The server solves one job at a time.
+  ///
+  /// If a job for the same spot is already done, or queued or running with
+  /// settings at least as strict, the server returns that job instead of
+  /// queuing a new one, with `reused` set. See SubmitJobRequest.force_new.
   $grpc.ResponseFuture<$0.Job> submit(
     $0.SubmitJobRequest request, {
     $grpc.CallOptions? options,
