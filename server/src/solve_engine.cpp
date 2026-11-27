@@ -55,12 +55,8 @@ std::vector<std::string> spot_positions(const v1::Spot& spot) {
 
 std::string reuse_key(const v1::Spot& spot, v1::Engine engine, std::string* error) {
   if (engine == v1::ENGINE_MONTE_CARLO) {
-    // Until the mc engine defines a canonical form: the spot as sent, without
-    // the engine choice (AUTO and MONTE_CARLO make the same game). Spot has
-    // no map fields, so its serialization is deterministic.
-    v1::Spot copy = spot;
-    copy.clear_engine();
-    return "M" + copy.SerializeAsString();
+    const std::string key = McEngine::key(spot, error);
+    return key.empty() ? key : "M" + key;
   }
   const auto config = to_spot_config(spot, error);
   if (!config) return {};
@@ -89,7 +85,13 @@ Error plan_spot(const v1::Spot& spot, const EngineLimits& limits, SpotPlan* out)
   v1::EstimateTreeResponse estimate;
   if (Error error = ExactEngine::estimate(spot, limits, &estimate)) return error;
   if (requested == v1::ENGINE_AUTO && !estimate.can_solve() && kMonteCarloAvailable) {
-    return plan_monte_carlo(spot, limits, out);
+    // Too large to solve exactly: Monte Carlo if that fits, else the exact
+    // estimate stands (and a submit is refused with its numbers).
+    SpotPlan monte_carlo;
+    if (!plan_monte_carlo(spot, limits, &monte_carlo) && monte_carlo.estimate.can_solve()) {
+      *out = std::move(monte_carlo);
+      return {};
+    }
   }
   out->engine = v1::ENGINE_EXACT;
   out->estimate = std::move(estimate);

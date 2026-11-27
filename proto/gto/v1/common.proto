@@ -92,10 +92,12 @@ message Abstraction {
 // the ranges, pot and stacks are then ignored: everyone starts with every
 // hand and `stack_bb` behind.
 message PreflopSettings {
-  // Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Positions are
-  // named SB, BB, UTG, UTG1, UTG2, LJ, HJ, CO, BTN as the table size needs
-  // them (heads-up: BTN and BB, the button posting the small blind). Seats
-  // are numbered in postflop order: SB, BB, then UTG … BTN; heads-up BB, BTN.
+  // Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Seats are
+  // numbered in the order of preflop action: UTG, UTG1, UTG2, LJ, HJ, CO,
+  // BTN, SB, BB as the table size needs them (6-max: UTG, HJ, CO, BTN, SB,
+  // BB; 3-handed: BTN, SB, BB; heads-up: SB, BB, the small blind being the
+  // button). Job.positions and every per-player array of a preflop job use
+  // this order; postflop the SB acts first (heads-up the BB).
   uint32 players = 1;
   // Stack of every player before posting, in big blinds.
   double stack_bb = 2;
@@ -122,9 +124,9 @@ message PreflopSettings {
   // 4-bet size as a multiple of the 3-bet; later raises use it too.
   // Default 2.3.
   optional double four_bet_multiplier = 12;
-  // Whether a player may call a raise when they have not put money in yet
-  // (cold call). Off: such players fold or re-raise. The big blind may always
-  // call.
+  // Also allow cold calls of 3-bets and 4-bets (calling a re-raise without
+  // having put money in voluntarily). Calling an open is always allowed, and
+  // whoever has already raised or called may always call.
   bool allow_cold_calls = 13;
   // Most raises preflop, the open counting as the first. Default 4 (open,
   // 3-bet, 4-bet, 5-bet all-in).

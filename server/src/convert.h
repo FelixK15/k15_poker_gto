@@ -37,8 +37,9 @@ std::optional<SpotConfig> to_spot_config(const v1::Spot& spot, std::string* erro
 /// given, since that is the order of the actions.
 std::string spot_key(const SpotConfig& config);
 
-/// Position names of a preflop table of 2 to 9 players, in seat order
-/// (postflop order of action: SB, BB, UTG … BTN; heads-up BB, BTN).
+/// Position names of a preflop table of 2 to 9 players, in the mc engine's
+/// seat order, which is the order of preflop action: UTG … BTN, SB, BB
+/// (heads-up SB, BB; the small blind is the button).
 std::vector<std::string> preflop_positions(std::size_t players);
 
 /// A position name can appear in paths ("BTN:raise2.5"): 1 to 12 letters,

@@ -133,7 +133,10 @@ message PlayerRange {
   // Reach-weighted average of `ev`.
   double range_ev = 4;
   // Equity of each hand against the other player's range: its share of the
-  // pot, 0 to 1, if both checked or called to the end.
+  // pot, 0 to 1, if both checked or called to the end. Exact engine only:
+  // empty (and range_equity 0) for Monte Carlo solutions. Monte Carlo EVs
+  // are sampled (GetNodeResponse.ev_estimated); `ev` is empty for a player
+  // with more than 5,000 hands reaching the node (wide PLO ranges).
   repeated float equity = 5;
   double range_equity = 6;
 
@@ -199,7 +202,8 @@ message GetNodeResponse {
   // that player's PlayerRange (as sent, after any max_hands cut).
   repeated float strategy = 5;
 
-  // Chance nodes: the cards that can come.
+  // Chance nodes: the cards that can come. Where a whole flop is dealt
+  // (preflop solves), the next path entry names three of them at once.
   repeated string next_cards = 6;
 
   // Two players: the same as players[0] and players[1].
@@ -224,7 +228,8 @@ message GetNodeResponse {
   // Action node: index of the acting player in `players`. Fold node: the
   // player who folded.
   uint32 acting_player = 15;
-  // Per player in seat order: chips put in since the start of the spot,
+  // Per player in seat order: chips put in since the start of the spot
+  // (preflop solves: including the blinds posted),
   // whether they have folded, whether they are all-in.
   repeated double committed = 16;
   repeated bool folded = 17;

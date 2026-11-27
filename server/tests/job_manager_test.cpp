@@ -258,14 +258,17 @@ TEST(JobManager, RefusesWhatDoesNotFit) {
   JobManagerConfig few_nodes = memory_config();
   few_nodes.max_nodes = 100;
   {
+    // Exact only: on AUTO the Monte Carlo tree (no card branches) fits.
+    v1::Spot exact = slow_spot();
+    exact.set_engine(v1::ENGINE_EXACT);
     JobManager jobs(few_nodes);
     v1::EstimateTreeResponse estimate;
-    ASSERT_FALSE(jobs.estimate(slow_spot(), &estimate));
+    ASSERT_FALSE(jobs.estimate(exact, &estimate));
     EXPECT_TRUE(estimate.too_large());
     EXPECT_FALSE(estimate.can_solve());
 
     v1::Job job;
-    EXPECT_EQ(jobs.submit(request_for(slow_spot()), &job).kind, ErrorKind::ResourceExhausted);
+    EXPECT_EQ(jobs.submit(request_for(exact), &job).kind, ErrorKind::ResourceExhausted);
   }
 }
 

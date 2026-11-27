@@ -1,5 +1,7 @@
 #include "convert.h"
 
+#include "gto/mc/game.h"
+
 #include <algorithm>
 #include <cstring>
 #include <set>
@@ -208,17 +210,11 @@ std::string spot_key(const SpotConfig& config) {
 }
 
 std::vector<std::string> preflop_positions(std::size_t players) {
-  switch (players) {
-    case 2: return {"BB", "BTN"};
-    case 3: return {"SB", "BB", "BTN"};
-    case 4: return {"SB", "BB", "CO", "BTN"};
-    case 5: return {"SB", "BB", "HJ", "CO", "BTN"};
-    case 6: return {"SB", "BB", "UTG", "HJ", "CO", "BTN"};
-    case 7: return {"SB", "BB", "UTG", "LJ", "HJ", "CO", "BTN"};
-    case 8: return {"SB", "BB", "UTG", "UTG1", "LJ", "HJ", "CO", "BTN"};
-    case 9: return {"SB", "BB", "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO", "BTN"};
-    default: return {};
-  }
+  std::vector<std::string> names;
+  if (players < 2 || players > 9) return names;
+  const int n = static_cast<int>(players);
+  for (int p = 0; p < n; ++p) names.push_back(mc::seat_name(n, mc::Street::Preflop, p));
+  return names;
 }
 
 bool valid_position(std::string_view name) {
