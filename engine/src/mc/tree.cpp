@@ -387,7 +387,12 @@ class TreeBuilder {
       return is_sb(p) ? (pf.allow_sb_complete || pf.allow_limp) : pf.allow_limp;
     }
     if (vol) return true;
-    if (s.raises == 1) return is_blind(p) || pf.cold_call_open;
+    if (s.raises == 1) {
+      const bool bb = is_blind(p) && !is_sb(p);
+      if (bb) return true;
+      if (pf.max_cold_callers >= 0 && s.callers >= pf.max_cold_callers) return false;
+      return is_blind(p) || pf.cold_call_open;
+    }
     if (s.raises == 2) return pf.cold_call_3bet;
     return pf.cold_call_4bet;
   }
@@ -400,7 +405,13 @@ class TreeBuilder {
     bool allin = pf.allin_every_level;
     if (level == 1) {
       const bool sb_first_in = is_sb(p) && s.limpers == 0;
-      for (const double size : sb_first_in ? pf.sb_open_bb : pf.open_bb) {
+      const auto seat = static_cast<std::size_t>(p);
+      const std::vector<double>& opens =
+          sb_first_in ? pf.sb_open_bb
+          : (seat < pf.open_bb_by_seat.size() && !pf.open_bb_by_seat[seat].empty())
+              ? pf.open_bb_by_seat[seat]
+              : pf.open_bb;
+      for (const double size : opens) {
         wishes.push_back(size * bb + s.limpers * pf.iso_per_limper_bb * bb);
       }
     } else if (level == 2 || level == 3) {

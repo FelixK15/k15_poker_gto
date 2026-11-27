@@ -12,6 +12,7 @@ add_library(solver STATIC
   src/mc/abstraction.cpp
   src/mc/evaluate.cpp
   src/mc/game.cpp
+  src/mc/preflop.cpp
   src/mc/report.cpp
   src/mc/solver.cpp
   src/mc/spot.cpp

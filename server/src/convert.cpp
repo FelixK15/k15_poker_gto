@@ -1,5 +1,7 @@
 #include "convert.h"
 
+#include "gto/mc/game.h"
+
 #include <algorithm>
 #include <cstring>
 #include <set>
@@ -67,7 +69,8 @@ SpotShape spot_shape(const v1::Spot& spot) {
   shape.variant = spot.variant();
   if (spot.has_preflop()) {
     shape.preflop = true;
-    shape.players = spot.preflop().players();
+    shape.players = spot.preflop().preset().empty() ? spot.preflop().players()
+                                                    : preset_players(spot.preflop().preset());
   } else if (spot.players_size() > 0) {
     shape.players = static_cast<std::size_t>(spot.players_size());
   }
@@ -208,17 +211,19 @@ std::string spot_key(const SpotConfig& config) {
 }
 
 std::vector<std::string> preflop_positions(std::size_t players) {
-  switch (players) {
-    case 2: return {"BB", "BTN"};
-    case 3: return {"SB", "BB", "BTN"};
-    case 4: return {"SB", "BB", "CO", "BTN"};
-    case 5: return {"SB", "BB", "HJ", "CO", "BTN"};
-    case 6: return {"SB", "BB", "UTG", "HJ", "CO", "BTN"};
-    case 7: return {"SB", "BB", "UTG", "LJ", "HJ", "CO", "BTN"};
-    case 8: return {"SB", "BB", "UTG", "UTG1", "LJ", "HJ", "CO", "BTN"};
-    case 9: return {"SB", "BB", "UTG", "UTG1", "UTG2", "LJ", "HJ", "CO", "BTN"};
-    default: return {};
-  }
+  std::vector<std::string> names;
+  if (players < 2 || players > 9) return names;
+  const int n = static_cast<int>(players);
+  if (n == 2) return {"BTN", "BB"};
+  for (int p = 0; p < n; ++p) names.push_back(mc::seat_name(n, mc::Street::Preflop, p));
+  return names;
+}
+
+std::size_t preset_players(std::string_view preset) {
+  if (preset == "hu" || preset == "headsup" || preset == "2") return 2;
+  if (preset == "6max" || preset == "6-max" || preset == "6") return 6;
+  if (preset == "9max" || preset == "9-max" || preset == "9") return 9;
+  return 0;
 }
 
 bool valid_position(std::string_view name) {

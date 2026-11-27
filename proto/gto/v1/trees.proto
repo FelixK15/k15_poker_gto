@@ -25,7 +25,8 @@ message EstimateTreeResponse {
   // Hands in each range that are possible on the board.
   uint32 oop_hands = 3;
   uint32 ip_hands = 4;
-  // Memory for regrets and strategies, and for the tree itself.
+  // Memory for regrets and strategies, and for the tree itself (Monte
+  // Carlo: tree_bytes includes the bucket tables and hand lists).
   uint64 strategy_bytes = 5;
   uint64 tree_bytes = 6;
   // The tree exceeds the server's node limit. The numbers above are then
@@ -43,8 +44,8 @@ message EstimateTreeResponse {
   // Monte Carlo: information sets of the abstracted game (betting sequences
   // times buckets). 0 for the exact engine; see strategy_entries.
   uint64 info_sets = 11;
-  // Exact engine: action-hand pairs over all decisions (each costs two
-  // values in strategy_bytes).
+  // Action-hand pairs over all decisions (Monte Carlo: action-bucket
+  // pairs, the table entries). Each costs two values in strategy_bytes.
   uint64 strategy_entries = 12;
   // The engine a submit of this spot would run on (never AUTO).
   Engine engine = 13;
@@ -53,4 +54,7 @@ message EstimateTreeResponse {
   // Players and their position names, in seat order.
   uint32 player_count = 15;
   repeated string positions = 16;
+  // Monte Carlo: how hands are grouped on each street with betting, one
+  // line per street, e.g. "flop: lossless (1,326 hands)". Show as is.
+  repeated string abstraction = 17;
 }

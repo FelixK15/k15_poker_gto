@@ -73,6 +73,9 @@ struct StreetSizing {
 struct PreflopSizing {
   /// Open-raise sizes in big blinds (raise to), first in from any seat but the SB.
   std::vector<double> open_bb{2.5};
+  /// Per player overrides of open_bb: empty, or one entry per player where an
+  /// empty entry uses open_bb (preflop presets open smaller from the BTN).
+  std::vector<std::vector<double>> open_bb_by_seat;
   /// Open-raise sizes of the SB when everybody folded to it.
   std::vector<double> sb_open_bb{3.0};
   /// Added to an open (iso-raise) per limper, in big blinds.
@@ -97,6 +100,11 @@ struct PreflopSizing {
   /// Players who have not yet put chips in voluntarily may call an open
   /// (the blinds always may).
   bool cold_call_open = true;
+  /// Most players who may cold call an open (call it without having put
+  /// chips in voluntarily), counted over everyone who called it so far;
+  /// the big blind may always call. -1 = no limit. Keeps 9-max trees
+  /// small: with 1, a second player behind a cold caller folds or 3-bets.
+  int max_cold_callers = -1;
   /// Players who have not yet raised or called a raise may call a 3-bet
   /// (cold call) / a 4-bet or more. The open-raiser may always call a 3-bet,
   /// a 3-bettor always a 4-bet, and so on: whoever has put chips in

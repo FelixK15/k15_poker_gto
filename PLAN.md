@@ -199,9 +199,12 @@ keeps the client stateless and makes deep links and "copy line" trivial.
   (vector CFR over every hand, heads-up postflop NLH and PLO4, exact exploitability, locks) or the
   Monte Carlo engine (multiway, preflop, heads-up spots too large to solve exactly; estimated
   exploitability, labelled by `ExploitabilityKind`). `Spot.engine` AUTO picks exact when the
-  heads-up tree fits. Until `gto::mc` is plugged in, Monte Carlo spots are validated and refused
-  with FAILED_PRECONDITION. PLO nodes list at most 2,000 hands per player by default (the ones
-  with the most reach); `GetNodeRequest.max_hands` raises that to 20,000.
+  heads-up tree fits, else Monte Carlo when that fits. Monte Carlo jobs solve in quarter-second
+  chunks, measure sampled EVs and best responses every few seconds, keep no locks, and browse
+  with sampled EVs (no equities). Preflop jobs number seats UTG … BTN, SB, BB like the mc engine
+  and export heads-up flop scenarios as 169-class ranges (`GetPreflopRanges`). PLO nodes list at
+  most 2,000 hands per player by default (the ones with the most reach);
+  `GetNodeRequest.max_hands` raises that to 20,000.
 - **Deployment:** single executable + config file; Windows zip/service and a Linux Docker image.
 
 ## 5. Client (Flutter)

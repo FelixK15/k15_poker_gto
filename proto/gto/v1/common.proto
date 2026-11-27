@@ -92,10 +92,12 @@ message Abstraction {
 // the ranges, pot and stacks are then ignored: everyone starts with every
 // hand and `stack_bb` behind.
 message PreflopSettings {
-  // Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Positions are
-  // named SB, BB, UTG, UTG1, UTG2, LJ, HJ, CO, BTN as the table size needs
-  // them (heads-up: BTN and BB, the button posting the small blind). Seats
-  // are numbered in postflop order: SB, BB, then UTG … BTN; heads-up BB, BTN.
+  // Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Seats are
+  // numbered in the order of preflop action: UTG, UTG1, UTG2, LJ, HJ, CO,
+  // BTN, SB, BB as the table size needs them (6-max: UTG, HJ, CO, BTN, SB,
+  // BB; 3-handed: BTN, SB, BB; heads-up: BTN, BB, the button posting the
+  // small blind). Job.positions and every per-player array of a preflop job
+  // use this order; postflop the SB acts first (heads-up the BB).
   uint32 players = 1;
   // Stack of every player before posting, in big blinds.
   double stack_bb = 2;
@@ -122,16 +124,38 @@ message PreflopSettings {
   // 4-bet size as a multiple of the 3-bet; later raises use it too.
   // Default 2.3.
   optional double four_bet_multiplier = 12;
-  // Whether a player may call a raise when they have not put money in yet
-  // (cold call). Off: such players fold or re-raise. The big blind may always
-  // call.
+  // Players who have not put money in yet may call an open (cold call). The
+  // blinds may always call an open; whoever has raised or called may always
+  // call a re-raise.
   bool allow_cold_calls = 13;
   // Most raises preflop, the open counting as the first. Default 4 (open,
   // 3-bet, 4-bet, 5-bet all-in).
   optional uint32 raise_cap = 14;
-  // Also play the flop, turn and river with Spot.tree's sizes. Off: the hand
-  // is valued at the flop by equity, without further betting.
+  // Also play the flop (no turn or river betting) with Spot.tree.flop sizes
+  // and strength buckets; Spot.tree.raise_cap applies (default 1). Off: the
+  // hand is valued at the flop by equity, without further betting (every
+  // player realises all of their equity: the main approximation).
   bool solve_postflop = 15;
+
+  // The small blind may complete even when allow_limp is off.
+  bool allow_sb_complete = 16;
+  // Cold calls of 3-bets, and of 4-bets and more.
+  bool allow_cold_call_3bet = 17;
+  bool allow_cold_call_4bet = 18;
+  // Added to a 3-bet or 4-bet per caller of the raise being re-raised, in
+  // multiples of that raise (squeeze sizing). Default 1.
+  optional double squeeze_per_caller = 19;
+  // Open sizes for single positions, replacing open_sizes_bb there.
+  repeated PositionSizes open_sizes_by_position = 20;
+  // A tuned preset: "hu", "6max" or "9max". When set, everything above but
+  // stack_bb and the rake comes from the preset (sizes follow the nearest of
+  // 100, 200 and 300 BB): the settings the shipped preflop library uses.
+  string preset = 21;
+}
+
+message PositionSizes {
+  string position = 1;
+  repeated double sizes_bb = 2;
 }
 
 // A spot to solve: heads-up or multiway postflop, or a preflop solve.

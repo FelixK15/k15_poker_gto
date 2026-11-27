@@ -7,6 +7,7 @@ add_executable(solver_tests
   mc_kuhn_test.cpp
   mc_perf_test.cpp
   mc_plo_test.cpp
+  mc_preflop_test.cpp
   mc_pot_test.cpp
   mc_river_test.cpp
   mc_tree_test.cpp

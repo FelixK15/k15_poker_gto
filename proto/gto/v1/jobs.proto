@@ -93,9 +93,9 @@ message Job {
   bool reused = 20;
 
   // EV of every player from the latest measurement, in chips, in seat order
-  // (Spot.players order; heads-up OOP then IP, the same as oop_ev / ip_ev,
+  // (Spot.players order, preflop UTG … BB; heads-up OOP then IP, the same as oop_ev / ip_ev,
   // which stay filled for two players). Preflop: in big blinds relative to
-  // the stack before posting.
+  // the stack before posting blinds and antes (so folding the BB is -1).
   repeated double evs = 21;
   // What exploitability_pct means. Unspecified on jobs saved by older
   // servers, which were all EXACT or (with locks) LOCKED_GAME.
