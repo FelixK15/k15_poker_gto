@@ -133,7 +133,10 @@ grpc::Status SolutionServiceImpl::GetNode(grpc::ServerContext* context,
                                           const v1::GetNodeRequest* request,
                                           v1::GetNodeResponse* response) {
   GTO_REQUIRE_AUTH(context);
-  return to_status(jobs_.node(request->job_id(), request->path(), response));
+  NodeOptions options;
+  options.max_hands = request->max_hands();
+  options.detail = request->detail();
+  return to_status(jobs_.node(request->job_id(), request->path(), options, response));
 }
 
 grpc::Status SolutionServiceImpl::GetRunoutReport(grpc::ServerContext* context,
@@ -141,6 +144,21 @@ grpc::Status SolutionServiceImpl::GetRunoutReport(grpc::ServerContext* context,
                                                   v1::GetRunoutReportResponse* response) {
   GTO_REQUIRE_AUTH(context);
   return to_status(jobs_.runouts(request->job_id(), request->path(), response));
+}
+
+grpc::Status SolutionServiceImpl::ListPreflopScenarios(
+    grpc::ServerContext* context, const v1::ListPreflopScenariosRequest* request,
+    v1::ListPreflopScenariosResponse* response) {
+  GTO_REQUIRE_AUTH(context);
+  const std::uint32_t max_raises = request->max_raises() == 0 ? 4 : request->max_raises();
+  return to_status(jobs_.preflop_scenarios(request->job_id(), max_raises, response));
+}
+
+grpc::Status SolutionServiceImpl::GetPreflopRanges(grpc::ServerContext* context,
+                                                   const v1::GetPreflopRangesRequest* request,
+                                                   v1::GetPreflopRangesResponse* response) {
+  GTO_REQUIRE_AUTH(context);
+  return to_status(jobs_.preflop_ranges(request->job_id(), request->path(), response));
 }
 
 grpc::Status LockServiceImpl::Resolve(grpc::ServerContext* context,

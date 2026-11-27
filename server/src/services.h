@@ -11,7 +11,7 @@
 namespace gto::server {
 
 inline constexpr unsigned kApiMajor = 1;
-inline constexpr unsigned kApiMinor = 3;
+inline constexpr unsigned kApiMinor = 4;
 
 class ServerServiceImpl final : public v1::ServerService::Service {
  public:
@@ -75,6 +75,12 @@ class SolutionServiceImpl final : public v1::SolutionService::Service {
   grpc::Status GetRunoutReport(grpc::ServerContext* context,
                                const v1::GetRunoutReportRequest* request,
                                v1::GetRunoutReportResponse* response) override;
+  grpc::Status ListPreflopScenarios(grpc::ServerContext* context,
+                                    const v1::ListPreflopScenariosRequest* request,
+                                    v1::ListPreflopScenariosResponse* response) override;
+  grpc::Status GetPreflopRanges(grpc::ServerContext* context,
+                                const v1::GetPreflopRangesRequest* request,
+                                v1::GetPreflopRangesResponse* response) override;
 
  private:
   const Auth& auth_;

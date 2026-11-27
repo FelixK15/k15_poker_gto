@@ -2,8 +2,11 @@
 add_library(gto_server_lib STATIC
   src/auth.cpp
   src/convert.cpp
+  src/exact_engine.cpp
   src/job_manager.cpp
+  src/mc_engine.cpp
   src/services.cpp
+  src/solve_engine.cpp
   src/system_info.cpp
   src/zstd_stream.cpp
 )

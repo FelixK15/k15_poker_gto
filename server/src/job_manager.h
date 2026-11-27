@@ -12,11 +12,13 @@
 #include <thread>
 #include <vector>
 
-#include "gto/solver.h"
+#include "convert.h"
+#include "error.h"
 #include "gto/v1/jobs.pb.h"
 #include "gto/v1/locks.pb.h"
 #include "gto/v1/solutions.pb.h"
 #include "gto/v1/trees.pb.h"
+#include "solve_engine.h"
 
 namespace gto::server {
 
@@ -37,25 +39,9 @@ struct JobManagerConfig {
   int check_interval = 10;
 };
 
-enum class ErrorKind {
-  None,
-  InvalidArgument,
-  NotFound,
-  FailedPrecondition,
-  ResourceExhausted,
-  Internal,
-};
-
-/// Outcome of a JobManager call; the gRPC layer turns it into a status.
-struct Error {
-  ErrorKind kind = ErrorKind::None;
-  std::string message;
-
-  explicit operator bool() const noexcept { return kind != ErrorKind::None; }
-};
-
 /// Owns all jobs: queues them, solves one at a time on its own thread, keeps
-/// their solutions for browsing and stores both on disk.
+/// their solutions for browsing and stores both on disk. Engine-agnostic: a
+/// job's solution is a SolveEngine (solve_engine.h).
 ///
 /// All methods are thread-safe.
 class JobManager {
@@ -79,10 +65,20 @@ class JobManager {
   Error cancel(const std::string& id, v1::Job* out);
   Error remove(const std::string& id);
 
-  Error node(const std::string& id, const std::string& path, v1::GetNodeResponse* out);
+  Error node(const std::string& id, const std::string& path, v1::GetNodeResponse* out) {
+    return node(id, path, NodeOptions{}, out);
+  }
+  Error node(const std::string& id, const std::string& path, const NodeOptions& options,
+             v1::GetNodeResponse* out);
 
   /// How each card that can come at a chance node changes the spot.
   Error runouts(const std::string& id, const std::string& path, v1::GetRunoutReportResponse* out);
+
+  /// Preflop solves: standard lines, and ranges after a line.
+  Error preflop_scenarios(const std::string& id, std::uint32_t max_raises,
+                          v1::ListPreflopScenariosResponse* out);
+  Error preflop_ranges(const std::string& id, const std::string& path,
+                       v1::GetPreflopRangesResponse* out);
 
   /// Queues a re-solve of a job under locks, as a new job that starts from
   /// the parent's solution.
@@ -100,11 +96,15 @@ class JobManager {
   void shutdown();
 
  private:
-  /// A solver and the lock that serialises solving and browsing on it.
+  /// An engine and the lock that serialises solving and browsing on it.
   struct Solution {
     std::mutex mutex;
-    std::unique_ptr<Solver> solver;
+    std::unique_ptr<SolveEngine> engine;
   };
+
+  EngineLimits limits() const noexcept {
+    return {config_.threads, config_.memory_budget_bytes, config_.max_nodes};
+  }
 
   enum class Request { None, Pause, Cancel, Delete };
 
@@ -142,8 +142,7 @@ class JobManager {
   /// A job whose solution already answers a submit of the spot with this key
   /// and these settings: one that is done and got there, or failing that one
   /// queued or running with settings at least as strict. Newest wins.
-  const Entry* find_reusable(const std::string& spot_key,
-                             int max_iterations, double target_exploitability_pct) const;
+  const Entry* find_reusable(const std::string& spot_key, const ResolvedSettings& settings) const;
 
   void load_from_disk();
   void write_job(const v1::Job& job) const;
