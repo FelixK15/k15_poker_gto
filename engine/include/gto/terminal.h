@@ -18,10 +18,13 @@ namespace gto {
 /// in total and per card, and the hands blocked by the player's own cards are
 /// subtracted.
 ///
-/// Supports one or two hole cards per hand. Four (PLO) needs a longer
-/// inclusion-exclusion and is not implemented yet.
+/// Supports one, two or four hole cards per hand. With four (PLO) the hands
+/// blocked by ours are found by inclusion-exclusion over the subsets of our
+/// cards: subtract the reach summed per card, add it back per pair of cards,
+/// subtract it per triple, and add the identical hand.
 ///
-/// Thread-safe: all methods are const and keep their scratch data on the stack.
+/// Thread-safe: all methods are const and keep their scratch data on the
+/// stack or, for the larger four-card sums, in thread-local buffers.
 class TerminalEvaluator {
  public:
   /// Keeps a reference to `hands`, which must outlive the evaluator.
@@ -53,6 +56,11 @@ class TerminalEvaluator {
                                float* out) const;
   void showdown_general(const ShowdownTable& table, int player, double beat, double beat_or_tie,
                         double lose, const float* opponent_reach, float* out) const;
+  void showdown_four(const ShowdownTable& table, int player, double beat, double beat_or_tie,
+                     double lose, const float* opponent_reach, float* out) const;
+  void build_four_card_slots();
+  void scaled_compatible_reach_four(int player, double scale, const float* opponent_reach,
+                                    float* out) const;
 
   const Hands* hands_;
   int hole_cards_ = 0;
@@ -65,6 +73,20 @@ class TerminalEvaluator {
   std::array<std::vector<std::uint8_t>, 2> card2_;
   std::array<std::vector<std::uint32_t>, 2> same_index_;
   std::array<std::vector<float>, 2> same_weight_;
+
+  // Four hole cards. Each player's hands, as opponent hands, add their reach
+  // to 14 running sums: one per card, per pair and per triple of their
+  // cards. Only the subsets some hand holds get a sum, numbered from 1 in
+  // the player's own slot space; slot 0 stays zero.
+  static constexpr std::size_t kFourCardSubsets = 14;  // 4 cards, 6 pairs, 4 triples
+  /// [hand * 14 + k]: the slots a player's hand adds to.
+  std::array<std::vector<std::uint32_t>, 2> add_slots_;
+  /// [hand * 14 + k]: where a player's hand reads the opponent's sums for
+  /// its own cards (k < 4), pairs (k < 10) and triples, in the opponent's
+  /// slot space; 0 when no opponent hand holds that subset.
+  std::array<std::vector<std::uint32_t>, 2> read_slots_;
+  /// Number of slots in each player's slot space, slot 0 included.
+  std::array<std::size_t, 2> slot_count_{0, 0};
 };
 
 }  // namespace gto

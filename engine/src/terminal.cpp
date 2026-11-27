@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "gto/card.h"
+#include "gto/omaha.h"
 
 namespace gto {
 
@@ -28,6 +29,17 @@ std::string holdem_hand_name(const Hand& hand) {
   return a.to_string() + b.to_string();
 }
 
+std::string hand_name(const Hand& hand) {
+  if (hand.num_cards == 2) return holdem_hand_name(hand);
+  if (hand.num_cards == 4) {
+    return omaha_hand_name({Card(hand.cards[0]), Card(hand.cards[1]), Card(hand.cards[2]),
+                            Card(hand.cards[3])});
+  }
+  std::string name;
+  for (int c = 0; c < hand.num_cards; ++c) name += Card(hand.cards[c]).to_string();
+  return name;
+}
+
 ShowdownTable make_showdown_table(std::array<std::vector<HandStrength>, 2> strength) {
   ShowdownTable table;
   table.strength = std::move(strength);
@@ -46,7 +58,7 @@ TerminalEvaluator::TerminalEvaluator(const Hands& hands) : hands_(&hands) {
   for (const auto& player_hands : hands) {
     if (!player_hands.empty()) hole_cards_ = player_hands.front().num_cards;
   }
-  assert(hole_cards_ == 1 || hole_cards_ == 2);
+  assert(hole_cards_ == 1 || hole_cards_ == 2 || hole_cards_ == 4);
 
   for (std::size_t player = 0; player < 2; ++player) {
     std::unordered_map<std::uint64_t, std::int32_t> opponent_index;
@@ -64,9 +76,74 @@ TerminalEvaluator::TerminalEvaluator(const Hands& hands) : hands_(&hands) {
       // 63 as its second card; nothing ever adds to it.
       card1_[player].push_back(hand.cards[0]);
       card2_[player].push_back(hole_cards_ == 2 ? hand.cards[1] : kSpareCard);
-      const bool has_same = hole_cards_ == 2 && same.back() >= 0;
+      const bool has_same = hole_cards_ >= 2 && same.back() >= 0;
       same_index_[player].push_back(has_same ? static_cast<std::uint32_t>(same.back()) : 0u);
       same_weight_[player].push_back(has_same ? 1.0f : 0.0f);
+    }
+  }
+
+  if (hole_cards_ == 4) build_four_card_slots();
+}
+
+namespace {
+
+// Ids of the card subsets of a four-card hand: its cards (0-51), pairs
+// (52 + pair index) and triples (52 + 1326 + triple index).
+constexpr std::size_t kPairBase = 52;
+constexpr std::size_t kTripleBase = 52 + 1326;
+constexpr std::size_t kSubsetIds = 52 + 1326 + 22100;
+
+std::array<std::uint32_t, 14> subset_ids(const Hand& hand) {
+  std::array<std::uint32_t, 4> c = {hand.cards[0], hand.cards[1], hand.cards[2], hand.cards[3]};
+  std::sort(c.begin(), c.end());
+  const auto pair = [](std::uint32_t a, std::uint32_t b) {  // a < b
+    return static_cast<std::uint32_t>(kPairBase) + b * (b - 1) / 2 + a;
+  };
+  const auto triple = [](std::uint32_t a, std::uint32_t b, std::uint32_t d) {  // a < b < d
+    return static_cast<std::uint32_t>(kTripleBase) + a + b * (b - 1) / 2 +
+           d * (d - 1) * (d - 2) / 6;
+  };
+  return {c[0],
+          c[1],
+          c[2],
+          c[3],
+          pair(c[0], c[1]),
+          pair(c[0], c[2]),
+          pair(c[0], c[3]),
+          pair(c[1], c[2]),
+          pair(c[1], c[3]),
+          pair(c[2], c[3]),
+          triple(c[0], c[1], c[2]),
+          triple(c[0], c[1], c[3]),
+          triple(c[0], c[2], c[3]),
+          triple(c[1], c[2], c[3])};
+}
+
+}  // namespace
+
+void TerminalEvaluator::build_four_card_slots() {
+  std::array<std::vector<std::uint32_t>, 2> slot_of;
+  for (std::size_t player = 0; player < 2; ++player) {
+    slot_of[player].assign(kSubsetIds, 0);
+    std::uint32_t next = 1;
+    auto& add = add_slots_[player];
+    add.reserve((*hands_)[player].size() * kFourCardSubsets);
+    for (const Hand& hand : (*hands_)[player]) {
+      assert(hand.num_cards == 4);
+      for (const std::uint32_t id : subset_ids(hand)) {
+        assert(id < kSubsetIds);
+        std::uint32_t& slot = slot_of[player][id];
+        if (slot == 0) slot = next++;
+        add.push_back(slot);
+      }
+    }
+    slot_count_[player] = next;
+  }
+  for (std::size_t player = 0; player < 2; ++player) {
+    auto& read = read_slots_[player];
+    read.reserve((*hands_)[player].size() * kFourCardSubsets);
+    for (const Hand& hand : (*hands_)[player]) {
+      for (const std::uint32_t id : subset_ids(hand)) read.push_back(slot_of[1 - player][id]);
     }
   }
 }
@@ -209,6 +286,10 @@ void TerminalEvaluator::fold(int player, double payoff, const float* opponent_re
 
 void TerminalEvaluator::scaled_compatible_reach(int player, double scale,
                                                 const float* opponent_reach, float* out) const {
+  if (hole_cards_ == 4) {
+    scaled_compatible_reach_four(player, scale, opponent_reach, out);
+    return;
+  }
   const auto p = static_cast<std::size_t>(player);
   CardSums sums;
   card_sums(opponent_reach, card1_[1 - p].data(), card2_[1 - p].data(), card1_[1 - p].size(),
@@ -240,6 +321,10 @@ void TerminalEvaluator::showdown(const ShowdownTable& table, int player, double 
   // C for every hand: where to read them was worked out by prepare().
   const double beat = win - tie;
   const double beat_or_tie = tie - lose;
+  if (hole_cards_ == 4) {
+    showdown_four(table, player, beat, beat_or_tie, lose, opponent_reach, out);
+    return;
+  }
 
   const ShowdownPlan& plan = table.plans[p];
   if (plan.slots.empty()) {
@@ -354,6 +439,124 @@ void TerminalEvaluator::showdown_general(const ShowdownTable& table, int player,
       double reach = sum - blocked(hands[h]);
       if (two_cards && same[h] >= 0) reach += opponent_reach[same[h]];
       out[h] += static_cast<float>(lose * reach);
+    }
+  }
+}
+
+namespace {
+
+/// Reach of the opponent hands added so far that share a card with a hand
+/// whose subsets read `slot`: inclusion-exclusion over cards, pairs and
+/// triples. The identical hand, if added, is left out: the caller adds it.
+inline double blocked_four(const double* sums, const std::uint32_t* slot) {
+  const double cards = (sums[slot[0]] + sums[slot[1]]) + (sums[slot[2]] + sums[slot[3]]);
+  const double pairs = (sums[slot[4]] + sums[slot[5]]) + (sums[slot[6]] + sums[slot[7]]) +
+                       (sums[slot[8]] + sums[slot[9]]);
+  const double triples = (sums[slot[10]] + sums[slot[11]]) + (sums[slot[12]] + sums[slot[13]]);
+  return cards - pairs + triples;
+}
+
+/// Zeroed scratch for the per-subset sums, one buffer per thread.
+std::vector<double>& four_card_scratch(std::size_t size) {
+  thread_local std::vector<double> sums;
+  sums.assign(size, 0.0);
+  return sums;
+}
+
+}  // namespace
+
+void TerminalEvaluator::scaled_compatible_reach_four(int player, double scale,
+                                                     const float* opponent_reach,
+                                                     float* out) const {
+  const auto p = static_cast<std::size_t>(player);
+  std::vector<double>& buffer = four_card_scratch(slot_count_[1 - p]);
+  double* sums = buffer.data();
+
+  const std::uint32_t* add = add_slots_[1 - p].data();
+  const std::size_t opponents = (*hands_)[1 - p].size();
+  double total = 0;
+  for (std::size_t o = 0; o < opponents; ++o) {
+    const double r = opponent_reach[o];
+    if (r == 0) continue;
+    total += r;
+    const std::uint32_t* slot = add + o * kFourCardSubsets;
+    for (std::size_t k = 0; k < kFourCardSubsets; ++k) sums[slot[k]] += r;
+  }
+
+  const std::uint32_t* read = read_slots_[p].data();
+  const std::uint32_t* same = same_index_[p].data();
+  const float* same_weight = same_weight_[p].data();
+  const std::size_t count = (*hands_)[p].size();
+  for (std::size_t h = 0; h < count; ++h) {
+    const double value = total - blocked_four(sums, read + h * kFourCardSubsets) +
+                         static_cast<double>(opponent_reach[same[h]]) * same_weight[h];
+    out[h] = static_cast<float>(scale * value);
+  }
+}
+
+void TerminalEvaluator::showdown_four(const ShowdownTable& table, int player, double beat,
+                                      double beat_or_tie, double lose,
+                                      const float* opponent_reach, float* out) const {
+  const auto p = static_cast<std::size_t>(player);
+  const HandStrength* strength = table.strength[p].data();
+  const HandStrength* opponent_strength = table.strength[1 - p].data();
+  const std::uint32_t* order = table.order[p].data();
+  const std::uint32_t* opponent_order = table.order[1 - p].data();
+  const std::size_t count = table.order[p].size();
+  const std::size_t opponent_count = table.order[1 - p].size();
+  const std::uint32_t* add_slots = add_slots_[1 - p].data();
+  const std::uint32_t* read = read_slots_[p].data();
+  const std::uint32_t* same = same_index_[p].data();
+  const float* same_weight = same_weight_[p].data();
+
+  std::vector<double>& buffer = four_card_scratch(slot_count_[1 - p]);
+  double* sums = buffer.data();
+  double sum = 0;
+  const auto add = [&](std::uint32_t o) {
+    const double r = opponent_reach[o];
+    if (r == 0) return;
+    sum += r;
+    const std::uint32_t* slot = add_slots + static_cast<std::size_t>(o) * kFourCardSubsets;
+    for (std::size_t k = 0; k < kFourCardSubsets; ++k) sums[slot[k]] += r;
+  };
+  const auto compatible = [&](std::uint32_t h) {
+    return sum - blocked_four(sums, read + static_cast<std::size_t>(h) * kFourCardSubsets);
+  };
+  const auto same_reach = [&](std::uint32_t h) {
+    return static_cast<double>(opponent_reach[same[h]]) * same_weight[h];
+  };
+
+  // As in showdown_general(): the identical hand ties with ours, so it is
+  // among the added hands only from the ties on.
+  std::size_t j = 0;
+  std::size_t i = 0;
+  while (i < count) {
+    const HandStrength level = strength[order[i]];
+    std::size_t end = i + 1;
+    while (end < count && strength[order[end]] == level) ++end;
+
+    while (j < opponent_count && opponent_strength[opponent_order[j]] < level) {
+      add(opponent_order[j++]);
+    }
+    for (std::size_t k = i; k < end; ++k) {
+      const std::uint32_t h = order[k];
+      out[h] = static_cast<float>(beat * compatible(h));
+    }
+    while (j < opponent_count && opponent_strength[opponent_order[j]] == level) {
+      add(opponent_order[j++]);
+    }
+    for (std::size_t k = i; k < end; ++k) {
+      const std::uint32_t h = order[k];
+      out[h] += static_cast<float>(beat_or_tie * (compatible(h) + same_reach(h)));
+    }
+    i = end;
+  }
+
+  while (j < opponent_count) add(opponent_order[j++]);
+  if (lose != 0) {
+    for (std::size_t h = 0; h < count; ++h) {
+      const auto hand = static_cast<std::uint32_t>(h);
+      out[h] += static_cast<float>(lose * (compatible(hand) + same_reach(hand)));
     }
   }
 }

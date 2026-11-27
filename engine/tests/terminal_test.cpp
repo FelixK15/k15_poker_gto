@@ -2,11 +2,13 @@
 
 #include <cmath>
 #include <random>
+#include <set>
 #include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "gto/omaha.h"
 #include "gto/range.h"
 
 namespace gto {
@@ -143,6 +145,74 @@ TEST(TerminalEvaluator, MatchesBruteForceWithOneHoleCard) {
   }
   sets.table = make_showdown_table(std::move(strength));
   for (int trial = 0; trial < 5; ++trial) expect_matches_naive(sets, rng);
+}
+
+/// `count` random PLO hands per player off the board, a few of them held by
+/// both players so that identical hands occur.
+Sets random_omaha_sets(std::mt19937& rng, std::string_view board_text, std::size_t count) {
+  const auto board = *parse_cards(board_text);
+  std::uint64_t board_mask = 0;
+  for (const Card card : board) board_mask |= card.mask();
+  const OmahaBoardEvaluator evaluator(board);
+
+  std::uniform_int_distribution<int> combo(0, kOmahaCombos - 1);
+  std::uniform_real_distribution<float> weight(0.05f, 1.0f);
+  std::bernoulli_distribution share(0.1);
+  Sets sets;
+  std::array<std::vector<HandStrength>, 2> strength;
+  std::array<std::set<int>, 2> taken;
+  const auto add = [&](std::size_t player, int index) {
+    const auto cards = omaha_combo_cards(index);
+    std::uint64_t mask = 0;
+    for (const Card card : cards) mask |= card.mask();
+    if ((mask & board_mask) != 0 || !taken[player].insert(index).second) return;
+    sets.hands[player].push_back(make_hand(
+        {cards[0].index(), cards[1].index(), cards[2].index(), cards[3].index()}, weight(rng)));
+    strength[player].push_back(evaluator.evaluate(cards));
+  };
+  while (sets.hands[0].size() < count) add(0, combo(rng));
+  for (const int index : taken[0]) {
+    if (share(rng)) add(1, index);
+  }
+  while (sets.hands[1].size() < count) add(1, combo(rng));
+  sets.table = make_showdown_table(std::move(strength));
+  return sets;
+}
+
+TEST(TerminalEvaluator, MatchesBruteForceWithFourHoleCards) {
+  std::mt19937 rng(19);
+  for (const char* board : {"Ks8d5h3s2d", "QcQd7h7s2c", "AcKcQcJcTc", "9h8h7h6d2s"}) {
+    SCOPED_TRACE(board);
+    for (const std::size_t count : {1u, 5u, 40u, 300u}) {
+      SCOPED_TRACE(count);
+      expect_matches_naive(random_omaha_sets(rng, board, count), rng);
+    }
+  }
+  // Large sets: many hands share pairs and triples of cards.
+  expect_matches_naive(random_omaha_sets(rng, "Ks8d5h3s2d", 4000), rng);
+}
+
+TEST(TerminalEvaluator, FourCardsAllHandsOfFewCards) {
+  // Every four-card hand out of a ten-card deck for both players: nearly all
+  // of them overlap, which exercises every inclusion-exclusion term.
+  std::mt19937 rng(23);
+  const auto board = *parse_cards("2c3d4h5s7c");
+  const OmahaBoardEvaluator evaluator(board);
+  const auto deck = *parse_cards("AsAhKsKhQsQhJsJhTsTh");
+  Sets sets;
+  std::array<std::vector<HandStrength>, 2> strength;
+  for (std::size_t player = 0; player < 2; ++player) {
+    for (std::size_t a = 0; a < deck.size(); ++a)
+      for (std::size_t b = a + 1; b < deck.size(); ++b)
+        for (std::size_t c = b + 1; c < deck.size(); ++c)
+          for (std::size_t d = c + 1; d < deck.size(); ++d) {
+            sets.hands[player].push_back(make_hand(
+                {deck[a].index(), deck[b].index(), deck[c].index(), deck[d].index()}, 1.0f));
+            strength[player].push_back(evaluator.evaluate({deck[a], deck[b], deck[c], deck[d]}));
+          }
+  }
+  sets.table = make_showdown_table(std::move(strength));
+  for (int trial = 0; trial < 3; ++trial) expect_matches_naive(sets, rng);
 }
 
 TEST(TerminalEvaluator, BoardThatPlaysTiesEverything) {
