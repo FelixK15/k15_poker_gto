@@ -71,7 +71,9 @@ struct PreflopSettings {
   /// Per position overrides of open_sizes_bb (keys are position names, e.g.
   /// {"BTN", {2.3}}). Presets use them; the API has no such field yet.
   std::map<std::string, std::vector<double>> open_sizes_by_position;
-  /// SB first-in open sizes; empty = 3.
+  /// SB first-in open sizes; empty = 3. Heads-up the button (who posts the
+  /// SB) opens with open_sizes_by_position["BTN"], else these, else
+  /// open_sizes_bb, else 2.5.
   std::vector<double> sb_open_sizes_bb;
   /// Limping (calling the BB first in), the SB completing included.
   bool allow_limp = false;
@@ -87,6 +89,9 @@ struct PreflopSettings {
   /// Players who have not put money in yet may call an open (cold call).
   /// The blinds may always call an open.
   bool allow_cold_calls = false;
+  /// With allow_cold_calls: most players who may cold call one open (the BB
+  /// may always call); unset = no limit. The 9-max presets use 1.
+  std::optional<int> max_cold_callers;
   /// Cold calls of 3-bets / of 4-bets and more (off keeps trees small; the
   /// opener may always call a 3-bet, the 3-bettor a 4-bet, ...).
   bool allow_cold_call_3bet = false;
