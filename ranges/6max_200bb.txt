@@ -1,0 +1,1350 @@
+k15-preflop-library 1
+# Preflop ranges solved by K15 GTO (Monte Carlo CFR, 169 hand classes).
+# Approximation: no postflop play; the board is run out when the preflop
+# betting ends (100% equity realisation). Ranges are each player's reach
+# on the line (everyone else folding). Weights below 0.005 are dropped.
+format: 6max
+players: 6
+stack_bb: 200
+blinds: 0.5 1
+ante: 0
+settings: blinds 0.5/1; opens UTG 2.5 HJ 2.5 CO 2.5 BTN 2.3 SB 3; 3-bet IP 3.25x OOP 4.5x; 4-bet 2.4x; squeeze +1x/caller; cap 4 (then all-in); limps no; cold calls opens; equity at the flop (100% realisation)
+iterations: 2020131072
+exploitability_pct: 0.5069
+open: UTG 0.1412
+open: HJ 0.1648
+open: CO 0.1998
+open: BTN 0.2658
+open: SB 0.5431
+
+scenario: SB:raise3/BB:call
+name: SB open 3, BB call
+kind: srp
+oop: SB
+ip: BB
+aggressor: SB
+pot: 6
+effective_stack: 197
+frequency: 0.1356
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o,A5s,A5o,A4s,A4o,A3s,A3o,A2s,A2o,KK,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K9o,K8s,K8o,K7s,K7o,K6s,K6o,K5s,K5o,K4s,K4o,K3s,K3o,K2s,K2o,QQ,QJs,QJo,QTs,QTo,Q9s,Q9o,Q8s,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o:0.32,JJ,JTs,JTo,J9s,J9o,J8s,J8o,J7s,J7o,J6s,J5s,J4s:0.569,TT,T9s,T9o,T8s,T8o,T7s,99,98s,97s,88,87s,77,66,55,44,33,22
+ip_range: A6o:0.172,A5o,A4o,A3o,A2o,KJo:0.991,KTo,K9s,K9o,K8s,K8o,K7s,K7o,K6s,K6o,K5s,K5o,K4s,K4o,K3s,K3o,K2s,K2o,QJo,QTs,QTo,Q9s,Q9o,Q8s,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o,JTs:0.902,JTo,J9s,J9o,J8s,J8o,J7s,J7o,J6s,J6o,J5s,J5o,J4s,J4o,J3s,J3o:0.886,J2s,T9s,T9o,T8s,T8o,T7s,T7o,T6s,T6o,T5s,T4s,T3s,T2s,98s,98o,97s,97o,96s,96o,95s,94s,93s,92s,87s,87o,86s,86o,85s,84s,83s:0.999,82s:0.934,76s,76o,75s,75o,74s,73s,65s,65o,64s,63s,62s:0.974,54s,54o,53s,52s,43s,42s,22
+
+scenario: SB:raise3/BB:raise9.75/SB:call
+name: SB open 3, BB 3-bet 9.75, SB call
+kind: 3bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 19.5
+effective_stack: 190.25
+frequency: 0.02458
+oop_range: AQo:0.058,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o,A5s,A5o,A4s,A4o,A3s,A3o,A2s,A2o:0.638,KQs:0.547,KQo:0.999,KJs:0.623,KJo,KTs,KTo,K9s,K9o:0.998,K8s,K7s,K6s,K5s,K4s:0.999,K3s:0.118,QJs,QJo,QTs,QTo,Q9s,Q9o:0.999,Q8s,Q7s,Q6s,Q5s:0.591,JTs,JTo,J9s,J9o,J8s,J7s:0.999,T9s,T9o,T8s,T7s,99:0.875,98s,97s,88,87s,77,66,55,44,33,22
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o:0.828,A5s,A4s,A3s,A2s,KK,KQs,KQo,KJs,KJo:0.009,KTs,QQ,QJs,JJ,JTs:0.098,TT,99,88,77,66,55,44,33
+
+scenario: SB:raise3/BB:raise9.75/SB:raise23.4/BB:call
+name: SB open 3, BB 3-bet 9.75, SB 4-bet 23.4, BB call
+kind: 4bet
+oop: SB
+ip: BB
+aggressor: SB
+pot: 46.8
+effective_stack: 176.6
+frequency: 0.002286
+oop_range: AA,AKs,AKo,AQs,AQo:0.942,KK,KQs:0.453,KJs:0.377,QQ,JJ,TT,99:0.125
+ip_range: AKo:0.104,AQs,AQo,AJs,AJo,ATs:0.998,ATo:0.299,A9s,A8s:0.871,A7s:0.888,A6s,A5s:0.557,A4s:0.52,A3s:0.977,A2s:0.888,KK:0.31,KQs,KJs,KTs,QQ,QJs,JJ,JTs:0.098,TT,99,88,77,66,55,44,33
+
+scenario: BTN:raise2.3/BB:call
+name: BTN open 2.3, BB call
+kind: srp
+oop: BB
+ip: BTN
+aggressor: BTN
+pot: 5.1
+effective_stack: 197.7
+frequency: 0.09593
+oop_range: ATs:0.645,ATo,A9s,A9o,A8s:0.999,A8o,A7s,A7o,A6s,A6o,A5s:0.902,A5o,A4s:0.984,A4o,A3s:0.742,A3o,A2s:0.998,A2o,KQo:0.094,KJs:0.99,KJo,KTs:0.999,KTo,K9s,K9o,K8s:0.999,K8o,K7s,K7o,K6s,K6o,K5s,K5o,K4s,K4o,K3s,K3o,K2s,K2o,QJs:0.811,QJo,QTs:0.639,QTo,Q9s:0.732,Q9o,Q8s:0.999,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o,JTs:0.015,JTo:0.942,J9s:0.709,J9o,J8s:0.976,J8o,J7s,J7o,J6s,J6o,J5s,J5o,J4s,J4o,J3s,J3o,J2s,J2o,T9s:0.968,T9o,T8s,T8o,T7s,T7o,T6s,T6o,T5s,T5o,T4s,T4o,T3s,T3o,T2s,T2o,98s,98o,97s,97o,96s,96o,95s,95o,94s,94o,93s,93o,92s,92o,87s,87o,86s,86o,85s,85o,84s,84o,83s,83o,82s,82o,76s,76o,75s,75o,74s,74o,73s,73o,72s,72o,66:0.166,65s,65o,64s,64o,63s,63o,62s,62o,55,54s,54o,53s,53o,52s,52o,44,43s,43o,42s,42o,33,32s,32o,22
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o,A5s,A5o,A4s,A4o,A3s,A3o:0.72,A2s,KK,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K9o,K8s,K7s:0.998,QQ,QJs,QJo,QTs,QTo,Q9s,JJ,JTs,TT,99,88,77,66,55,44:0.647
+
+scenario: BTN:raise2.3/BB:raise10.35/BTN:call
+name: BTN open 2.3, BB 3-bet 10.35, BTN call
+kind: 3bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 21.2
+effective_stack: 189.65
+frequency: 0.003466
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs:0.355,A5s:0.098,A4s:0.016,A3s:0.258,KK,KQs,KQo:0.906,KJs:0.01,QQ,QJs:0.189,QTs:0.361,Q9s:0.268,JJ,JTs:0.985,JTo:0.058,J9s:0.291,J8s:0.024,TT,T9s:0.032,99,88,77:0.999,66:0.834
+ip_range: AKo:0.181,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A8s:0.998,A7s:0.265,A5s:0.732,A4s:0.168,KQs,KQo:0.697,KJs:0.866,KTs,QJs:0.067,JJ:0.538,TT:0.487,99,88,77,66,55:0.933,44:0.063
+
+scenario: BTN:raise2.3/BB:raise10.35/BTN:raise24.84/BB:call
+name: BTN open 2.3, BB 3-bet 10.35, BTN 4-bet 24.84, BB call
+kind: 4bet
+oop: BB
+ip: BTN
+aggressor: BTN
+pot: 50.18
+effective_stack: 175.16
+frequency: 0.0006862
+oop_range: AKs:0.148,AKo,AQs:0.99,AQo:0.892,AJs:0.736,KK,KQs:0.933,QQ,QJs:0.188,JJ,TT,99:0.995,88:0.865,77:0.886,66:0.834
+ip_range: AA,AKs:0.999,AKo:0.819,KK,QQ,JJ:0.462,TT:0.513
+
+scenario: BTN:raise2.3/SB:call/BB:raise12.65/SB:call
+name: BTN open 2.3, SB call, BB 3-bet 12.65, SB call
+kind: 3bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 27.6
+effective_stack: 187.35
+frequency: 0.0004972
+oop_range: ATs:0.067,ATo:0.966,A9s,A9o:0.052,A8s:0.999,A7s:0.989,A6s:0.842,A5s:0.175,A4s:0.395,A3s:0.013,KQo:0.288,KJs,KTs:0.995,K9s:0.156,QJs,QTs:0.977,Q9s:0.02,JTs:0.999,J9s:0.958,T9s:0.954,99:0.008,98s:0.109,66:0.013,55:0.161,44:0.9,33:0.377
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo:0.999,A9s:0.991,A8s:0.941,A7s:0.731,A5s:0.841,A4s:0.026,A3s:0.13,A2s:0.06,KK,KQs,KQo,KJs,KJo:0.01,KTs:0.115,QQ,QJs:0.988,JJ,TT,99,88,77,66,55,44:0.931,33:0.022
+
+scenario: BTN:raise2.3/SB:call/BB:raise12.65/BTN:call/SB:fold
+name: BTN open 2.3, SB call, BB 3-bet 12.65, BTN call
+kind: 3bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 27.6
+effective_stack: 187.35
+frequency: 0.001278
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo:0.999,A9s:0.991,A8s:0.941,A7s:0.731,A5s:0.841,A4s:0.026,A3s:0.13,A2s:0.06,KK,KQs,KQo,KJs,KJo:0.01,KTs:0.115,QQ,QJs:0.988,JJ,TT,99,88,77,66,55,44:0.931,33:0.022
+ip_range: AKs:0.009,AKo:0.223,AQs,AQo,AJs,AJo,ATs,ATo,A9s:0.999,A8s,A7s:0.997,A6s:0.99,A5s:0.998,A4s:0.085,A3s:0.042,KQs,KQo,KJs,KTs:0.997,K9s:0.07,QJs:0.998,QTs:0.972,JJ:0.006,JTs:0.997,TT:0.338,99:0.908,88,77,66,55,44:0.646
+
+scenario: BTN:raise2.3/SB:call/BB:raise12.65/BTN:raise30.36/BB:call
+name: BTN open 2.3, SB call, BB 3-bet 12.65, BTN 4-bet 30.36, BB call
+kind: 4bet
+oop: BB
+ip: BTN
+aggressor: BTN
+pot: 63.02
+effective_stack: 169.64
+frequency: 0.0003309
+oop_range: AKs:0.055,AKo:0.412,AQs,AQo,AJs:0.998,AJo:0.242,ATs:0.997,A9s:0.99,A8s:0.931,A7s:0.692,A5s:0.417,A4s:0.017,A2s:0.06,KK:0.489,KQs,KQo:0.651,KJs,KTs:0.052,QQ,QJs:0.988,JJ,TT,99,88,77,66:0.999,55:0.997,44:0.931,33:0.022
+ip_range: AA,AKs:0.991,AKo:0.777,KK,QQ,JJ:0.994,TT:0.662,99:0.092
+
+scenario: BTN:raise2.3/SB:raise10.35/BTN:call
+name: BTN open 2.3, SB 3-bet 10.35, BTN call
+kind: 3bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 21.7
+effective_stack: 189.65
+frequency: 0.006031
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs:0.931,ATo:0.034,A5s:0.823,A4s:0.087,A3s:0.039,KK:0.968,KQs,KQo:0.712,QQ,JJ,TT:0.995,99:0.991,88,77,66:0.987,55:0.839,44:0.1,33:0.619,22:0.97
+ip_range: AKo:0.249,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A8s:0.999,A7s:0.997,A5s:0.835,KQs,KQo:0.998,KJs,KTs,K9s:0.081,QJs,QTs,JTs,TT:0.484,99,88,77,66,55,44:0.647
+
+scenario: BTN:raise2.3/SB:raise10.35/BTN:raise24.84/SB:call
+name: BTN open 2.3, SB 3-bet 10.35, BTN 4-bet 24.84, SB call
+kind: 4bet
+oop: SB
+ip: BTN
+aggressor: BTN
+pot: 50.68
+effective_stack: 175.16
+frequency: 0.00118
+oop_range: AKo:0.87,AQs,AQo,AJs:0.996,ATs:0.81,A5s:0.015,KK:0.968,KQs,QQ,JJ,TT:0.995,99:0.991,88,77:0.999,66:0.987,55:0.834,44:0.098,33:0.378,22:0.037
+ip_range: AA,AKs:0.996,AKo:0.751,KK,QQ,JJ:0.999,TT:0.516
+
+scenario: BTN:raise2.3/SB:raise10.35/BB:raise24.84/SB:call
+name: BTN open 2.3, SB 3-bet 10.35, BB 4-bet 24.84, SB call
+kind: 4bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 51.98
+effective_stack: 175.16
+frequency: 0.0004256
+oop_range: AKs:0.01,AKo:0.587,AQs:0.999,AQo,AJs:0.988,AJo:0.832,ATs:0.929,A5s:0.182,A4s:0.054,A3s:0.039,KK:0.617,KQs,KQo:0.711,QQ,JJ,TT:0.995,99:0.991,88,77:0.999,66:0.987,55:0.839,44:0.1,33:0.618,22:0.97
+ip_range: AA,AKs,AKo:0.997,KK,QQ,JJ,TT,99:0.095
+
+scenario: CO:raise2.5/BB:call
+name: CO open 2.5, BB call
+kind: srp
+oop: BB
+ip: CO
+aggressor: CO
+pot: 5.5
+effective_stack: 197.5
+frequency: 0.08581
+oop_range: AJs:0.721,AJo,ATs:0.773,ATo,A9s,A9o,A8s,A8o,A7s:0.998,A7o,A6s:0.999,A6o,A5s:0.54,A5o,A4s:0.939,A4o,A3s:0.91,A3o,A2s:0.998,A2o,KQo:0.98,KJs:0.345,KJo,KTs:0.488,KTo,K9s:0.284,K9o,K8s:0.98,K8o,K7s:0.999,K7o,K6s,K6o,K5s,K5o,K4s,K4o,K3s,K3o,K2s,K2o,QJs:0.601,QJo,QTs:0.422,QTo,Q9s:0.986,Q9o,Q8s:0.998,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o,JTs:0.09,JTo,J9s:0.999,J9o,J8s,J8o,J7s,J7o,J6s,J6o,J5s,J5o,J4s,J4o,J3s,J3o,J2s,J2o,T9s:0.999,T9o,T8s,T8o,T7s,T7o,T6s,T6o,T5s,T5o,T4s,T4o,T3s,T3o,T2s,T2o,98s,98o,97s,97o,96s,96o,95s,95o,94s,94o,93s,93o,92s,92o,88:0.259,87s,87o,86s,86o,85s,85o,84s,84o,83s,83o:0.079,82s,82o:0.16,77,76s,76o,75s,75o,74s,74o,73s,73o,72s,66,65s,65o,64s,64o,63s,63o,62s,62o,55,54s,54o,53s,53o,52s,52o,44,43s,43o,42s,42o,33,32s,32o,22:0.997
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o:0.024,A5s,A4s,A3s,A2s:0.054,KK,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K8s:0.105,QQ,QJs,QJo,QTs,JJ,JTs:0.999,TT,99,88,77,66,55
+
+scenario: CO:raise2.5/BB:raise11.25/CO:call
+name: CO open 2.5, BB 3-bet 11.25, CO call
+kind: 3bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 23
+effective_stack: 188.75
+frequency: 0.002403
+oop_range: AA,AKs,AKo,AQs,AQo,AJs:0.279,ATs:0.227,A5s:0.46,A4s:0.061,A3s:0.09,KK,KQs:0.999,KQo:0.02,KJs:0.655,KTs:0.512,K9s:0.716,K8s:0.02,QQ,QJs:0.399,QTs:0.578,Q9s:0.014,JJ,JTs:0.91,TT,99,88:0.741
+ip_range: AKs:0.125,AKo:0.642,AQs,AQo,AJs:0.999,AJo,ATs,ATo:0.14,A9s:0.973,A8s:0.031,A5s:0.231,KQs,KJs,KTs:0.515,QQ:0.555,JJ:0.451,TT,99,88,77:0.671,66:0.509,55:0.013
+
+scenario: CO:raise2.5/BB:raise11.25/CO:raise27/BB:call
+name: CO open 2.5, BB 3-bet 11.25, CO 4-bet 27, BB call
+kind: 4bet
+oop: BB
+ip: CO
+aggressor: CO
+pot: 54.5
+effective_stack: 173
+frequency: 0.0003455
+oop_range: AKs,AKo,AQs:0.944,KK,QQ,JJ:0.999,TT:0.844,99:0.782,88:0.319
+ip_range: AA,AKs:0.875,AKo:0.358,A5s:0.011,KK,QQ:0.445,JJ:0.549
+
+scenario: CO:raise2.5/SB:call/BB:fold
+name: CO open 2.5, SB call
+kind: srp
+oop: SB
+ip: CO
+aggressor: CO
+pot: 6
+effective_stack: 197.5
+frequency: 0.0024
+oop_range: AJs:0.925,AJo:0.999,ATs:0.612,ATo,A9s,A9o,A8s:0.995,A8o,A7s,A7o,A6s:0.975,A5s:0.467,A5o:0.866,A4s:0.954,A3s:0.836,A2s,KK:0.008,KQs:0.372,KQo:0.682,KJs:0.486,KJo,KTs:0.998,KTo,K9s:0.5,K8s:0.923,K7s:0.956,K6s:0.69,QJs:0.922,QJo,QTs,QTo,Q9s,Q8s:0.996,JTs,JTo,J9s,J8s:0.961,T9s,T8s,98s,77:0.064,66:0.976,55,44,33:0.558
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o:0.024,A5s,A4s,A3s,A2s:0.054,KK,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K8s:0.105,QQ,QJs,QJo,QTs,JJ,JTs:0.999,TT,99,88,77,66,55
+
+scenario: CO:raise2.5/SB:call/BB:raise13.75/SB:call
+name: CO open 2.5, SB call, BB 3-bet 13.75, SB call
+kind: 3bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0002094
+oop_range: AJs:0.915,AJo:0.999,ATs:0.612,A9s:0.951,A8s:0.193,KQs:0.37,KQo:0.12,KJs:0.112,KTs:0.905,QJs:0.114,QTs:0.012,JTs:0.339,T9s:0.474,77:0.064,66:0.975,55:0.998,44:0.069
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo:0.98,ATs:0.026,A8s:0.03,A7s:0.006,A5s:0.219,A4s:0.079,A3s:0.007,A2s:0.066,KK,KQs,KQo:0.595,KJs:0.524,KTs:0.241,QQ,QJs:0.039,QTs:0.058,JJ,TT,99,88,77,66:0.998,55:0.512
+
+scenario: CO:raise2.5/SB:call/BB:raise13.75/CO:call/SB:fold
+name: CO open 2.5, SB call, BB 3-bet 13.75, CO call
+kind: 3bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0007099
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo:0.98,ATs:0.026,A8s:0.03,A7s:0.006,A5s:0.219,A4s:0.079,A3s:0.007,A2s:0.066,KK,KQs,KQo:0.595,KJs:0.524,KTs:0.241,QQ,QJs:0.039,QTs:0.058,JJ,TT,99,88,77,66:0.998,55:0.512
+ip_range: AKs:0.35,AKo:0.471,AQs:0.999,AQo,AJs,AJo:0.999,ATs:0.999,A9s:0.995,A8s:0.562,A7s:0.037,KQs,KQo:0.379,KJs:0.176,KTs:0.99,JJ:0.027,JTs:0.024,TT:0.579,99,88,77,66,55:0.789
+
+scenario: CO:raise2.5/SB:call/BB:raise13.75/CO:raise33/BB:call
+name: CO open 2.5, SB call, BB 3-bet 13.75, CO 4-bet 33, BB call
+kind: 4bet
+oop: BB
+ip: CO
+aggressor: CO
+pot: 68.5
+effective_stack: 167
+frequency: 0.000203
+oop_range: AKs:0.024,AKo:0.85,AQs,AQo:0.976,AJs:0.828,ATs:0.019,KK:0.961,KQs,KJs:0.24,QQ,QJs:0.039,JJ,TT:0.958,99:0.649,88:0.747,77:0.952,66:0.992,55:0.506
+ip_range: AA,AKs:0.65,AKo:0.529,KK,QQ:0.998,JJ:0.973,TT:0.421
+
+scenario: CO:raise2.5/SB:raise11.25/CO:call
+name: CO open 2.5, SB 3-bet 11.25, CO call
+kind: 3bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 23.5
+effective_stack: 188.75
+frequency: 0.003423
+oop_range: AA,AKs,AKo,AQs,AQo,AJs:0.075,ATs:0.388,A8s:0.005,A6s:0.025,A5s:0.533,A4s:0.046,A3s:0.164,KK:0.992,KQs:0.628,KQo:0.318,KJs:0.514,K9s:0.5,K8s:0.077,K7s:0.022,QQ,QJs:0.078,JJ:0.999,TT:0.999,99:0.995,88,77:0.936,66:0.024,33:0.439,22:0.079
+ip_range: AKs:0.014,AKo:0.665,AQs:0.998,AQo,AJs:0.999,AJo,ATs,ATo:0.021,A9s:0.999,A8s:0.011,A5s:0.01,KQs,KJs:0.995,KTs:0.044,QQ:0.365,JJ:0.314,JTs:0.516,TT,99,88,77,66:0.999,55:0.627
+
+scenario: CO:raise2.5/SB:raise11.25/CO:raise27/SB:call
+name: CO open 2.5, SB 3-bet 11.25, CO 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: CO
+aggressor: CO
+pot: 55
+effective_stack: 173
+frequency: 0.0005312
+oop_range: AKs:0.966,AKo,AQs:0.999,AJs:0.073,KK:0.992,QQ,JJ:0.999,TT:0.845,99:0.631,88:0.637,77:0.353,66:0.009
+ip_range: AA,AKs:0.986,AKo:0.335,KK,QQ:0.635,JJ:0.686
+
+scenario: CO:raise2.5/SB:raise11.25/BB:raise27/SB:call
+name: CO open 2.5, SB 3-bet 11.25, BB 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 56.5
+effective_stack: 173
+frequency: 0.0001694
+oop_range: AKs:0.19,AKo:0.96,AQs:0.899,AQo:0.793,ATs:0.178,A6s:0.019,A5s:0.137,A4s:0.024,A3s:0.032,KK:0.95,KQs:0.628,KJs:0.023,QQ,QJs:0.04,JJ:0.999,TT:0.997,99:0.794,88:0.981,77:0.898,66:0.023,33:0.19,22:0.021
+ip_range: AA,AKs:0.997,AKo:0.539,KK,QQ,JJ,TT:0.17
+
+scenario: CO:raise2.5/BTN:call/SB:fold/BB:fold
+name: CO open 2.5, BTN call
+kind: srp
+oop: CO
+ip: BTN
+aggressor: CO
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0001618
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A7o,A6s,A6o:0.024,A5s,A4s,A3s,A2s:0.054,KK,KQs,KQo,KJs,KJo,KTs,KTo,K9s,K8s:0.105,QQ,QJs,QJo,QTs,JJ,JTs:0.999,TT,99,88,77,66,55
+ip_range: ATo:0.817,A9s:0.823,KK:0.05,KQs:0.47,KQo:0.137,KJs:0.998,99:0.493,77:0.43,66:0.029
+
+scenario: CO:raise2.5/BTN:call/BB:raise13.75/BTN:call
+name: CO open 2.5, BTN call, BB 3-bet 13.75, BTN call
+kind: 3bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 4.591e-05
+oop_range: AA,AKs,AKo,AQs:0.983,AQo:0.995,AJs:0.871,AJo:0.108,ATs:0.662,ATo:0.085,A9s:0.236,A9o:0.04,A8s:0.01,A6s:0.007,A4s:0.01,KK,KQs:0.716,KQo:0.648,KJs:0.919,KJo:0.027,KTs:0.067,KTo:0.016,K9s:0.018,QQ,QTs:0.015,JJ:0.999,TT,99:0.999,88:0.993,77:0.216
+ip_range: ATo:0.037,A9s:0.531,KQs:0.47,KJs:0.147,99:0.491,77:0.426,66:0.022
+
+scenario: CO:raise2.5/BTN:call/BB:raise13.75/CO:call/BTN:fold
+name: CO open 2.5, BTN call, BB 3-bet 13.75, CO call
+kind: 3bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 3.111e-05
+oop_range: AA,AKs,AKo,AQs:0.983,AQo:0.995,AJs:0.871,AJo:0.108,ATs:0.662,ATo:0.085,A9s:0.236,A9o:0.04,A8s:0.01,A6s:0.007,A4s:0.01,KK,KQs:0.716,KQo:0.648,KJs:0.919,KJo:0.027,KTs:0.067,KTo:0.016,K9s:0.018,QQ,QTs:0.015,JJ:0.999,TT,99:0.999,88:0.993,77:0.216
+ip_range: AKs:0.061,AKo:0.597,AQs:0.984,AQo:0.954,AJs:0.99,AJo:0.674,ATs:0.427,A9s:0.058,A8s:0.047,A6s:0.016,A4s:0.148,A3s:0.031,KK:0.018,KQs:0.984,KQo:0.007,KTs:0.056,QQ:0.131,QJs:0.177,JJ:0.455,TT:0.91,99:0.998,88:0.984,77:0.191,66:0.072,55:0.141
+
+scenario: CO:raise2.5/BTN:call/BB:raise13.75/CO:raise33/BB:call
+name: CO open 2.5, BTN call, BB 3-bet 13.75, CO 4-bet 33, BB call
+kind: 4bet
+oop: BB
+ip: CO
+aggressor: CO
+pot: 69
+effective_stack: 167
+frequency: 1.256e-05
+oop_range: AKs:0.641,AKo:0.916,AQs:0.96,AQo:0.343,AJs:0.687,ATs:0.228,A9s:0.124,KK:0.844,KQs:0.202,KJs:0.254,KTs:0.026,K9s:0.01,QQ:0.993,QTs:0.015,JJ:0.997,TT:0.843,99:0.977,88:0.876,77:0.213
+ip_range: AA,AKs:0.938,AKo:0.403,AQs:0.008,AQo:0.041,ATs:0.011,A8s:0.008,A5s:0.016,A4s:0.008,KK:0.982,QQ:0.869,JJ:0.545,TT:0.09
+
+scenario: CO:raise2.5/BTN:call/SB:raise13.75/BTN:call
+name: CO open 2.5, BTN call, SB 3-bet 13.75, BTN call
+kind: 3bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 5.402e-05
+oop_range: AA,AKs:0.999,AKo:0.999,AQs:0.998,AQo:0.98,AJs:0.959,AJo:0.587,ATs:0.872,ATo:0.092,A9s:0.274,A8s:0.076,KK:0.837,KQs:0.987,KQo:0.608,KJs:0.615,QQ:0.979,JJ:0.999,TT:0.989,99,88:0.995,77:0.168
+ip_range: ATo:0.008,A9s:0.552,KQs:0.47,KQo:0.032,KJs:0.075,99:0.493,77:0.43,66:0.027
+
+scenario: CO:raise2.5/BTN:call/SB:raise13.75/CO:call/BTN:fold
+name: CO open 2.5, BTN call, SB 3-bet 13.75, CO call
+kind: 3bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 3.672e-05
+oop_range: AA,AKs:0.999,AKo:0.999,AQs:0.998,AQo:0.98,AJs:0.959,AJo:0.587,ATs:0.872,ATo:0.092,A9s:0.274,A8s:0.076,KK:0.837,KQs:0.987,KQo:0.608,KJs:0.615,QQ:0.979,JJ:0.999,TT:0.989,99,88:0.995,77:0.168
+ip_range: AKs:0.035,AKo:0.226,AQs:0.972,AQo:0.999,AJs:0.952,AJo:0.752,ATs:0.782,A9s:0.057,A8s:0.038,A3s:0.006,KK:0.059,KQs:0.908,KJs:0.335,KTs:0.01,QQ:0.346,QJs:0.006,QTs:0.052,JJ:0.493,JTs:0.133,TT:0.998,99:0.995,88:0.995,77:0.828,66:0.069,55:0.034
+
+scenario: CO:raise2.5/BTN:call/SB:raise13.75/CO:raise33/SB:call
+name: CO open 2.5, BTN call, SB 3-bet 13.75, CO 4-bet 33, SB call
+kind: 4bet
+oop: SB
+ip: CO
+aggressor: CO
+pot: 69.5
+effective_stack: 167
+frequency: 1.698e-05
+oop_range: AKs:0.335,AKo:0.97,AQs:0.803,AQo:0.504,AJs:0.869,AJo:0.021,ATs:0.476,ATo:0.012,A9s:0.028,A8s:0.01,KK:0.703,KQs:0.769,KJs:0.27,QQ:0.978,JJ:0.999,TT:0.98,99:0.983,88:0.994,77:0.168
+ip_range: AA,AKs:0.965,AKo:0.773,AQs:0.027,AJs:0.012,A9s:0.009,KK:0.941,QQ:0.654,JJ:0.507
+
+scenario: CO:raise2.5/BTN:raise8.12/CO:call
+name: CO open 2.5, BTN 3-bet 8.12, CO call
+kind: 3bet
+oop: CO
+ip: BTN
+aggressor: BTN
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.006932
+oop_range: AKs:0.08,AKo:0.657,AQs,AQo,AJs,AJo,ATs:0.996,ATo:0.872,A9s,A8s,A7s:0.825,A6s:0.387,A5s,A4s:0.997,A3s,A2s:0.054,KQs,KQo,KJs,KJo:0.854,KTs,KTo:0.998,K9s,K8s:0.105,QJs,QTs,JJ:0.744,JTs:0.999,TT:0.744,99,88,77,66,55
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs:0.997,ATo:0.183,A9s:0.173,KK:0.95,KQs:0.53,KQo:0.043,QQ,JJ,TT:0.996,99:0.507,88:0.997,77:0.57,66:0.014
+
+scenario: CO:raise2.5/BTN:raise8.12/CO:raise19.5/BTN:call
+name: CO open 2.5, BTN 3-bet 8.12, CO 4-bet 19.5, BTN call
+kind: 4bet
+oop: CO
+ip: BTN
+aggressor: CO
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.000625
+oop_range: AA,AKs:0.92,AKo:0.343,KK,QQ,JJ:0.256,TT:0.256
+ip_range: AKs,AKo,AQs,AQo:0.154,AJs:0.732,ATs:0.096,KK:0.95,KQs:0.007,QQ,JJ,TT:0.993,99:0.195,88:0.555,77:0.498,66:0.012
+
+scenario: CO:raise2.5/BTN:raise8.12/BB:raise19.5/BTN:call
+name: CO open 2.5, BTN 3-bet 8.12, BB 4-bet 19.5, BTN call
+kind: 4bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 0.0002041
+oop_range: AA,AKs,AKo,KK,QQ,JJ,TT:0.05
+ip_range: AKs:0.056,AKo:0.939,AQs:0.953,AQo:0.996,AJs:0.901,ATs:0.355,A9s:0.019,KK:0.95,KQs:0.53,QQ,JJ,TT:0.996,99:0.507,88:0.997,77:0.57,66:0.014
+
+scenario: CO:raise2.5/BTN:raise8.12/SB:raise19.5/BTN:call
+name: CO open 2.5, BTN 3-bet 8.12, SB 4-bet 19.5, BTN call
+kind: 4bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 0.0002123
+oop_range: AA,AKs:0.999,AKo,KK,QQ,JJ:0.998,TT:0.105
+ip_range: AKs:0.439,AKo:0.989,AQs:0.926,AQo:0.995,AJs:0.711,ATs:0.193,A9s:0.121,KK:0.95,KQs:0.53,QQ,JJ,TT:0.996,99:0.507,88:0.997,77:0.57,66:0.013
+
+scenario: HJ:raise2.5/BB:call
+name: HJ open 2.5, BB call
+kind: srp
+oop: BB
+ip: HJ
+aggressor: HJ
+pot: 5.5
+effective_stack: 197.5
+frequency: 0.08027
+oop_range: AQo:0.194,AJs:0.899,AJo,ATs:0.995,ATo,A9s:0.999,A9o,A8s:0.993,A8o,A7s:0.876,A7o,A6s:0.999,A6o,A5s:0.905,A5o,A4s:0.569,A4o,A3s:0.99,A3o,A2s,A2o,KQo:0.938,KJs:0.442,KJo,KTs:0.021,KTo,K9s:0.569,K9o,K8s:0.998,K8o,K7s:0.997,K7o,K6s,K6o,K5s,K5o,K4s:0.999,K4o,K3s,K3o,K2s,K2o,QJs:0.29,QJo,QTs:0.813,QTo,Q9s:0.999,Q9o,Q8s:0.999,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o,JTs,JTo,J9s,J9o,J8s,J8o,J7s,J7o,J6s,J6o,J5s,J5o,J4s,J4o,J3s,J3o,J2s,J2o,T9s,T9o,T8s,T8o,T7s,T7o,T6s,T6o,T5s,T5o,T4s,T4o,T3s,T3o,T2s,T2o:0.992,98s,98o,97s,97o,96s,96o,95s,95o,94s,94o:0.972,93s,93o:0.991,92s,88:0.996,87s,87o,86s,86o,85s,85o,84s,84o,83s,82s,77,76s,76o,75s,75o,74s,74o,73s,73o,72s,66,65s,65o,64s,64o,63s,63o,62s,55,54s,54o,53s,53o,52s,52o,44,43s,43o,42s,42o,33,32s,32o:0.801,22
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A6s:0.985,A5s,KK,KQs,KQo,KJs,KJo,KTs,KTo:0.453,K9s,QQ,QJs,QTs,JJ,TT,99,88,77,66,55:0.517
+
+scenario: HJ:raise2.5/BB:raise11.25/HJ:call
+name: HJ open 2.5, BB 3-bet 11.25, HJ call
+kind: 3bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 23
+effective_stack: 188.75
+frequency: 0.00211
+oop_range: AA,AKs,AKo,AQs,AQo:0.806,AJs:0.101,ATs:0.005,A8s:0.007,A7s:0.124,A5s:0.095,A4s:0.431,A3s:0.01,KK,KQs:0.999,KQo:0.062,KJs:0.558,KTs:0.979,K9s:0.431,QQ,QJs:0.71,QTs:0.187,JJ,TT,99
+ip_range: AKs:0.02,AKo:0.822,AQs,AQo,AJs:0.994,AJo:0.322,ATs,A5s:0.013,KQs,KJs:0.861,QQ:0.543,JJ:0.995,TT,99,88,77:0.992,66:0.16,55:0.02
+
+scenario: HJ:raise2.5/BB:raise11.25/HJ:raise27/BB:call
+name: HJ open 2.5, BB 3-bet 11.25, HJ 4-bet 27, BB call
+kind: 4bet
+oop: BB
+ip: HJ
+aggressor: HJ
+pot: 54.5
+effective_stack: 173
+frequency: 0.0002862
+oop_range: AKs,AKo,AQs:0.481,KK,QQ,JJ:0.837,TT:0.997,99:0.379
+ip_range: AA,AKs:0.98,AKo:0.178,AJs:0.006,A7s:0.011,A6s:0.007,A5s:0.076,KK,QQ:0.457
+
+scenario: HJ:raise2.5/SB:call/BB:fold
+name: HJ open 2.5, SB call
+kind: srp
+oop: SB
+ip: HJ
+aggressor: HJ
+pot: 6
+effective_stack: 197.5
+frequency: 0.0027
+oop_range: AJs:0.998,AJo,ATs,ATo,A9s,A9o,A8s:0.995,A8o,A7s:0.829,A7o:0.008,A6s,A5s:0.752,A4s:0.378,A3s:0.993,A2s:0.885,KQs:0.341,KQo:0.644,KJs:0.655,KJo:0.997,KTs:0.358,KTo,K9s:0.939,K8s:0.988,K7s:0.845,QJs:0.966,QJo,QTs,QTo,Q9s,Q8s:0.926,JJ:0.007,JTs,JTo:0.998,J9s,J8s:0.899,T9s,T8s:0.999,98s,88:0.007,87s:0.007,77:0.991,66,55,44,33:0.999
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A6s:0.985,A5s,KK,KQs,KQo,KJs,KJo,KTs,KTo:0.453,K9s,QQ,QJs,QTs,JJ,TT,99,88,77,66,55:0.517
+
+scenario: HJ:raise2.5/SB:call/BB:raise13.75/SB:call
+name: HJ open 2.5, SB call, BB 3-bet 13.75, SB call
+kind: 3bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0001073
+oop_range: AJs:0.998,AJo:0.553,ATs:0.99,A9s:0.418,KQs:0.34,KJs:0.63,KTs:0.014,JJ:0.007,JTs:0.08,88:0.007,77:0.991,66:0.498,55:0.143
+ip_range: AA,AKs,AKo,AQs,AQo,AJs:0.957,ATs:0.125,A8s:0.118,A7s:0.058,A6s:0.033,A5s:0.221,A4s:0.073,A3s:0.01,A2s:0.12,KK,KQs:0.988,KQo:0.298,KJs:0.314,KTs:0.022,QQ,QJs:0.446,QTs:0.269,JJ,TT,99,88,77,66:0.281
+
+scenario: HJ:raise2.5/SB:call/BB:raise13.75/HJ:call/SB:fold
+name: HJ open 2.5, SB call, BB 3-bet 13.75, HJ call
+kind: 3bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0005316
+oop_range: AA,AKs,AKo,AQs,AQo,AJs:0.957,ATs:0.125,A8s:0.118,A7s:0.058,A6s:0.033,A5s:0.221,A4s:0.073,A3s:0.01,A2s:0.12,KK,KQs:0.988,KQo:0.298,KJs:0.314,KTs:0.022,QQ,QJs:0.446,QTs:0.269,JJ,TT,99,88,77,66:0.281
+ip_range: AKs:0.365,AKo:0.538,AQs,AQo,AJs:0.999,AJo:0.476,ATs:0.999,A9s:0.267,A8s:0.017,KQs,KJs:0.48,QJs:0.011,JJ:0.319,TT:0.994,99:0.999,88,77,66:0.861,55:0.022
+
+scenario: HJ:raise2.5/SB:call/BB:raise13.75/HJ:raise33/BB:call
+name: HJ open 2.5, SB call, BB 3-bet 13.75, HJ 4-bet 33, BB call
+kind: 4bet
+oop: BB
+ip: HJ
+aggressor: HJ
+pot: 68.5
+effective_stack: 167
+frequency: 0.0001328
+oop_range: AKs:0.074,AKo:0.996,AQs:0.996,AQo:0.038,AJs:0.951,KK,KQs:0.41,QQ,QTs:0.031,JJ,TT:0.681,99:0.469,88:0.798,77:0.974,66:0.28
+ip_range: AA,AKs:0.635,AKo:0.462,KK,QQ,JJ:0.681,TT:0.006
+
+scenario: HJ:raise2.5/SB:raise11.25/HJ:call
+name: HJ open 2.5, SB 3-bet 11.25, HJ call
+kind: 3bet
+oop: SB
+ip: HJ
+aggressor: SB
+pot: 23.5
+effective_stack: 188.75
+frequency: 0.002847
+oop_range: AA,AKs,AKo,AQs,AQo,A7s:0.171,A5s:0.248,A4s:0.622,A3s:0.007,A2s:0.114,KK:0.999,KQs:0.659,KQo:0.356,KJs:0.345,KTs:0.642,K9s:0.06,QQ,QJs:0.034,JJ:0.993,TT,99,88:0.993,77:0.009
+ip_range: AKs:0.045,AKo:0.733,AQs,AQo,AJs,AJo:0.07,ATs,A9s:0.076,KQs,KJs:0.27,QQ:0.363,JJ:0.777,TT,99,88,77:0.999,66:0.958,55:0.427
+
+scenario: HJ:raise2.5/SB:raise11.25/HJ:raise27/SB:call
+name: HJ open 2.5, SB 3-bet 11.25, HJ 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: HJ
+aggressor: HJ
+pot: 55
+effective_stack: 173
+frequency: 0.000472
+oop_range: AKs,AKo,AQs:0.999,KK:0.999,QQ,JJ:0.993,TT:0.722,99:0.622,88:0.373,77:0.009
+ip_range: AA,AKs:0.955,AKo:0.267,KK,QQ:0.637,JJ:0.223
+
+scenario: HJ:raise2.5/SB:raise11.25/BB:raise27/SB:call
+name: HJ open 2.5, SB 3-bet 11.25, BB 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 56.5
+effective_stack: 173
+frequency: 0.0001084
+oop_range: AKs:0.069,AKo:0.979,AQs:0.949,AQo:0.19,A7s:0.051,A5s:0.033,A4s:0.246,A2s:0.036,KK:0.987,KQs:0.555,QQ,JJ:0.993,TT:0.886,99:0.894,88:0.866,77:0.009
+ip_range: AA,AKs:0.979,AKo:0.333,KK,QQ,JJ:0.876
+
+scenario: HJ:raise2.5/BTN:call/SB:fold/BB:fold
+name: HJ open 2.5, BTN call
+kind: srp
+oop: HJ
+ip: BTN
+aggressor: HJ
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0001048
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A6s:0.985,A5s,KK,KQs,KQo,KJs,KJo,KTs,KTo:0.453,K9s,QQ,QJs,QTs,JJ,TT,99,88,77,66,55:0.517
+ip_range: AJo:0.409,ATs:0.307,ATo:0.401,KK:0.014,KQs:0.367,KJs:0.51,TT:0.013,99:0.033,88:0.245,77:0.685
+
+scenario: HJ:raise2.5/BTN:call/BB:raise13.75/BTN:call
+name: HJ open 2.5, BTN call, BB 3-bet 13.75, BTN call
+kind: 3bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 2.356e-05
+oop_range: AA,AKs,AKo,AQs:0.874,AQo:0.918,AJs:0.334,ATs:0.016,A9s:0.129,A7s:0.187,A5s:0.036,KK,KQs:0.837,KQo:0.678,KJs:0.242,KJo:0.028,QQ,QJs:0.012,JJ,JTs:0.019,TT:0.999,99:0.996,88:0.999
+ip_range: AJo:0.02,ATs:0.264,KQs:0.365,TT:0.013,99:0.032,88:0.245,77:0.534
+
+scenario: HJ:raise2.5/BTN:call/BB:raise13.75/HJ:call/BTN:fold
+name: HJ open 2.5, BTN call, BB 3-bet 13.75, HJ call
+kind: 3bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 2.744e-05
+oop_range: AA,AKs,AKo,AQs:0.874,AQo:0.918,AJs:0.334,ATs:0.016,A9s:0.129,A7s:0.187,A5s:0.036,KK,KQs:0.837,KQo:0.678,KJs:0.242,KJo:0.028,QQ,QJs:0.012,JJ,JTs:0.019,TT:0.999,99:0.996,88:0.999
+ip_range: AKs:0.33,AKo:0.639,AQs:0.993,AQo:0.986,AJs:0.944,AJo:0.207,ATs:0.65,A9s:0.136,A8s:0.025,A5s:0.007,KK:0.021,KQs:0.563,KQo:0.014,KJs:0.179,QQ:0.119,JJ:0.369,TT:0.999,99:0.997,88:0.955,77:0.528,66:0.389,55:0.084
+
+scenario: HJ:raise2.5/BTN:call/SB:raise13.75/BTN:call
+name: HJ open 2.5, BTN call, SB 3-bet 13.75, BTN call
+kind: 3bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 3.612e-05
+oop_range: AA,AKs:0.988,AKo,AQs:0.942,AQo:0.935,AJs:0.176,ATs:0.04,A9s:0.22,A7s:0.021,KK:0.934,KQs:0.784,KQo:0.617,KJs:0.189,KJo:0.022,QQ:0.999,QJs:0.065,JJ:0.999,TT,99,88:0.986,77:0.04
+ip_range: AJo:0.017,ATs:0.305,KQs:0.359,KJs:0.262,TT:0.013,99:0.033,88:0.245,77:0.669
+
+scenario: HJ:raise2.5/BTN:call/SB:raise13.75/HJ:call/BTN:fold
+name: HJ open 2.5, BTN call, SB 3-bet 13.75, HJ call
+kind: 3bet
+oop: SB
+ip: HJ
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 2.89e-05
+oop_range: AA,AKs:0.988,AKo,AQs:0.942,AQo:0.935,AJs:0.176,ATs:0.04,A9s:0.22,A7s:0.021,KK:0.934,KQs:0.784,KQo:0.617,KJs:0.189,KJo:0.022,QQ:0.999,QJs:0.065,JJ:0.999,TT,99,88:0.986,77:0.04
+ip_range: AKs:0.463,AKo:0.742,AQs:0.989,AQo:0.993,AJs:0.83,ATs:0.016,A8s:0.024,A7s:0.019,A5s:0.165,KQs:0.94,KQo:0.201,KJs:0.204,QQ:0.146,JJ:0.766,TT:0.998,99:0.992,88:0.95,77:0.033,66:0.702,55:0.018
+
+scenario: HJ:raise2.5/BTN:raise8.12/HJ:call
+name: HJ open 2.5, BTN 3-bet 8.12, HJ call
+kind: 3bet
+oop: HJ
+ip: BTN
+aggressor: BTN
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.005565
+oop_range: AKs:0.008,AKo:0.876,AQs,AQo,AJs,AJo,ATs:0.919,A9s:0.999,A8s:0.805,A7s:0.624,A6s:0.019,A5s:0.918,KQs,KQo,KJs,KJo:0.369,KTs,KTo:0.314,K9s,QQ:0.422,QJs,QTs,JJ:0.718,TT,99,88,77,66,55:0.517
+ip_range: AA:0.997,AKs,AKo,AQs,AQo,AJs:0.998,AJo:0.591,ATs:0.693,KK:0.986,KQs:0.633,QQ,JJ:0.999,TT:0.987,99:0.967,88:0.755,77:0.315
+
+scenario: HJ:raise2.5/BTN:raise8.12/HJ:raise19.5/BTN:call
+name: HJ open 2.5, BTN 3-bet 8.12, HJ 4-bet 19.5, BTN call
+kind: 4bet
+oop: HJ
+ip: BTN
+aggressor: HJ
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.0005028
+oop_range: AA,AKs:0.992,AKo:0.124,ATs:0.081,A5s:0.081,KK,QQ:0.578,JJ:0.282
+ip_range: AKs,AKo,AQs:0.996,AJs:0.424,ATs:0.053,KK:0.986,QQ,JJ:0.99,TT:0.9,99:0.572,88:0.113,77:0.204
+
+scenario: HJ:raise2.5/BTN:raise8.12/BB:raise19.5/BTN:call
+name: HJ open 2.5, BTN 3-bet 8.12, BB 4-bet 19.5, BTN call
+kind: 4bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 0.0001646
+oop_range: AA,AKs:0.999,AKo:0.722,KK,QQ,JJ:0.93
+ip_range: AKs:0.508,AKo:0.991,AQs:0.782,AQo:0.995,AJs:0.727,ATs:0.012,KK:0.985,KQs:0.633,QQ,JJ:0.999,TT:0.985,99:0.967,88:0.717,77:0.301
+
+scenario: HJ:raise2.5/BTN:raise8.12/SB:raise19.5/BTN:call
+name: HJ open 2.5, BTN 3-bet 8.12, SB 4-bet 19.5, BTN call
+kind: 4bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 0.0001563
+oop_range: AA,AKs:0.976,AKo:0.65,KK,QQ,JJ:0.776,TT:0.019
+ip_range: AKs:0.49,AKo,AQs:0.789,AQo:0.873,AJs:0.899,KK:0.985,KQs:0.63,QQ,JJ:0.999,TT:0.925,99:0.905,88:0.755,77:0.236
+
+scenario: HJ:raise2.5/CO:call/BTN:fold/SB:fold/BB:fold
+name: HJ open 2.5, CO call
+kind: srp
+oop: HJ
+ip: CO
+aggressor: HJ
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0001465
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o,A7s,A6s:0.985,A5s,KK,KQs,KQo,KJs,KJo,KTs,KTo:0.453,K9s,QQ,QJs,QTs,JJ,TT,99,88,77,66,55:0.517
+ip_range: AA:0.008,AJs:0.025,AJo:0.588,ATs:0.454,KK:0.026,KQs:0.217,TT:0.315,99:0.07,88:0.049,77:0.255
+
+scenario: HJ:raise2.5/CO:call/BB:raise13.75/CO:call
+name: HJ open 2.5, CO call, BB 3-bet 13.75, CO call
+kind: 3bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 2.267e-05
+oop_range: AA,AKs:0.997,AKo,AQs:0.839,AQo:0.957,AJs:0.292,AJo:0.058,ATs:0.083,ATo:0.011,A9s:0.053,A4s:0.008,A3s:0.005,A2s:0.017,KK,KQs:0.947,KQo:0.305,KJs:0.263,KJo:0.08,KTs:0.334,KTo:0.145,QQ,QJs:0.249,QTs:0.037,QTo:0.013,JJ,TT:0.998,T9s:0.017,99:0.986,88:0.372
+ip_range: AJs:0.025,AJo:0.054,ATs:0.24,KQs:0.112,TT:0.315,99:0.07,88:0.04,77:0.246
+
+scenario: HJ:raise2.5/CO:call/BB:raise13.75/HJ:call/CO:fold
+name: HJ open 2.5, CO call, BB 3-bet 13.75, HJ call
+kind: 3bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 1.351e-05
+oop_range: AA,AKs:0.997,AKo,AQs:0.839,AQo:0.957,AJs:0.292,AJo:0.058,ATs:0.083,ATo:0.011,A9s:0.053,A4s:0.008,A3s:0.005,A2s:0.017,KK,KQs:0.947,KQo:0.305,KJs:0.263,KJo:0.08,KTs:0.334,KTo:0.145,QQ,QJs:0.249,QTs:0.037,QTo:0.013,JJ,TT:0.998,T9s:0.017,99:0.986,88:0.372
+ip_range: AKs:0.708,AKo:0.661,AQs:0.984,AQo:0.816,AJs:0.587,ATs:0.183,A9s:0.009,KK:0.017,KQs:0.238,KJs:0.102,QQ:0.487,JJ:0.849,TT:0.994,99:0.778,66:0.018
+
+scenario: HJ:raise2.5/CO:call/SB:raise13.75/CO:call
+name: HJ open 2.5, CO call, SB 3-bet 13.75, CO call
+kind: 3bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 2.615e-05
+oop_range: AA,AKs:0.876,AKo:0.999,AQs:0.808,AQo:0.968,AJs:0.017,AJo:0.173,ATs:0.157,A8s:0.014,A5s:0.026,A3s:0.111,KK,KQs:0.732,KQo:0.34,KJs:0.06,KTs:0.481,K9s:0.012,QQ:0.992,QJs:0.114,QTs:0.007,JJ:0.968,TT:0.998,99:0.972,88:0.725,77:0.021,44:0.008
+ip_range: AJs:0.025,AJo:0.017,ATs:0.353,KQs:0.217,TT:0.305,99:0.07,88:0.049,77:0.227
+
+scenario: HJ:raise2.5/CO:call/SB:raise13.75/HJ:call/CO:fold
+name: HJ open 2.5, CO call, SB 3-bet 13.75, HJ call
+kind: 3bet
+oop: SB
+ip: HJ
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 1.715e-05
+oop_range: AA,AKs:0.876,AKo:0.999,AQs:0.808,AQo:0.968,AJs:0.017,AJo:0.173,ATs:0.157,A8s:0.014,A5s:0.026,A3s:0.111,KK,KQs:0.732,KQo:0.34,KJs:0.06,KTs:0.481,K9s:0.012,QQ:0.992,QJs:0.114,QTs:0.007,JJ:0.968,TT:0.998,99:0.972,88:0.725,77:0.021,44:0.008
+ip_range: AKs:0.826,AKo:0.543,AQs:0.924,AQo:0.988,AJs:0.502,ATs:0.084,KK:0.027,KQs:0.467,KJs:0.276,QQ:0.771,JJ:0.964,TT:0.845,99:0.918,88:0.128,77:0.005,55:0.009
+
+scenario: HJ:raise2.5/CO:call/BTN:raise10.62/CO:call
+name: HJ open 2.5, CO call, BTN 3-bet 10.62, CO call
+kind: 3bet
+oop: CO
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 2.194e-05
+oop_range: AJs:0.025,AJo:0.089,ATs:0.407,KQs:0.216,TT:0.315,99:0.064,88:0.049,77:0.255
+ip_range: AA:0.996,AKs:0.857,AKo:0.977,AQs:0.762,AQo:0.745,AJs:0.646,ATo:0.033,A4s:0.023,KK:0.905,KQs:0.114,KQo:0.227,KJs:0.124,KTs:0.139,QQ:0.744,JJ:0.995,TT:0.961,99:0.815,88:0.555,77:0.013
+
+scenario: HJ:raise2.5/CO:call/BTN:raise10.62/HJ:call/CO:fold
+name: HJ open 2.5, CO call, BTN 3-bet 10.62, HJ call
+kind: 3bet
+oop: HJ
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 1.72e-05
+oop_range: AA:0.012,AKs:0.367,AKo:0.583,AQs:0.863,AQo:0.965,AJs:0.837,ATs:0.597,A9s:0.103,A5s:0.013,KK:0.114,KQs:0.986,KQo:0.524,KJs:0.19,KTs:0.698,KTo:0.054,K9s:0.014,QQ:0.925,QJs:0.735,QTs:0.769,JJ:0.94,TT:0.973,99:0.993,88:0.975,77:0.37,66:0.33,55:0.259
+ip_range: AA:0.996,AKs:0.857,AKo:0.977,AQs:0.762,AQo:0.745,AJs:0.646,ATo:0.033,A4s:0.023,KK:0.905,KQs:0.114,KQo:0.227,KJs:0.124,KTs:0.139,QQ:0.744,JJ:0.995,TT:0.961,99:0.815,88:0.555,77:0.013
+
+scenario: HJ:raise2.5/CO:raise8.12/HJ:call
+name: HJ open 2.5, CO 3-bet 8.12, HJ call
+kind: 3bet
+oop: HJ
+ip: CO
+aggressor: CO
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.005301
+oop_range: AKo:0.825,AQs,AQo,AJs,AJo,ATs,A9s,A8s:0.737,A7s:0.4,A6s:0.032,A5s:0.992,KQs,KQo:0.997,KJs,KJo:0.132,KTs,KTo:0.024,K9s,QQ:0.312,QJs,QTs,JJ:0.825,TT,99,88,77,66,55:0.517
+ip_range: AA:0.992,AKs,AKo,AQs,AQo,AJs:0.975,AJo:0.412,ATs:0.546,KK:0.974,KQs:0.783,QQ:0.999,JJ:0.997,TT:0.685,99:0.93,88:0.951,77:0.067
+
+scenario: HJ:raise2.5/CO:raise8.12/HJ:raise19.5/CO:call
+name: HJ open 2.5, CO 3-bet 8.12, HJ 4-bet 19.5, CO call
+kind: 4bet
+oop: HJ
+ip: CO
+aggressor: HJ
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.0005114
+oop_range: AA,AKs:0.996,AKo:0.175,A5s:0.008,KK,QQ:0.688,JJ:0.175
+ip_range: AKs,AKo,AQs:0.883,AQo:0.006,AJs:0.45,KK:0.974,QQ:0.999,JJ:0.993,TT:0.649,99:0.135,88:0.684,77:0.065
+
+scenario: HJ:raise2.5/CO:raise8.12/BB:raise19.5/CO:call
+name: HJ open 2.5, CO 3-bet 8.12, BB 4-bet 19.5, CO call
+kind: 4bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 0.0001689
+oop_range: AA,AKs:0.999,AKo:0.611,KK,QQ,JJ:0.999
+ip_range: AKs:0.832,AKo:0.996,AQs:0.857,AQo:0.994,AJs:0.437,ATs:0.143,KK:0.974,KQs:0.782,QQ:0.999,JJ:0.997,TT:0.653,99:0.93,88:0.76,77:0.067
+
+scenario: HJ:raise2.5/CO:raise8.12/SB:raise19.5/CO:call
+name: HJ open 2.5, CO 3-bet 8.12, SB 4-bet 19.5, CO call
+kind: 4bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 0.0001538
+oop_range: AA,AKs:0.958,AKo:0.619,KK,QQ,JJ:0.825
+ip_range: AKs:0.357,AKo,AQs:0.644,AQo:0.716,AJs:0.766,ATs:0.007,KK:0.974,KQs:0.783,QQ:0.999,JJ:0.997,TT:0.573,99:0.887,88:0.948,77:0.067
+
+scenario: HJ:raise2.5/CO:raise8.12/BTN:raise19.5/CO:call
+name: HJ open 2.5, CO 3-bet 8.12, BTN 4-bet 19.5, CO call
+kind: 4bet
+oop: CO
+ip: BTN
+aggressor: BTN
+pot: 43
+effective_stack: 180.5
+frequency: 0.0001218
+oop_range: AKs:0.581,AKo,AQs,AQo:0.536,AJs:0.278,ATs:0.102,KK:0.974,KQs:0.645,QQ:0.999,JJ:0.997,TT:0.558,99:0.798,88:0.931,77:0.061
+ip_range: AA,AKs:0.943,AKo:0.15,KK,QQ,JJ:0.668
+
+scenario: UTG:raise2.5/BB:call
+name: UTG open 2.5, BB call
+kind: srp
+oop: BB
+ip: UTG
+aggressor: UTG
+pot: 5.5
+effective_stack: 197.5
+frequency: 0.07495
+oop_range: AQs:0.147,AQo:0.997,AJs,AJo,ATs,ATo,A9s,A9o,A8s:0.998,A8o,A7s,A7o,A6s,A6o,A5s:0.81,A5o,A4s:0.951,A4o,A3s,A3o,A2s:0.992,A2o,KQs:0.984,KQo:0.999,KJs:0.549,KJo,KTo:0.995,K9s:0.717,K9o,K8s,K8o,K7s:0.876,K7o,K6s:0.95,K6o,K5s:0.489,K5o,K4s:0.586,K4o,K3s:0.764,K3o,K2s:0.944,K2o,QJs:0.999,QJo,QTs,QTo,Q9s,Q9o,Q8s,Q8o,Q7s,Q7o,Q6s,Q6o,Q5s,Q5o,Q4s,Q4o,Q3s,Q3o,Q2s,Q2o,JTs,JTo,J9s,J9o,J8s,J8o,J7s,J7o,J6s,J6o,J5s,J5o,J4s,J4o,J3s,J3o,J2s,J2o:0.705,TT:0.085,T9s,T9o,T8s,T8o,T7s,T7o,T6s,T6o,T5s,T5o,T4s,T4o,T3s,T3o:0.293,T2s,99:0.999,98s,98o,97s,97o,96s,96o,95s,95o,94s,93s,92s,88,87s,87o,86s,86o,85s,85o,84s,84o,83s,82s,77,76s,76o,75s,75o,74s,74o,73s,72s,66,65s,65o,64s,64o,63s,63o,62s,55,54s,54o,53s,53o,52s,52o,44,43s,43o,42s,42o:0.993,33,32s,22
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.077,A7s,A5s:0.671,KK,KQs,KQo,KJs,KJo,KTs,QQ,QJs,QTs:0.397,JJ,TT,99,88,77,66
+
+scenario: UTG:raise2.5/BB:raise11.25/UTG:call
+name: UTG open 2.5, BB 3-bet 11.25, UTG call
+kind: 3bet
+oop: BB
+ip: UTG
+aggressor: BB
+pot: 23
+effective_stack: 188.75
+frequency: 0.001416
+oop_range: AA,AKs,AKo,AQs:0.853,A5s:0.19,A4s:0.049,A2s:0.008,KK,KQs:0.016,KJs:0.451,KTs:0.997,KTo:0.005,K9s:0.283,K7s:0.124,K6s:0.05,K5s:0.511,K4s:0.414,K3s:0.236,K2s:0.056,QQ,JJ,TT:0.915
+ip_range: AKs:0.093,AKo:0.853,AQs,AQo,AJs,ATs,A5s:0.276,KQs:0.998,KJs:0.016,QQ:0.659,JJ,TT,99:0.83,88:0.28,77:0.118,66:0.137
+
+scenario: UTG:raise2.5/BB:raise11.25/UTG:raise27/BB:call
+name: UTG open 2.5, BB 3-bet 11.25, UTG 4-bet 27, BB call
+kind: 4bet
+oop: BB
+ip: UTG
+aggressor: UTG
+pot: 54.5
+effective_stack: 173
+frequency: 0.0002439
+oop_range: AKs,AKo,KK,QQ:0.999,JJ:0.689,TT:0.557
+ip_range: AA,AKs:0.907,AKo:0.147,KK,QQ:0.341
+
+scenario: UTG:raise2.5/SB:call/BB:fold
+name: UTG open 2.5, SB call
+kind: srp
+oop: SB
+ip: UTG
+aggressor: UTG
+pot: 6
+effective_stack: 197.5
+frequency: 0.002941
+oop_range: AQs:0.6,AQo:0.13,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.862,A7s:0.998,A6s:0.999,A5s:0.989,A4s:0.681,A3s:0.999,A2s:0.738,KQs:0.707,KQo:0.997,KJs:0.609,KJo:0.999,KTo:0.557,K9s:0.582,K8s:0.948,QJs,QJo,QTs,QTo:0.025,Q9s,Q8s:0.857,JTs,J9s,J8s:0.115,T9s,T8s:0.999,99:0.174,98s:0.999,88:0.999,77,66,55,44,33
+ip_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.077,A7s,A5s:0.671,KK,KQs,KQo,KJs,KJo,KTs,QQ,QJs,QTs:0.397,JJ,TT,99,88,77,66
+
+scenario: UTG:raise2.5/SB:call/BB:raise13.75/SB:call
+name: UTG open 2.5, SB call, BB 3-bet 13.75, SB call
+kind: 3bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0001082
+oop_range: AQs:0.6,AQo:0.13,AJs:0.997,ATs:0.99,A9s:0.074,KQs:0.678,KJs:0.01,99:0.174,88:0.999,77:0.899,66:0.927,55:0.392,44:0.036,33:0.006
+ip_range: AA,AKs,AKo,AQs:0.999,AQo:0.997,AJs:0.009,A8s:0.213,A5s:0.479,A4s:0.089,A3s:0.011,KK,KQs:0.926,KQo:0.052,KJs:0.944,KTs:0.286,QQ,QJs:0.135,JJ,TT,99,88,77:0.176,66:0.006
+
+scenario: UTG:raise2.5/SB:call/BB:raise13.75/UTG:call/SB:fold
+name: UTG open 2.5, SB call, BB 3-bet 13.75, UTG call
+kind: 3bet
+oop: BB
+ip: UTG
+aggressor: BB
+pot: 30
+effective_stack: 186.25
+frequency: 0.0003604
+oop_range: AA,AKs,AKo,AQs:0.999,AQo:0.997,AJs:0.009,A8s:0.213,A5s:0.479,A4s:0.089,A3s:0.011,KK,KQs:0.926,KQo:0.052,KJs:0.944,KTs:0.286,QQ,QJs:0.135,JJ,TT,99,88,77:0.176,66:0.006
+ip_range: AKs:0.124,AKo:0.732,AQs,AQo,AJs,ATs:0.871,KQs:0.955,KJs:0.037,QQ:0.118,JJ:0.655,TT:0.997,99,88,77:0.054,66:0.061
+
+scenario: UTG:raise2.5/SB:call/BB:raise13.75/UTG:raise33/BB:call
+name: UTG open 2.5, SB call, BB 3-bet 13.75, UTG 4-bet 33, BB call
+kind: 4bet
+oop: BB
+ip: UTG
+aggressor: UTG
+pot: 68.5
+effective_stack: 167
+frequency: 9.406e-05
+oop_range: AKs:0.951,AKo,AQs:0.925,AQo:0.011,KK,QQ,JJ:0.956,TT:0.669,99:0.8,88:0.393,77:0.082
+ip_range: AA,AKs:0.876,AKo:0.268,KK,QQ:0.882,JJ:0.345
+
+scenario: UTG:raise2.5/SB:raise11.25/UTG:call
+name: UTG open 2.5, SB 3-bet 11.25, UTG call
+kind: 3bet
+oop: SB
+ip: UTG
+aggressor: SB
+pot: 23.5
+effective_stack: 188.75
+frequency: 0.002349
+oop_range: AA,AKs,AKo,AQs:0.4,AQo:0.87,A5s:0.011,A4s:0.319,A2s:0.249,KK,KQs:0.293,KJs:0.391,KTs:0.998,K9s:0.418,K8s:0.011,QQ,JJ:0.999,TT,99:0.826
+ip_range: AKs:0.038,AKo:0.875,AQs,AQo,AJs,ATs:0.836,KQs:0.478,KJs:0.123,QQ:0.703,JJ:0.998,TT,99,88:0.994,77:0.573,66:0.585
+
+scenario: UTG:raise2.5/SB:raise11.25/UTG:raise27/SB:call
+name: UTG open 2.5, SB 3-bet 11.25, UTG 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: UTG
+aggressor: UTG
+pot: 55
+effective_stack: 173
+frequency: 0.0003346
+oop_range: AKs,AKo,KK,QQ,JJ:0.75,TT:0.94,99:0.199
+ip_range: AA,AKs:0.962,AKo:0.125,KK,QQ:0.297
+
+scenario: UTG:raise2.5/SB:raise11.25/BB:raise27/SB:call
+name: UTG open 2.5, SB 3-bet 11.25, BB 4-bet 27, SB call
+kind: 4bet
+oop: SB
+ip: BB
+aggressor: BB
+pot: 56.5
+effective_stack: 173
+frequency: 5.213e-05
+oop_range: AKs:0.795,AKo,AQs:0.05,KK:0.999,QQ,JJ:0.315,TT:0.757,99:0.741
+ip_range: AA,AKs:0.907,AKo:0.134,KK,QQ,JJ:0.015
+
+scenario: UTG:raise2.5/BTN:call/SB:fold/BB:fold
+name: UTG open 2.5, BTN call
+kind: srp
+oop: UTG
+ip: BTN
+aggressor: UTG
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0002593
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.077,A7s,A5s:0.671,KK,KQs,KQo,KJs,KJo,KTs,QQ,QJs,QTs:0.397,JJ,TT,99,88,77,66
+ip_range: AA:0.011,AJs:0.565,AJo,ATs:0.816,KK:0.027,KQs:0.589,JJ:0.008,TT:0.005,99:0.347,88:0.191,77:0.994
+
+scenario: UTG:raise2.5/BTN:call/BB:raise13.75/BTN:call
+name: UTG open 2.5, BTN call, BB 3-bet 13.75, BTN call
+kind: 3bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 3.075e-05
+oop_range: AA,AKs,AKo,AQs:0.999,AQo:0.614,AJs:0.147,ATs:0.092,ATo:0.01,A8s:0.04,A7s:0.196,A4s:0.076,A2s:0.258,KK,KQs:0.391,KQo:0.22,KTs:0.184,K9s:0.044,QQ,JJ,TT,99:0.999,88:0.688
+ip_range: AJs:0.561,ATs:0.368,KQs:0.224,JJ:0.008,TT:0.005,99:0.347,88:0.191,77:0.559
+
+scenario: UTG:raise2.5/BTN:call/BB:raise13.75/UTG:call/BTN:fold
+name: UTG open 2.5, BTN call, BB 3-bet 13.75, UTG call
+kind: 3bet
+oop: BB
+ip: UTG
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 3.149e-05
+oop_range: AA,AKs,AKo,AQs:0.999,AQo:0.614,AJs:0.147,ATs:0.092,ATo:0.01,A8s:0.04,A7s:0.196,A4s:0.076,A2s:0.258,KK,KQs:0.391,KQo:0.22,KTs:0.184,K9s:0.044,QQ,JJ,TT,99:0.999,88:0.688
+ip_range: AKs:0.314,AKo:0.737,AQs:0.998,AQo:0.99,AJs:0.103,KK:0.009,KQs:0.455,QQ:0.528,QTs:0.025,JJ:0.751,TT:0.977,99:0.994,88:0.108,66:0.141
+
+scenario: UTG:raise2.5/BTN:call/SB:raise13.75/BTN:call
+name: UTG open 2.5, BTN call, SB 3-bet 13.75, BTN call
+kind: 3bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 3.439e-05
+oop_range: AA,AKs:0.998,AKo,AQs:0.88,AQo:0.958,AJs:0.121,AJo:0.007,ATs:0.43,A4s:0.04,A3s:0.008,KK:0.967,KQs:0.69,KQo:0.125,QQ,QTs:0.016,JJ,TT:0.997,99:0.999,88:0.995
+ip_range: AJs:0.51,ATs:0.02,KQs:0.436,TT:0.005,99:0.345,88:0.183,77:0.617
+
+scenario: UTG:raise2.5/BTN:call/SB:raise13.75/UTG:call/BTN:fold
+name: UTG open 2.5, BTN call, SB 3-bet 13.75, UTG call
+kind: 3bet
+oop: SB
+ip: UTG
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 4.018e-05
+oop_range: AA,AKs:0.998,AKo,AQs:0.88,AQo:0.958,AJs:0.121,AJo:0.007,ATs:0.43,A4s:0.04,A3s:0.008,KK:0.967,KQs:0.69,KQo:0.125,QQ,QTs:0.016,JJ,TT:0.997,99:0.999,88:0.995
+ip_range: AKs:0.551,AKo:0.72,AQs,AQo:0.993,AJs:0.284,KK:0.007,KQs:0.157,KQo:0.007,KJs:0.395,QQ:0.298,QJs:0.011,QTs:0.012,JJ:0.65,TT:0.849,99:0.999,88:0.931,77:0.009
+
+scenario: UTG:raise2.5/BTN:call/SB:raise13.75/UTG:raise33/SB:call
+name: UTG open 2.5, BTN call, SB 3-bet 13.75, UTG 4-bet 33, SB call
+kind: 4bet
+oop: SB
+ip: UTG
+aggressor: UTG
+pot: 69.5
+effective_stack: 167
+frequency: 1.236e-05
+oop_range: AKs:0.755,AKo:0.98,AQs:0.798,AQo:0.126,AJs:0.01,ATs:0.069,KK:0.966,KQs:0.245,QQ:0.997,QTs:0.014,JJ:0.545,TT:0.579,99:0.741,88:0.676
+ip_range: AA,AKs:0.448,AKo:0.28,KK:0.993,QQ:0.702,JJ:0.35,TT:0.15
+
+scenario: UTG:raise2.5/BTN:raise8.12/UTG:call
+name: UTG open 2.5, BTN 3-bet 8.12, UTG call
+kind: 3bet
+oop: UTG
+ip: BTN
+aggressor: BTN
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.003707
+oop_range: AKo:0.823,AQs,AQo,AJs,AJo:0.765,ATs,A9s:0.887,A8s:0.008,A7s:0.017,A5s:0.671,KQs,KJs,KJo:0.158,KTs,QQ:0.263,QJs,QTs:0.397,JJ:0.886,TT,99,88,77,66
+ip_range: AA:0.989,AKs,AKo,AQs,AQo,AJs:0.435,ATs:0.184,KK:0.973,KQs:0.41,QQ:0.999,JJ:0.992,TT:0.995,99:0.653,88:0.809
+
+scenario: UTG:raise2.5/BTN:raise8.12/UTG:raise19.5/BTN:call
+name: UTG open 2.5, BTN 3-bet 8.12, UTG 4-bet 19.5, BTN call
+kind: 4bet
+oop: UTG
+ip: BTN
+aggressor: UTG
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.0005061
+oop_range: AA,AKs:0.998,AKo:0.177,KK,QQ:0.737,JJ:0.114
+ip_range: AKs,AKo,AQs:0.999,KK:0.973,QQ:0.999,JJ:0.991,TT:0.754,99:0.142,88:0.533
+
+scenario: UTG:raise2.5/BTN:raise8.12/BB:raise19.5/BTN:call
+name: UTG open 2.5, BTN 3-bet 8.12, BB 4-bet 19.5, BTN call
+kind: 4bet
+oop: BB
+ip: BTN
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 9.378e-05
+oop_range: AA,AKs:0.875,AKo:0.235,KK,QQ,JJ:0.771
+ip_range: AKs:0.734,AKo,AQs:0.837,AQo:0.538,AJs:0.014,KK:0.973,KQs:0.402,QQ:0.999,JJ:0.978,TT:0.653,99:0.363,88:0.471
+
+scenario: UTG:raise2.5/BTN:raise8.12/SB:raise19.5/BTN:call
+name: UTG open 2.5, BTN 3-bet 8.12, SB 4-bet 19.5, BTN call
+kind: 4bet
+oop: SB
+ip: BTN
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 8.311e-05
+oop_range: AA,AKs:0.908,AKo:0.214,KK,QQ,JJ:0.707
+ip_range: AKs:0.256,AKo:0.999,AQs:0.644,AQo:0.161,AJs:0.008,KK:0.972,KQs:0.356,QQ:0.999,JJ:0.987,TT:0.331,99:0.452,88:0.777
+
+scenario: UTG:raise2.5/CO:call/BTN:fold/SB:fold/BB:fold
+name: UTG open 2.5, CO call
+kind: srp
+oop: UTG
+ip: CO
+aggressor: UTG
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0001693
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.077,A7s,A5s:0.671,KK,KQs,KQo,KJs,KJo,KTs,QQ,QJs,QTs:0.397,JJ,TT,99,88,77,66
+ip_range: AA:0.036,AJs:0.701,AJo,ATs:0.619,KK:0.045,KQs:0.805,JJ:0.02,TT:0.166,99:0.214,88:0.141,77:0.01
+
+scenario: UTG:raise2.5/CO:call/BB:raise13.75/CO:call
+name: UTG open 2.5, CO call, BB 3-bet 13.75, CO call
+kind: 3bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 2.349e-05
+oop_range: AA,AKs:0.999,AKo,AQs:0.642,AQo:0.54,ATs:0.039,ATo:0.118,A7s:0.139,A6s:0.053,A5s:0.01,A3s:0.008,A2s:0.033,KK,KQs:0.886,KQo:0.347,KJs:0.009,K9s:0.079,QQ,QTs:0.026,JJ,TT:0.998,99:0.762,88:0.009
+ip_range: AJs:0.655,ATs:0.41,KQs:0.317,JJ:0.018,TT:0.165,99:0.212,88:0.134
+
+scenario: UTG:raise2.5/CO:call/BB:raise13.75/UTG:call/CO:fold
+name: UTG open 2.5, CO call, BB 3-bet 13.75, UTG call
+kind: 3bet
+oop: BB
+ip: UTG
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 2.021e-05
+oop_range: AA,AKs:0.999,AKo,AQs:0.642,AQo:0.54,ATs:0.039,ATo:0.118,A7s:0.139,A6s:0.053,A5s:0.01,A3s:0.008,A2s:0.033,KK,KQs:0.886,KQo:0.347,KJs:0.009,K9s:0.079,QQ,QTs:0.026,JJ,TT:0.998,99:0.762,88:0.009
+ip_range: AKs:0.745,AKo:0.663,AQs:0.914,AQo:0.553,KQs:0.389,KTs:0.01,QQ:0.452,JJ:0.948,TT:0.94,99:0.274,88:0.006,77:0.256,66:0.472
+
+scenario: UTG:raise2.5/CO:call/SB:raise13.75/CO:call
+name: UTG open 2.5, CO call, SB 3-bet 13.75, CO call
+kind: 3bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 2.937e-05
+oop_range: AA,AKs:0.998,AKo:0.992,AQs:0.801,AQo:0.951,AJs:0.569,AJo:0.275,ATs:0.509,A2s:0.006,KK:0.988,KQs:0.388,KQo:0.26,KJs:0.094,KTs:0.268,K8s:0.066,QQ:0.971,QTs:0.011,JJ:0.999,TT,99:0.964,88:0.119
+ip_range: AJs:0.679,ATs:0.336,KQs:0.392,JJ:0.008,TT:0.166,99:0.213,88:0.132,77:0.009
+
+scenario: UTG:raise2.5/CO:call/SB:raise13.75/UTG:call/CO:fold
+name: UTG open 2.5, CO call, SB 3-bet 13.75, UTG call
+kind: 3bet
+oop: SB
+ip: UTG
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 3.447e-05
+oop_range: AA,AKs:0.998,AKo:0.992,AQs:0.801,AQo:0.951,AJs:0.569,AJo:0.275,ATs:0.509,A2s:0.006,KK:0.988,KQs:0.388,KQo:0.26,KJs:0.094,KTs:0.268,K8s:0.066,QQ:0.971,QTs:0.011,JJ:0.999,TT,99:0.964,88:0.119
+ip_range: AKs:0.243,AKo:0.868,AQs:0.902,AQo:0.754,AJs:0.253,ATs:0.012,A8s:0.009,KK:0.018,KQs:0.417,QQ:0.94,QTs:0.008,JJ:0.533,TT:0.98,99:0.995,88:0.559,77:0.326,66:0.283
+
+scenario: UTG:raise2.5/CO:call/BTN:raise10.62/CO:call
+name: UTG open 2.5, CO call, BTN 3-bet 10.62, CO call
+kind: 3bet
+oop: CO
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 2.801e-05
+oop_range: AJs:0.679,AJo:0.025,ATs:0.53,KQs:0.805,JJ:0.012,TT:0.166,99:0.214,88:0.141,77:0.01
+ip_range: AA,AKs:0.91,AKo:0.883,AQs:0.84,AQo:0.98,AJs:0.037,ATs:0.025,KK:0.877,KQs:0.373,KQo:0.081,QQ:0.865,JJ:0.965,TT:0.996,99:0.654,88:0.644,77:0.041,33:0.009
+
+scenario: UTG:raise2.5/CO:call/BTN:raise10.62/UTG:call/CO:fold
+name: UTG open 2.5, CO call, BTN 3-bet 10.62, UTG call
+kind: 3bet
+oop: UTG
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 2.995e-05
+oop_range: AKs:0.587,AKo:0.756,AQs:0.988,AQo:0.998,AJs:0.598,ATs:0.139,ATo:0.013,A7s:0.032,A5s:0.047,KK:0.208,KQs:0.965,KJs:0.439,KTs:0.82,QQ:0.366,QTs:0.009,JJ:0.98,TT:0.999,99:0.993,88:0.827,77:0.802,66:0.752
+ip_range: AA,AKs:0.91,AKo:0.883,AQs:0.84,AQo:0.98,AJs:0.037,ATs:0.025,KK:0.877,KQs:0.373,KQo:0.081,QQ:0.865,JJ:0.965,TT:0.996,99:0.654,88:0.644,77:0.041,33:0.009
+
+scenario: UTG:raise2.5/CO:raise8.12/UTG:call
+name: UTG open 2.5, CO 3-bet 8.12, UTG call
+kind: 3bet
+oop: UTG
+ip: CO
+aggressor: CO
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.003905
+oop_range: AKo:0.839,AQs,AQo,AJs,AJo:0.775,ATs,A9s:0.746,A8s:0.012,A7s:0.017,A5s:0.671,KQs,KJs,KJo:0.142,KTs,QQ:0.296,QJs,QTs:0.397,JJ:0.968,TT,99,88,77,66
+ip_range: AA:0.964,AKs,AKo,AQs,AQo,AJs:0.299,ATs:0.378,KK:0.955,KQs:0.194,QQ:0.999,JJ:0.98,TT:0.834,99:0.786,88:0.859
+
+scenario: UTG:raise2.5/CO:raise8.12/UTG:raise19.5/CO:call
+name: UTG open 2.5, CO 3-bet 8.12, UTG 4-bet 19.5, CO call
+kind: 4bet
+oop: UTG
+ip: CO
+aggressor: UTG
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.0005171
+oop_range: AA,AKs:0.998,AKo:0.161,KK,QQ:0.704,JJ:0.032
+ip_range: AKs,AKo,AQs:0.979,AJs:0.019,KK:0.955,QQ:0.999,JJ:0.914,TT:0.806,99:0.211,88:0.507
+
+scenario: UTG:raise2.5/CO:raise8.12/BB:raise19.5/CO:call
+name: UTG open 2.5, CO 3-bet 8.12, BB 4-bet 19.5, CO call
+kind: 4bet
+oop: BB
+ip: CO
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 8.624e-05
+oop_range: AA,AKs:0.9,AKo:0.178,KK,QQ,JJ:0.709
+ip_range: AKs:0.31,AKo,AQs:0.674,AQo:0.138,AJs:0.025,KK:0.955,KQs:0.144,QQ:0.999,JJ:0.977,TT:0.562,99:0.399,88:0.835
+
+scenario: UTG:raise2.5/CO:raise8.12/SB:raise19.5/CO:call
+name: UTG open 2.5, CO 3-bet 8.12, SB 4-bet 19.5, CO call
+kind: 4bet
+oop: SB
+ip: CO
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 7.651e-05
+oop_range: AA,AKs:0.692,AKo:0.159,KK,QQ,JJ:0.398
+ip_range: AKs:0.622,AKo:0.998,AQs:0.903,AQo:0.026,ATs:0.008,KK:0.954,KQs:0.14,QQ:0.999,JJ:0.978,TT:0.643,99:0.26,88:0.665
+
+scenario: UTG:raise2.5/CO:raise8.12/BTN:raise19.5/CO:call
+name: UTG open 2.5, CO 3-bet 8.12, BTN 4-bet 19.5, CO call
+kind: 4bet
+oop: CO
+ip: BTN
+aggressor: BTN
+pot: 43
+effective_stack: 180.5
+frequency: 7.583e-05
+oop_range: AKs:0.857,AKo:0.999,AQs:0.721,AQo:0.025,KK:0.955,KQs:0.061,QQ:0.999,JJ:0.895,TT:0.402,99:0.272,88:0.742
+ip_range: AA,AKs:0.957,AKo:0.136,KK,QQ,JJ:0.358
+
+scenario: UTG:raise2.5/HJ:call/CO:fold/BTN:fold/SB:fold/BB:fold
+name: UTG open 2.5, HJ call
+kind: srp
+oop: UTG
+ip: HJ
+aggressor: UTG
+pot: 6.5
+effective_stack: 197.5
+frequency: 0.0002693
+oop_range: AA,AKs,AKo,AQs,AQo,AJs,AJo,ATs,ATo,A9s,A9o,A8s,A8o:0.077,A7s,A5s:0.671,KK,KQs,KQo,KJs,KJo,KTs,QQ,QJs,QTs:0.397,JJ,TT,99,88,77,66
+ip_range: AA:0.025,AJs:0.744,AJo:0.484,ATs:0.39,KK:0.02,KQs:0.315,JJ:0.027,TT:0.341,99:0.067,88:0.435
+
+scenario: UTG:raise2.5/HJ:call/BB:raise13.75/HJ:call
+name: UTG open 2.5, HJ call, BB 3-bet 13.75, HJ call
+kind: 3bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 1.993e-05
+oop_range: AA,AKs:0.998,AKo:0.999,AQs:0.601,AQo:0.376,ATs:0.071,A9s:0.021,A5s:0.214,A3s:0.034,A2s:0.032,KK,KQs:0.611,KQo:0.116,KJs:0.663,KJo:0.027,KTo:0.008,K8s:0.024,K3s:0.006,QQ,JJ:0.999,TT:0.984,99:0.544,88:0.007
+ip_range: AJs:0.6,ATs:0.053,JJ:0.027,TT:0.34,99:0.067,88:0.377
+
+scenario: UTG:raise2.5/HJ:call/BB:raise13.75/UTG:call/HJ:fold
+name: UTG open 2.5, HJ call, BB 3-bet 13.75, UTG call
+kind: 3bet
+oop: BB
+ip: UTG
+aggressor: BB
+pot: 30.5
+effective_stack: 186.25
+frequency: 1.36e-05
+oop_range: AA,AKs:0.998,AKo:0.999,AQs:0.601,AQo:0.376,ATs:0.071,A9s:0.021,A5s:0.214,A3s:0.034,A2s:0.032,KK,KQs:0.611,KQo:0.116,KJs:0.663,KJo:0.027,KTo:0.008,K8s:0.024,K3s:0.006,QQ,JJ:0.999,TT:0.984,99:0.544,88:0.007
+ip_range: AKs:0.531,AKo:0.799,AQs:0.928,AQo:0.744,AJs:0.017,ATs:0.232,KK:0.055,KQs:0.088,QQ:0.987,JJ:0.993,TT:0.895,77:0.202
+
+scenario: UTG:raise2.5/HJ:call/SB:raise13.75/HJ:call
+name: UTG open 2.5, HJ call, SB 3-bet 13.75, HJ call
+kind: 3bet
+oop: SB
+ip: HJ
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 2.563e-05
+oop_range: AA,AKs:0.99,AKo:0.999,AQs:0.91,AQo:0.8,AJs:0.129,ATs:0.129,A9s:0.008,A5s:0.013,A3s:0.005,KK:0.983,KQs:0.169,KQo:0.233,KJs:0.2,KTs:0.508,KTo:0.011,QQ,QJs:0.02,QTs:0.037,JJ:0.996,TT,99:0.824,88:0.016
+ip_range: AJs:0.497,ATs:0.052,KQs:0.07,JJ:0.024,TT:0.34,99:0.067,88:0.417
+
+scenario: UTG:raise2.5/HJ:call/SB:raise13.75/UTG:call/HJ:fold
+name: UTG open 2.5, HJ call, SB 3-bet 13.75, UTG call
+kind: 3bet
+oop: SB
+ip: UTG
+aggressor: SB
+pot: 31
+effective_stack: 186.25
+frequency: 1.562e-05
+oop_range: AA,AKs:0.99,AKo:0.999,AQs:0.91,AQo:0.8,AJs:0.129,ATs:0.129,A9s:0.008,A5s:0.013,A3s:0.005,KK:0.983,KQs:0.169,KQo:0.233,KJs:0.2,KTs:0.508,KTo:0.011,QQ,QJs:0.02,QTs:0.037,JJ:0.996,TT,99:0.824,88:0.016
+ip_range: AKs:0.863,AKo:0.541,AQs:0.959,AQo:0.394,A8s:0.009,KK:0.085,KQs:0.181,QQ:0.527,JJ:0.991,TT:0.952,99:0.706,88:0.275,77:0.015,66:0.012
+
+scenario: UTG:raise2.5/HJ:call/BTN:raise10.62/HJ:call
+name: UTG open 2.5, HJ call, BTN 3-bet 10.62, HJ call
+kind: 3bet
+oop: HJ
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 2.687e-05
+oop_range: AJs:0.737,ATs:0.383,KQs:0.315,JJ:0.027,TT:0.34,99:0.065,88:0.431
+ip_range: AA,AKs:0.999,AKo:0.948,AQs:0.496,AQo:0.848,AJs:0.108,A5s:0.008,KK:0.878,KQs:0.625,KQo:0.016,KJs:0.006,QQ:0.981,JJ:0.908,TT:0.965,99:0.772,88:0.014
+
+scenario: UTG:raise2.5/HJ:call/BTN:raise10.62/UTG:call/HJ:fold
+name: UTG open 2.5, HJ call, BTN 3-bet 10.62, UTG call
+kind: 3bet
+oop: UTG
+ip: BTN
+aggressor: BTN
+pot: 25.25
+effective_stack: 189.375
+frequency: 1.528e-05
+oop_range: AKs:0.966,AKo:0.478,AQs:0.916,AQo:0.975,AJs:0.398,ATs:0.106,A8s:0.016,A5s:0.035,KK:0.107,KQs:0.758,KQo:0.12,KJs:0.291,KTs:0.644,QQ:0.824,QJs:0.807,JJ:0.949,TT:0.996,99:0.96,88:0.677,77:0.299,66:0.347
+ip_range: AA,AKs:0.999,AKo:0.948,AQs:0.496,AQo:0.848,AJs:0.108,A5s:0.008,KK:0.878,KQs:0.625,KQo:0.016,KJs:0.006,QQ:0.981,JJ:0.908,TT:0.965,99:0.772,88:0.014
+
+scenario: UTG:raise2.5/HJ:call/CO:raise10.62/HJ:call
+name: UTG open 2.5, HJ call, CO 3-bet 10.62, HJ call
+kind: 3bet
+oop: HJ
+ip: CO
+aggressor: CO
+pot: 25.25
+effective_stack: 189.375
+frequency: 2.187e-05
+oop_range: AJs:0.69,AJo:0.01,ATs:0.147,KQs:0.31,JJ:0.023,TT:0.34,99:0.067,88:0.435
+ip_range: AA:0.943,AKs:0.106,AKo:0.979,AQs:0.915,AQo:0.611,KK:0.751,KQs:0.432,KQo:0.04,QQ:0.694,JJ:0.724,TT:0.445,99:0.336,88:0.062
+
+scenario: UTG:raise2.5/HJ:call/CO:raise10.62/UTG:call/HJ:fold
+name: UTG open 2.5, HJ call, CO 3-bet 10.62, UTG call
+kind: 3bet
+oop: UTG
+ip: CO
+aggressor: CO
+pot: 25.25
+effective_stack: 189.375
+frequency: 1.18e-05
+oop_range: AKs:0.375,AKo:0.938,AQs:0.889,AQo:0.32,AJs:0.599,ATs:0.006,KK:0.156,KQs:0.775,KJs:0.809,KTs:0.012,QQ:0.978,QJs:0.021,QTs:0.041,JJ,TT:0.866,99:0.965,88:0.784,77:0.085,66:0.4
+ip_range: AA:0.943,AKs:0.106,AKo:0.979,AQs:0.915,AQo:0.611,KK:0.751,KQs:0.432,KQo:0.04,QQ:0.694,JJ:0.724,TT:0.445,99:0.336,88:0.062
+
+scenario: UTG:raise2.5/HJ:raise8.12/UTG:call
+name: UTG open 2.5, HJ 3-bet 8.12, UTG call
+kind: 3bet
+oop: UTG
+ip: HJ
+aggressor: HJ
+pot: 17.75
+effective_stack: 191.875
+frequency: 0.003935
+oop_range: AKo:0.835,AQs,AQo,AJs,AJo:0.654,ATs,A9s:0.692,A8s:0.041,A7s:0.063,A5s:0.671,KQs,KJs,KTs,QQ:0.352,QJs,QTs:0.397,JJ:0.935,TT,99,88,77,66
+ip_range: AA:0.975,AKs,AKo,AQs:0.998,AQo:0.997,AJs:0.256,ATs:0.419,KK:0.98,KQs:0.413,QQ:0.999,JJ:0.973,TT:0.659,99:0.933,88:0.565
+
+scenario: UTG:raise2.5/HJ:raise8.12/UTG:raise19.5/HJ:call
+name: UTG open 2.5, HJ 3-bet 8.12, UTG 4-bet 19.5, HJ call
+kind: 4bet
+oop: UTG
+ip: HJ
+aggressor: UTG
+pot: 40.5
+effective_stack: 180.5
+frequency: 0.0005068
+oop_range: AA,AKs:0.999,AKo:0.165,KK,QQ:0.648,JJ:0.065
+ip_range: AKs,AKo,AQs:0.543,AJs:0.058,KK:0.98,QQ:0.999,JJ:0.973,TT:0.509,99:0.39,88:0.319
+
+scenario: UTG:raise2.5/HJ:raise8.12/BB:raise19.5/HJ:call
+name: UTG open 2.5, HJ 3-bet 8.12, BB 4-bet 19.5, HJ call
+kind: 4bet
+oop: BB
+ip: HJ
+aggressor: BB
+pot: 42
+effective_stack: 180.5
+frequency: 9.112e-05
+oop_range: AA,AKs:0.899,AKo:0.222,KK,QQ:0.999,JJ:0.676
+ip_range: AKs:0.519,AKo:0.997,AQs:0.758,AQo:0.011,AJs:0.068,ATs:0.021,KK:0.98,KQs:0.352,QQ:0.999,JJ:0.973,TT:0.511,99:0.762,88:0.356
+
+scenario: UTG:raise2.5/HJ:raise8.12/SB:raise19.5/HJ:call
+name: UTG open 2.5, HJ 3-bet 8.12, SB 4-bet 19.5, HJ call
+kind: 4bet
+oop: SB
+ip: HJ
+aggressor: SB
+pot: 42.5
+effective_stack: 180.5
+frequency: 8.383e-05
+oop_range: AA,AKs:0.861,AKo:0.246,KK,QQ,JJ:0.508
+ip_range: AKs:0.693,AKo,AQs:0.683,AQo:0.066,AJs:0.01,ATs:0.025,KK:0.98,KQs:0.105,QQ:0.999,JJ:0.973,TT:0.207,99:0.591,88:0.386
+
+scenario: UTG:raise2.5/HJ:raise8.12/BTN:raise19.5/HJ:call
+name: UTG open 2.5, HJ 3-bet 8.12, BTN 4-bet 19.5, HJ call
+kind: 4bet
+oop: HJ
+ip: BTN
+aggressor: BTN
+pot: 43
+effective_stack: 180.5
+frequency: 8.34e-05
+oop_range: AKs:0.931,AKo:0.999,AQs:0.773,AQo:0.036,ATs:0.062,KK:0.979,QQ:0.999,JJ:0.947,TT:0.293,99:0.415,88:0.558
+ip_range: AA,AKs:0.926,AKo:0.221,KK,QQ:0.998,JJ:0.317
+
+scenario: UTG:raise2.5/HJ:raise8.12/CO:raise19.5/HJ:call
+name: UTG open 2.5, HJ 3-bet 8.12, CO 4-bet 19.5, HJ call
+kind: 4bet
+oop: HJ
+ip: CO
+aggressor: CO
+pot: 43
+effective_stack: 180.5
+frequency: 7.599e-05
+oop_range: AKs:0.991,AKo:0.999,AQs:0.614,AQo:0.01,KK:0.98,QQ:0.999,JJ:0.824,TT:0.313,99:0.475,88:0.476
+ip_range: AA,AKs:0.97,AKo:0.09,KK,QQ,JJ:0.295
