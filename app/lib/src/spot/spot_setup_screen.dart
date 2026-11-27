@@ -12,6 +12,7 @@ import '../jobs/jobs_screen.dart' show jobStateLabel;
 import '../range/omaha_syntax.dart';
 import '../range/preflop_library.dart';
 import '../range/preflop_source.dart';
+import '../range/solved_library.dart';
 import '../range/range_editor.dart';
 import '../range/range_preview.dart';
 import '../range/range_store.dart';
@@ -87,6 +88,9 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
   String? _scenarioPath;
   String? _sourceProblem;
   bool _loadingSource = false;
+
+  /// The bundled solved library for the chosen table and stack, once read.
+  SolvedLibrary? _bundled;
 
   Timer? _debounce;
   int _estimateRequest = 0;
@@ -249,6 +253,10 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     final defenders = PreflopLibrary.defenders(_format, _opener);
     if (!defenders.contains(_defender)) _defender = defenders.last;
 
+    if (_source == PreflopSource.bundled) {
+      _applyBundled(overwrite: overwrite);
+      return;
+    }
     final scenario = PreflopLibrary.scenario(
       format: _format,
       stack: _stack,
@@ -279,14 +287,81 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     });
   }
 
-  /// Switches where the line picker takes its ranges from. The solved
+  /// Fills in the chosen line from the bundled solved library, reading the
+  /// file for the table and stack first if needed.
+  Future<void> _applyBundled({bool overwrite = false}) async {
+    final format = _format;
+    final stack = _stack;
+    var library = _bundled;
+    final want = format == TableFormat.nineMax ? 9 : 6;
+    if (library == null ||
+        library.players != want ||
+        library.stackBb != stack) {
+      setState(() {
+        _loadingSource = true;
+        _sourceProblem = null;
+      });
+      try {
+        library = await SolvedLibrary.load(format, stack);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _loadingSource = false;
+          _sourceProblem = 'The bundled library could not be read: $error';
+        });
+        return;
+      }
+      if (!mounted || format != _format || stack != _stack) return;
+      setState(() {
+        _bundled = library;
+        _loadingSource = false;
+      });
+    }
+    final scenario = library.find(_potType, _opener, _defender);
+    if (scenario == null) {
+      setState(() {
+        _sourceProblem =
+            'The solved library has no ${_potType.label.toLowerCase()} '
+            'between $_opener and $_defender: in the solution that line '
+            'is (almost) never played. Pick another line.';
+        ++_formVersion;
+      });
+      return;
+    }
+    if (!overwrite && !listEquals(_spotFields(), _filledSpot)) {
+      setState(() {
+        _sourceProblem = null;
+        _keptOwnSpot = true;
+        ++_formVersion;
+      });
+      return;
+    }
+    _filledIn(() {
+      _input.setPlayerCount(2);
+      _input.setVariant(Variant.VARIANT_HOLDEM);
+      _input
+        ..oopRange = scenario.oopRange
+        ..ipRange = scenario.ipRange
+        ..pot = formatChips(scenario.pot)
+        ..stack = formatChips(scenario.effectiveStack);
+      _scenarioDescription =
+          '${scenario.name}. OOP is ${scenario.oop}, IP is ${scenario.ip}.';
+      _sourceProblem = null;
+      _filledSpot = _spotFields();
+      _keptOwnSpot = false;
+    });
+  }
+
+  /// Switches where the line picker takes its ranges from. The server
   /// source lists the server's preflop solves.
   Future<void> _setSource(PreflopSource source) async {
     setState(() {
       _source = source;
       _sourceProblem = null;
+      _scenarioDescription = null;
     });
     if (source == PreflopSource.solved) await _loadPreflopJobs();
+    if (source == PreflopSource.bundled) await _applyBundled();
   }
 
   Future<void> _loadPreflopJobs() async {
@@ -428,15 +503,26 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
     }
 
     final theme = Theme.of(context);
-    final sourcePicker = SegmentedButton<PreflopSource>(
-      key: const Key('preflop-source'),
-      showSelectedIcon: false,
-      segments: [
-        for (final source in PreflopSource.values)
-          ButtonSegment(value: source, label: Text(source.label)),
-      ],
-      selected: {_source},
-      onSelectionChanged: (selection) => _setSource(selection.first),
+    final sourcePicker = SizedBox(
+      width: 280,
+      child: DropdownButtonFormField<PreflopSource>(
+        key: const Key('preflop-source'),
+        initialValue: _source,
+        isDense: true,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Ranges from',
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: [
+          for (final source in PreflopSource.values)
+            DropdownMenuItem(value: source, child: Text(source.label)),
+        ],
+        onChanged: (source) {
+          if (source != null && source != _source) _setSource(source);
+        },
+      ),
     );
     if (_source == PreflopSource.solved) {
       return _section(info: _preflopInfo, 'Preflop', [
@@ -518,6 +604,14 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
             ),
           ],
         )
+      else if (_sourceProblem != null)
+        Text(
+          _sourceProblem!,
+          key: const Key('preflop-source-problem'),
+          style: TextStyle(color: theme.colorScheme.error),
+        )
+      else if (_loadingSource)
+        const LinearProgressIndicator()
       else
         Text(
           _scenarioDescription ??
@@ -526,14 +620,27 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
           style: theme.textTheme.bodyMedium,
         ),
       Text(
-        'These ranges are rough starting points built from simple rules, '
-        'not solver output. Adjust them to your game.',
+        _source == PreflopSource.bundled
+            ? _bundledCaveat
+            : 'These ranges are rough starting points built from simple '
+                  'rules, not solver output. Adjust them to your game.',
         key: const Key('preflop-source-label'),
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     ]);
+  }
+
+  /// What the bundled library is and what to keep in mind about it.
+  String get _bundledCaveat {
+    final library = _bundled;
+    return 'Solved by K15 GTO\'s preflop solver'
+        '${library == null ? '' : ' (${library.quality})'}. '
+        'It plays no postflop: the board is run out after the preflop '
+        'betting, so every player realises 100% of their equity. Calling '
+        'ranges come out wider than a full solution\'s (the big blind '
+        'defends very wide) and suited connectors and small pairs lower.';
   }
 
   /// The solved source: a preflop job, then one of its lines.

@@ -1,0 +1,6 @@
+These files are copies of the repository's ranges/ folder (the preflop range
+library solved by K15 GTO's own preflop solver; see ranges/README.txt for how
+they were made, their approximations and the file format). Flutter can only
+bundle assets inside the app package, hence the copies. After regenerating
+ranges/, copy the six *.txt files here again; test/solved_library_test.dart
+fails while the copies differ.
