@@ -179,3 +179,56 @@ TEST(GameTree, RejectsBadConfigs) {
 
 }  // namespace
 }  // namespace gto
+
+namespace gto {
+namespace {
+
+TreeConfig pot_limit_config(double stack, bool pot_limit) {
+  TreeConfig config;
+  config.pot = 10;
+  config.effective_stack = stack;
+  config.pot_limit = pot_limit;
+  for (const int player : {kOop, kIp}) {
+    BetSizing& sizing = config.sizing[kRiver][static_cast<std::size_t>(player)];
+    sizing.bet = {0.5, 2.0};
+    sizing.raise = {1.0, 3.0};
+    sizing.add_allin = true;
+  }
+  return config;
+}
+
+TEST(GameTree, PotLimitCapsBetsAndRaises) {
+  const GameTree tree = build_ok(pot_limit_config(100, true));
+  // 2x pot becomes a pot-size bet, and all-in beyond the pot becomes the same.
+  EXPECT_EQ(labels(tree, ""), (Labels{"check", "bet5", "bet10"}));
+  // Facing 5 into 10: call 5, then raise the 20 in the pot: to 25.
+  EXPECT_EQ(labels(tree, "bet5"), (Labels{"fold", "call", "raise25"}));
+  // Facing a pot bet of 10 into 10: call, raise 30 more: to 40.
+  EXPECT_EQ(labels(tree, "bet10"), (Labels{"fold", "call", "raise40"}));
+  // Facing 25 with 40 in the pot: the call makes it 60, so the re-raise
+  // goes to 25 + 60 = 85.
+  EXPECT_EQ(labels(tree, "bet5/raise25"), (Labels{"fold", "call", "raise85"}));
+  // Beyond the stack: 100 is within the pot-size raise, so all-in.
+  EXPECT_EQ(labels(tree, "bet10/raise40"), (Labels{"fold", "call", "allin"}));
+
+  // The same sizes without the cap.
+  const GameTree no_limit = build_ok(pot_limit_config(100, false));
+  EXPECT_EQ(labels(no_limit, ""), (Labels{"check", "bet5", "bet20", "allin"}));
+}
+
+TEST(GameTree, PotLimitAllInOnlyWithinTheCap) {
+  // 8 behind with 10 in the pot: every bet of at least the threshold may go
+  // all-in, since all-in is below a pot-size bet.
+  const GameTree shallow = build_ok(pot_limit_config(8, true));
+  EXPECT_EQ(labels(shallow, ""), (Labels{"check", "bet5", "allin"}));
+
+  // 14 behind: a pot bet (10) is past the all-in threshold (0.67 * 14) but
+  // all-in itself is beyond the pot, so the pot bet stays.
+  const GameTree deeper = build_ok(pot_limit_config(14, true));
+  EXPECT_EQ(labels(deeper, ""), (Labels{"check", "bet5", "bet10"}));
+  const GameTree deeper_nl = build_ok(pot_limit_config(14, false));
+  EXPECT_EQ(labels(deeper_nl, ""), (Labels{"check", "bet5", "allin"}));
+}
+
+}  // namespace
+}  // namespace gto

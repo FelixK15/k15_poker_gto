@@ -56,6 +56,11 @@ struct TreeConfig {
   /// A bet or raise that puts in at least this fraction of the player's
   /// remaining stack becomes all-in. 0 disables the rule.
   double allin_threshold = 0.67;
+  /// Pot-limit betting (PLO): no bet may exceed the pot and no raise the
+  /// pot-size raise. Larger sizes are cut down to that cap, the all-in
+  /// threshold only applies where all-in itself is within the cap, and an
+  /// all-in option beyond the cap becomes the pot-size bet or raise.
+  bool pot_limit = false;
   /// Building stops with an error beyond this many nodes.
   std::size_t max_nodes = 100'000'000;
 };

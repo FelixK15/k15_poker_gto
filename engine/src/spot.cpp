@@ -1,4 +1,4 @@
-// Turns a Hold'em spot description into a Game.
+// Turns a Hold'em or PLO4 spot description into a Game.
 
 #include "gto/solver.h"
 
@@ -8,16 +8,31 @@ namespace gto {
 
 namespace {
 
+Card swap_suits(Card card, int suit_a, int suit_b) {
+  if (card.suit() == suit_a) return Card(card.rank(), suit_b);
+  if (card.suit() == suit_b) return Card(card.rank(), suit_a);
+  return card;
+}
+
 /// Whether swapping two suits leaves every weight of the range unchanged.
 bool invariant_under_swap(const Range& range, int suit_a, int suit_b) {
-  const auto swap = [&](Card card) {
-    if (card.suit() == suit_a) return Card(card.rank(), suit_b);
-    if (card.suit() == suit_b) return Card(card.rank(), suit_a);
-    return card;
-  };
   for (int combo = 0; combo < Range::kNumCombos; ++combo) {
     const auto [a, b] = Range::combo_cards(combo);
-    if (range.weight(combo) != range.weight(swap(a), swap(b))) return false;
+    if (range.weight(combo) !=
+        range.weight(swap_suits(a, suit_a, suit_b), swap_suits(b, suit_a, suit_b))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool invariant_under_swap(const std::optional<OmahaRange>& range, int suit_a, int suit_b) {
+  if (!range) return true;
+  for (int combo = 0; combo < kOmahaCombos; ++combo) {
+    const float weight = range->weight(combo);
+    auto cards = omaha_combo_cards(combo);
+    for (Card& card : cards) card = swap_suits(card, suit_a, suit_b);
+    if (weight != range->weight(omaha_combo_index(cards))) return false;
   }
   return true;
 }
@@ -28,8 +43,11 @@ SuitSymmetry range_symmetry(const SpotConfig& config) {
   if (!config.use_isomorphism) return symmetry;
   for (int a = 0; a < 4; ++a) {
     for (int b = a + 1; b < 4; ++b) {
-      const bool same = invariant_under_swap(config.ranges[0], a, b) &&
-                        invariant_under_swap(config.ranges[1], a, b);
+      const bool same = config.variant == Variant::Omaha4
+                            ? invariant_under_swap(config.omaha_ranges[0], a, b) &&
+                                  invariant_under_swap(config.omaha_ranges[1], a, b)
+                            : invariant_under_swap(config.ranges[0], a, b) &&
+                                  invariant_under_swap(config.ranges[1], a, b);
       symmetry.interchangeable[static_cast<std::size_t>(a)][static_cast<std::size_t>(b)] = same;
       symmetry.interchangeable[static_cast<std::size_t>(b)][static_cast<std::size_t>(a)] = same;
     }
@@ -51,12 +69,27 @@ bool make_hands(const SpotConfig& config, Hands& hands, std::string* error) {
   for (const Card card : config.board) board_mask |= card.mask();
 
   for (std::size_t player = 0; player < 2; ++player) {
-    for (int combo = 0; combo < Range::kNumCombos; ++combo) {
-      const float weight = config.ranges[player].weight(combo);
-      if (!(weight > 0)) continue;
-      const auto [a, b] = Range::combo_cards(combo);
-      if (((a.mask() | b.mask()) & board_mask) != 0) continue;
-      hands[player].push_back(make_hand({a.index(), b.index()}, weight));
+    if (config.variant == Variant::Omaha4) {
+      if (const auto& range = config.omaha_ranges[player]) {
+        for (int combo = 0; combo < kOmahaCombos; ++combo) {
+          const float weight = range->weight(combo);
+          if (!(weight > 0)) continue;
+          const auto cards = omaha_combo_cards(combo);
+          std::uint64_t mask = 0;
+          for (const Card card : cards) mask |= card.mask();
+          if ((mask & board_mask) != 0) continue;
+          hands[player].push_back(make_hand(
+              {cards[0].index(), cards[1].index(), cards[2].index(), cards[3].index()}, weight));
+        }
+      }
+    } else {
+      for (int combo = 0; combo < Range::kNumCombos; ++combo) {
+        const float weight = config.ranges[player].weight(combo);
+        if (!(weight > 0)) continue;
+        const auto [a, b] = Range::combo_cards(combo);
+        if (((a.mask() | b.mask()) & board_mask) != 0) continue;
+        hands[player].push_back(make_hand({a.index(), b.index()}, weight));
+      }
     }
     if (hands[player].empty()) {
       return fail(std::string(player == kOop ? "the OOP" : "the IP") +
@@ -128,9 +161,25 @@ std::optional<Game> make_game(const SpotConfig& config, std::string* error) {
       dealt_mask |= std::uint64_t{1} << id;
     }
     const std::size_t board_size = cards.size();
-    cards.resize(board_size + 2);
 
     std::array<std::vector<HandStrength>, 2> strength;
+    if (config.variant == Variant::Omaha4) {
+      const OmahaBoardEvaluator evaluator(cards);
+      for (std::size_t player = 0; player < 2; ++player) {
+        strength[player].reserve(game.hands[player].size());
+        for (const Hand& hand : game.hands[player]) {
+          strength[player].push_back(
+              (hand.mask & dealt_mask) != 0
+                  ? 0  // impossible on this board, never used
+                  : evaluator.evaluate({Card(hand.cards[0]), Card(hand.cards[1]),
+                                        Card(hand.cards[2]), Card(hand.cards[3])}));
+        }
+      }
+      game.showdowns.push_back(make_showdown_table(std::move(strength)));
+      continue;
+    }
+
+    cards.resize(board_size + 2);
     for (std::size_t player = 0; player < 2; ++player) {
       strength[player].reserve(game.hands[player].size());
       for (const Hand& hand : game.hands[player]) {

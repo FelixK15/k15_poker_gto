@@ -4,6 +4,7 @@ add_executable(solver_tests
   hand_evaluator_test.cpp
   lock_test.cpp
   omaha_test.cpp
+  plo_solver_test.cpp
   persistence_test.cpp
   range_test.cpp
   solver_test.cpp
