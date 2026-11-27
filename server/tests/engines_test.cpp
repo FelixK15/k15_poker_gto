@@ -777,7 +777,7 @@ TEST(MonteCarlo, KeepsSolutionsAcrossRestarts) {
 TEST(MonteCarlo, NamesPositions) {
   EXPECT_EQ(spot_positions(preflop_spot()),
             (std::vector<std::string>{"UTG", "HJ", "CO", "BTN", "SB", "BB"}));
-  EXPECT_EQ(preflop_positions(2), (std::vector<std::string>{"SB", "BB"}));
+  EXPECT_EQ(preflop_positions(2), (std::vector<std::string>{"BTN", "BB"}));
   EXPECT_EQ(preflop_positions(3), (std::vector<std::string>{"BTN", "SB", "BB"}));
   EXPECT_EQ(preflop_positions(9).size(), 9u);
   EXPECT_TRUE(preflop_positions(10).empty());
@@ -831,7 +831,9 @@ TEST(Preflop, SolvesAHeadsUpPresetAndExportsRanges) {
   for (const v1::PreflopScenario& scenario : scenarios.scenarios()) {
     EXPECT_EQ(scenario.positions_size(), 2);
     EXPECT_GT(scenario.pot(), 0);
-    if (scenario.kind() == v1::PREFLOP_SCENARIO_KIND_SINGLE_RAISED && srp == nullptr) {
+    // The button's open (there are also BB raises over a limp).
+    if (scenario.kind() == v1::PREFLOP_SCENARIO_KIND_SINGLE_RAISED &&
+        scenario.aggressor() == "BTN" && srp == nullptr) {
       srp = &scenario;
     }
   }

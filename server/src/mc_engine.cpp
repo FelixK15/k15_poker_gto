@@ -962,7 +962,9 @@ Error McEngine::preflop_scenarios(std::uint32_t max_raises,
   if (solver_->config().variant != Variant::Holdem) {
     return make_error(ErrorKind::FailedPrecondition, "preflop scenarios exist for Hold'em only");
   }
-  const int raises = static_cast<int>(std::min<std::uint32_t>(std::max(max_raises, 1u), 10u));
+  // The API counts pot depth (2 = single-raised), the engine raises.
+  const int raises =
+      static_cast<int>(std::min<std::uint32_t>(std::max(max_raises, 2u), 11u)) - 1;
   for (const mc::PreflopScenario& scenario : mc::list_preflop_scenarios(*solver_, raises)) {
     v1::PreflopScenario* proto = out->add_scenarios();
     proto->set_name(scenario.name);
