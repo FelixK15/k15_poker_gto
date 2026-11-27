@@ -78,10 +78,14 @@ class Builder {
 
       if (remaining > kEpsilon) {
         std::vector<double> amounts;
+        // Pot limit: a bet is at most the pot.
+        const double cap = pot;
         for (const double fraction : sizing[player].bet) {
-          add_amount(amounts, snap_to_allin(fraction * pot, remaining));
+          add_amount(amounts, snap_to_allin(fraction * pot, remaining, cap));
         }
-        if (sizing[player].add_allin) add_amount(amounts, remaining);
+        if (sizing[player].add_allin) {
+          add_amount(amounts, config_.pot_limit ? std::min(remaining, cap) : remaining);
+        }
         std::sort(amounts.begin(), amounts.end());
 
         for (const double amount : amounts) {
@@ -114,15 +118,21 @@ class Builder {
       if (can_raise) {
         const double pot_after_call = pot + to_call;
         const double allin_to = state.street_bet[player] + remaining;
+        // Pot limit: call, then raise by at most the pot after the call.
+        const double max_raise_to = state.street_bet[opponent] + pot_after_call;
 
         std::vector<double> amounts;
         for (const double fraction : sizing[player].raise) {
           const double increment = std::max(fraction * pot_after_call, state.last_increment);
           const double raise_to = state.street_bet[opponent] + increment;
           const double added = raise_to - state.street_bet[player];
-          add_amount(amounts, state.street_bet[player] + snap_to_allin(added, remaining));
+          add_amount(amounts,
+                     state.street_bet[player] +
+                         snap_to_allin(added, remaining, max_raise_to - state.street_bet[player]));
         }
-        if (sizing[player].add_allin) add_amount(amounts, allin_to);
+        if (sizing[player].add_allin) {
+          add_amount(amounts, config_.pot_limit ? std::min(allin_to, max_raise_to) : allin_to);
+        }
         std::sort(amounts.begin(), amounts.end());
 
         for (const double raise_to : amounts) {
@@ -267,9 +277,17 @@ class Builder {
   }
 
   /// Caps `chips` at the remaining stack and applies the all-in threshold.
-  double snap_to_allin(double chips, double remaining) const {
+  /// With pot-limit betting `chips` is first cut to `cap`, and the threshold
+  /// only moves it to all-in if that is within the cap.
+  double snap_to_allin(double chips, double remaining, double cap) const {
+    bool allin_allowed = true;
+    if (config_.pot_limit) {
+      chips = std::min(chips, cap);
+      allin_allowed = remaining <= cap + kEpsilon;
+    }
     if (chips >= remaining - kEpsilon) return remaining;
-    if (config_.allin_threshold > 0 && chips >= config_.allin_threshold * remaining) {
+    if (config_.allin_threshold > 0 && chips >= config_.allin_threshold * remaining &&
+        allin_allowed) {
       return remaining;
     }
     return chips;

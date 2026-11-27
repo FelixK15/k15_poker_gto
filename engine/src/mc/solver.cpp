@@ -11,9 +11,7 @@
 
 #include "gto/hand_evaluator.h"
 #include "solver_impl.h"
-#if GTO_HAVE_OMAHA
 #include "gto/omaha.h"
-#endif
 
 namespace gto::mc {
 
@@ -176,13 +174,11 @@ void Solver::Impl::compute_strength(Deal& deal) const {
       cards[6] = Card(hand.cards[1]);
       strength = evaluate_hand(std::span<const Card>(cards, 7));
     } else {
-#if GTO_HAVE_OMAHA
       Card board[5];
       for (int i = 0; i < 5; ++i) board[i] = Card(deal.board[static_cast<std::size_t>(i)]);
       const std::array<Card, 4> hole{Card(hand.cards[0]), Card(hand.cards[1]), Card(hand.cards[2]),
                                      Card(hand.cards[3])};
       strength = evaluate_omaha(hole, std::span<const Card>(board, 5));
-#endif
     }
     deal.strength[static_cast<std::size_t>(p)] = strength;
   }

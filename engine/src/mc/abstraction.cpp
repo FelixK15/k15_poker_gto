@@ -9,9 +9,7 @@
 
 #include "gto/hand_evaluator.h"
 #include "gto/range.h"
-#if GTO_HAVE_OMAHA
 #include "gto/omaha.h"
-#endif
 
 namespace gto::mc {
 
@@ -214,7 +212,6 @@ class HoldemStrengthBuckets final : public BucketFunction {
   BoardCache<std::vector<std::uint16_t>> cache_;
 };
 
-#if GTO_HAVE_OMAHA
 
 class OmahaPreflopBuckets final : public BucketFunction {
  public:
@@ -359,7 +356,6 @@ class OmahaStrengthBuckets final : public BucketFunction {
   std::shared_ptr<OmahaBoards> boards_;
 };
 
-#endif  // GTO_HAVE_OMAHA
 
 /// Assigns quantile bins to values; equal values share the bin of their
 /// middle rank.
@@ -394,11 +390,9 @@ HoleHand decode_combo(const GameConfig& config, int combo) {
     hand.cards[0] = a.index();
     hand.cards[1] = b.index();
   } else {
-#if GTO_HAVE_OMAHA
     const auto cards = omaha_combo_cards(combo);
     hand.count = 4;
     for (int i = 0; i < 4; ++i) hand.cards[static_cast<std::size_t>(i)] = cards[static_cast<std::size_t>(i)].index();
-#endif
   }
   for (int i = 0; i < hand.count; ++i) hand.mask |= std::uint64_t{1} << hand.cards[static_cast<std::size_t>(i)];
   return hand;
@@ -662,9 +656,7 @@ std::optional<Abstraction> Abstraction::create(const GameConfig& config,
   for (const PlayerHands& ph : hands) live.push_back(ph.hands.size());
   Abstraction result;
   result.plan_ = plan_abstraction(config, live);
-#if GTO_HAVE_OMAHA
   std::shared_ptr<OmahaBoards> omaha_boards;
-#endif
   for (int s = static_cast<int>(config.start_street); s <= static_cast<int>(config.last_street); ++s) {
     const Street street = static_cast<Street>(s);
     const StreetPlan& plan = result.plan_[static_cast<std::size_t>(s)];
@@ -675,21 +667,17 @@ std::optional<Abstraction> Abstraction::create(const GameConfig& config,
       if (config.variant == Variant::Holdem) {
         fn = std::make_shared<Holdem169>();
       } else {
-#if GTO_HAVE_OMAHA
         fn = std::make_shared<OmahaPreflopBuckets>(config.abstraction.omaha_preflop_buckets);
-#endif
       }
     } else if (plan.kind == AbstractionKind::Lossless) {
       fn = std::make_shared<LosslessBuckets>(config, street, live);
     } else if (config.variant == Variant::Holdem) {
       fn = std::make_shared<HoldemStrengthBuckets>(config, street);
     } else {
-#if GTO_HAVE_OMAHA
       if (!omaha_boards) {
         omaha_boards = std::make_shared<OmahaBoards>(config.board, config.abstraction.omaha_strength_samples);
       }
       fn = std::make_shared<OmahaStrengthBuckets>(config, street, omaha_boards);
-#endif
     }
     if (!fn) {
       if (error) *error = "PLO support is not built into this engine yet";

@@ -30,6 +30,10 @@ Hand make_hand(std::initializer_list<int> card_ids, float weight);
 /// Text form of a Hold'em hand, higher rank first, e.g. "AhKd".
 std::string holdem_hand_name(const Hand& hand);
 
+/// Text form of any hand: the Hold'em name for two cards, the Omaha name
+/// (omaha_hand_name) for four, the cards in order otherwise.
+std::string hand_name(const Hand& hand);
+
 /// Both players' private hands, indexed by player.
 using Hands = std::array<std::vector<Hand>, 2>;
 

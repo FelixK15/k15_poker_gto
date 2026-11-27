@@ -15,9 +15,11 @@
 #include "gto/card.h"
 #include "gto/game_tree.h"
 #include "gto/hands.h"
+#include "gto/omaha.h"
 #include "gto/range.h"
 #include "gto/terminal.h"
 #include "gto/thread_pool.h"
+#include "gto/variant.h"
 
 namespace gto {
 
@@ -37,12 +39,17 @@ struct Game {
   double rake_cap = 0;
 };
 
-/// A Hold'em spot as a user describes it.
+/// A heads-up Hold'em or PLO4 spot as a user describes it.
 struct SpotConfig {
+  Variant variant = Variant::Holdem;
   /// Three cards for a flop spot, four for a turn spot, five for a river spot.
   std::vector<Card> board;
-  /// Indexed by player: [kOop], [kIp].
+  /// Hold'em ranges, indexed by player: [kOop], [kIp].
   std::array<Range, 2> ranges;
+  /// PLO4 ranges (Variant::Omaha4), indexed by player. Optional so that a
+  /// Hold'em spot does not carry two 270,725-weight vectors; a missing range
+  /// counts as empty. PLO spots normally also set tree.pot_limit.
+  std::array<std::optional<OmahaRange>, 2> omaha_ranges;
   TreeConfig tree;
   double rake_rate = 0;
   double rake_cap = 0;
@@ -51,7 +58,7 @@ struct SpotConfig {
   bool use_isomorphism = true;
 };
 
-/// Turns a Hold'em spot into a solvable game.
+/// Turns a spot into a solvable game. PLO hands have four cards.
 std::optional<Game> make_game(const SpotConfig& config, std::string* error = nullptr);
 
 /// What solving a spot would take, measured without building it.

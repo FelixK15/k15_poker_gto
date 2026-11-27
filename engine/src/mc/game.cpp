@@ -45,11 +45,6 @@ bool GameConfig::validate(std::string* error) const {
     return false;
   };
   if (num_players < 2 || num_players > kMaxPlayers) return fail("the game needs 2 to 9 players");
-#if !GTO_HAVE_OMAHA
-  if (variant == Variant::Omaha4 && toy_deck_size == 0) {
-    return fail("PLO support is not built into this engine yet");
-  }
-#endif
   if (toy_deck_size < 0) return fail("bad toy deck size");
   if (toy_deck_size > 0) {
     if (toy_deck_size < num_players || toy_deck_size > 52) return fail("the toy deck is too small");

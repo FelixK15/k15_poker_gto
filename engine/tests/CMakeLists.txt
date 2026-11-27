@@ -8,6 +8,8 @@ add_executable(solver_tests
   mc_pot_test.cpp
   mc_river_test.cpp
   mc_tree_test.cpp
+  omaha_test.cpp
+  plo_solver_test.cpp
   persistence_test.cpp
   range_test.cpp
   solver_test.cpp

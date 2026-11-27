@@ -1,0 +1,31 @@
+// Pot-Limit Omaha (four hole cards), a turn in a single-raised pot, 100BB
+// deep. Chips are big blinds; bets and raises are capped at the pot.
+// See plo_river.json for the range syntax.
+//
+// Try: --node check --node check/check/2c
+{
+  "variant": "omaha4",
+  "board": "Qs Jh 8d 5c",
+  "pot": 10,
+  "effective_stack": 95,
+  "ranges": {
+    "oop": "top8%",
+    "ip": "top6%"
+  },
+  "tree": {
+    "turn": {
+      "oop": { "bet_pct": [50], "raise_pct": [100] },
+      "ip": { "bet_pct": [50, 100], "raise_pct": [100] }
+    },
+    "river": {
+      "oop": { "bet_pct": [50, 100], "raise_pct": [100], "allin": true },
+      "ip": { "bet_pct": [50, 100], "raise_pct": [100], "allin": true }
+    },
+    "raise_cap": 2
+  },
+  "solve": {
+    "max_iterations": 500,
+    "target_exploitability_pct": 0.5,
+    "check_interval": 20
+  }
+}
