@@ -47,6 +47,27 @@ const EstimateTreeResponse$json = {
       '5': 4,
       '10': 'memoryBudgetBytes'
     },
+    {'1': 'player_hands', '3': 10, '4': 3, '5': 13, '10': 'playerHands'},
+    {'1': 'info_sets', '3': 11, '4': 1, '5': 4, '10': 'infoSets'},
+    {'1': 'strategy_entries', '3': 12, '4': 1, '5': 4, '10': 'strategyEntries'},
+    {
+      '1': 'engine',
+      '3': 13,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.Engine',
+      '10': 'engine'
+    },
+    {
+      '1': 'exploitability_kind',
+      '3': 14,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.ExploitabilityKind',
+      '10': 'exploitabilityKind'
+    },
+    {'1': 'player_count', '3': 15, '4': 1, '5': 13, '10': 'playerCount'},
+    {'1': 'positions', '3': 16, '4': 3, '5': 9, '10': 'positions'},
   ],
 };
 
@@ -57,4 +78,9 @@ final $typed_data.Uint8List estimateTreeResponseDescriptor = $convert.base64Deco
     'cxIZCghpcF9oYW5kcxgEIAEoDVIHaXBIYW5kcxIlCg5zdHJhdGVneV9ieXRlcxgFIAEoBFINc3'
     'RyYXRlZ3lCeXRlcxIdCgp0cmVlX2J5dGVzGAYgASgEUgl0cmVlQnl0ZXMSGwoJdG9vX2xhcmdl'
     'GAcgASgIUgh0b29MYXJnZRIbCgljYW5fc29sdmUYCCABKAhSCGNhblNvbHZlEi4KE21lbW9yeV'
-    '9idWRnZXRfYnl0ZXMYCSABKARSEW1lbW9yeUJ1ZGdldEJ5dGVz');
+    '9idWRnZXRfYnl0ZXMYCSABKARSEW1lbW9yeUJ1ZGdldEJ5dGVzEiEKDHBsYXllcl9oYW5kcxgK'
+    'IAMoDVILcGxheWVySGFuZHMSGwoJaW5mb19zZXRzGAsgASgEUghpbmZvU2V0cxIpChBzdHJhdG'
+    'VneV9lbnRyaWVzGAwgASgEUg9zdHJhdGVneUVudHJpZXMSJgoGZW5naW5lGA0gASgOMg4uZ3Rv'
+    'LnYxLkVuZ2luZVIGZW5naW5lEksKE2V4cGxvaXRhYmlsaXR5X2tpbmQYDiABKA4yGi5ndG8udj'
+    'EuRXhwbG9pdGFiaWxpdHlLaW5kUhJleHBsb2l0YWJpbGl0eUtpbmQSIQoMcGxheWVyX2NvdW50'
+    'GA8gASgNUgtwbGF5ZXJDb3VudBIcCglwb3NpdGlvbnMYECADKAlSCXBvc2l0aW9ucw==');

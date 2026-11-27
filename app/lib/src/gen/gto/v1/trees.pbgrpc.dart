@@ -34,7 +34,9 @@ class TreeServiceClient extends $grpc.Client {
 
   /// Checks a spot and reports how large its tree is and how much memory a
   /// solve needs. Fails with INVALID_ARGUMENT if the spot cannot be solved at
-  /// all (bad board, unreadable range, …).
+  /// all (bad board, unreadable range, …), and with FAILED_PRECONDITION if
+  /// the engine it needs is not available on this server (multiway and
+  /// preflop spots until the Monte Carlo engine is built in).
   $grpc.ResponseFuture<$0.EstimateTreeResponse> estimateTree(
     $0.EstimateTreeRequest request, {
     $grpc.CallOptions? options,

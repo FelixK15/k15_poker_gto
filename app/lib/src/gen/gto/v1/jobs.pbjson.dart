@@ -93,6 +93,27 @@ const Job$json = {
       '10': 'warmStartPending'
     },
     {'1': 'reused', '3': 20, '4': 1, '5': 8, '10': 'reused'},
+    {'1': 'evs', '3': 21, '4': 3, '5': 1, '10': 'evs'},
+    {
+      '1': 'exploitability_kind',
+      '3': 22,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.ExploitabilityKind',
+      '10': 'exploitabilityKind'
+    },
+    {'1': 'player_count', '3': 23, '4': 1, '5': 13, '10': 'playerCount'},
+    {'1': 'positions', '3': 24, '4': 3, '5': 9, '10': 'positions'},
+    {
+      '1': 'engine',
+      '3': 25,
+      '4': 1,
+      '5': 14,
+      '6': '.gto.v1.Engine',
+      '10': 'engine'
+    },
+    {'1': 'mc_iterations', '3': 26, '4': 1, '5': 4, '10': 'mcIterations'},
+    {'1': 'ev_estimated', '3': 27, '4': 1, '5': 8, '10': 'evEstimated'},
   ],
 };
 
@@ -109,7 +130,12 @@ final $typed_data.Uint8List jobDescriptor = $convert.base64Decode(
     'bW9yeV9ieXRlcxgPIAEoBFILbWVtb3J5Qnl0ZXMSIQoMaGFzX3NvbHV0aW9uGBAgASgIUgtoYX'
     'NTb2x1dGlvbhIbCglwYXJlbnRfaWQYESABKAlSCHBhcmVudElkEiYKBWxvY2tzGBIgAygLMhAu'
     'Z3RvLnYxLk5vZGVMb2NrUgVsb2NrcxIsChJ3YXJtX3N0YXJ0X3BlbmRpbmcYEyABKAhSEHdhcm'
-    '1TdGFydFBlbmRpbmcSFgoGcmV1c2VkGBQgASgIUgZyZXVzZWQ=');
+    '1TdGFydFBlbmRpbmcSFgoGcmV1c2VkGBQgASgIUgZyZXVzZWQSEAoDZXZzGBUgAygBUgNldnMS'
+    'SwoTZXhwbG9pdGFiaWxpdHlfa2luZBgWIAEoDjIaLmd0by52MS5FeHBsb2l0YWJpbGl0eUtpbm'
+    'RSEmV4cGxvaXRhYmlsaXR5S2luZBIhCgxwbGF5ZXJfY291bnQYFyABKA1SC3BsYXllckNvdW50'
+    'EhwKCXBvc2l0aW9ucxgYIAMoCVIJcG9zaXRpb25zEiYKBmVuZ2luZRgZIAEoDjIOLmd0by52MS'
+    '5FbmdpbmVSBmVuZ2luZRIjCg1tY19pdGVyYXRpb25zGBogASgEUgxtY0l0ZXJhdGlvbnMSIQoM'
+    'ZXZfZXN0aW1hdGVkGBsgASgIUgtldkVzdGltYXRlZA==');
 
 @$core.Deprecated('Use submitJobRequestDescriptor instead')
 const SubmitJobRequest$json = {

@@ -49,6 +49,28 @@ class SolutionServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getRunoutReport, request, options: options);
   }
 
+  /// Preflop solves only: the standard lines of the solution (limped,
+  /// single-raised, 3-bet and 4-bet pots for each pair of positions) with
+  /// their paths, ready for GetPreflopRanges. FAILED_PRECONDITION for other
+  /// jobs.
+  $grpc.ResponseFuture<$0.ListPreflopScenariosResponse> listPreflopScenarios(
+    $0.ListPreflopScenariosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listPreflopScenarios, request, options: options);
+  }
+
+  /// Preflop solves only: each remaining player's range after a preflop line,
+  /// as weights of the 169 hand classes, with pot and stacks. This is what a
+  /// client's preflop range library is built from. FAILED_PRECONDITION for
+  /// other jobs.
+  $grpc.ResponseFuture<$0.GetPreflopRangesResponse> getPreflopRanges(
+    $0.GetPreflopRangesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getPreflopRanges, request, options: options);
+  }
+
   // method descriptors
 
   static final _$getNode =
@@ -61,6 +83,16 @@ class SolutionServiceClient extends $grpc.Client {
           '/gto.v1.SolutionService/GetRunoutReport',
           ($0.GetRunoutReportRequest value) => value.writeToBuffer(),
           $0.GetRunoutReportResponse.fromBuffer);
+  static final _$listPreflopScenarios = $grpc.ClientMethod<
+          $0.ListPreflopScenariosRequest, $0.ListPreflopScenariosResponse>(
+      '/gto.v1.SolutionService/ListPreflopScenarios',
+      ($0.ListPreflopScenariosRequest value) => value.writeToBuffer(),
+      $0.ListPreflopScenariosResponse.fromBuffer);
+  static final _$getPreflopRanges = $grpc.ClientMethod<
+          $0.GetPreflopRangesRequest, $0.GetPreflopRangesResponse>(
+      '/gto.v1.SolutionService/GetPreflopRanges',
+      ($0.GetPreflopRangesRequest value) => value.writeToBuffer(),
+      $0.GetPreflopRangesResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('gto.v1.SolutionService')
@@ -84,6 +116,24 @@ abstract class SolutionServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.GetRunoutReportRequest.fromBuffer(value),
         ($0.GetRunoutReportResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListPreflopScenariosRequest,
+            $0.ListPreflopScenariosResponse>(
+        'ListPreflopScenarios',
+        listPreflopScenarios_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListPreflopScenariosRequest.fromBuffer(value),
+        ($0.ListPreflopScenariosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetPreflopRangesRequest,
+            $0.GetPreflopRangesResponse>(
+        'GetPreflopRanges',
+        getPreflopRanges_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetPreflopRangesRequest.fromBuffer(value),
+        ($0.GetPreflopRangesResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.GetNodeResponse> getNode_Pre($grpc.ServiceCall $call,
@@ -102,4 +152,22 @@ abstract class SolutionServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetRunoutReportResponse> getRunoutReport(
       $grpc.ServiceCall call, $0.GetRunoutReportRequest request);
+
+  $async.Future<$0.ListPreflopScenariosResponse> listPreflopScenarios_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListPreflopScenariosRequest> $request) async {
+    return listPreflopScenarios($call, await $request);
+  }
+
+  $async.Future<$0.ListPreflopScenariosResponse> listPreflopScenarios(
+      $grpc.ServiceCall call, $0.ListPreflopScenariosRequest request);
+
+  $async.Future<$0.GetPreflopRangesResponse> getPreflopRanges_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetPreflopRangesRequest> $request) async {
+    return getPreflopRanges($call, await $request);
+  }
+
+  $async.Future<$0.GetPreflopRangesResponse> getPreflopRanges(
+      $grpc.ServiceCall call, $0.GetPreflopRangesRequest request);
 }

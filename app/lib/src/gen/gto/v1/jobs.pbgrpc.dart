@@ -32,7 +32,9 @@ class JobServiceClient extends $grpc.Client {
 
   JobServiceClient(super.channel, {super.options, super.interceptors});
 
-  /// Queues a spot for solving. The server solves one job at a time.
+  /// Queues a spot for solving. The server solves one job at a time. Errors
+  /// as for TreeService.EstimateTree, and RESOURCE_EXHAUSTED for a spot over
+  /// the server's limits.
   ///
   /// If a job for the same spot is already done, or queued or running with
   /// settings at least as strict, the server returns that job instead of
