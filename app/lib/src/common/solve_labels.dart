@@ -132,3 +132,10 @@ String jobKind(Job job) {
   if (job.engine != Engine.ENGINE_AUTO) parts.add(engineLabel(job.engine));
   return parts.join(' · ');
 }
+
+/// Title of a job: its name, or the board, or what kind of solve it is.
+String jobTitle(Job job) => job.name.isNotEmpty
+    ? job.name
+    : job.spot.board.isNotEmpty
+    ? job.spot.board
+    : jobKind(job);

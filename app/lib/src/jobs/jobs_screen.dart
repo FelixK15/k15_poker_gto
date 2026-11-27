@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../common/playing_card.dart';
+import '../common/solve_labels.dart';
 
 /// "Running", "Paused", … for a job state.
 String jobStateLabel(JobState state) {
@@ -29,12 +30,31 @@ String jobStateLabel(JobState state) {
 /// One line on where a job stands.
 String jobProgress(Job job) {
   final parts = <String>[
-    'Iteration ${job.iteration} of ${job.settings.maxIterations}',
+    if (isMonteCarlo(job))
+      '${formatSamples(job.mcIterations.toInt())} of '
+          '${formatSamples(jobMcBudget(job))} samples'
+    else
+      'Iteration ${job.iteration} of ${job.settings.maxIterations}',
     if (job.measured)
-      '${job.exploitabilityPct.toStringAsFixed(2)}% of pot exploitable',
+      exploitabilityLabel(job.exploitabilityPct, job.exploitabilityKind),
     if (job.solveSeconds >= 0.05) '${job.solveSeconds.toStringAsFixed(1)} s',
   ];
   return parts.join(' · ');
+}
+
+/// The Monte Carlo iterations a job runs to.
+int jobMcBudget(Job job) => job.settings.mcIterations > 0
+    ? job.settings.mcIterations.toInt()
+    : defaultMcIterations;
+
+/// How far a running job is, 0 to 1, or null if that cannot be told.
+double? jobFraction(Job job) {
+  if (isMonteCarlo(job)) {
+    return (job.mcIterations.toInt() / jobMcBudget(job)).clamp(0.0, 1.0);
+  }
+  return job.settings.maxIterations == 0
+      ? null
+      : job.iteration / job.settings.maxIterations;
 }
 
 /// All jobs on the server, kept up to date, with their controls.
@@ -323,7 +343,7 @@ class _JobCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          job.name.isEmpty ? job.spot.board : job.name,
+                          jobTitle(job),
                           style: theme.textTheme.titleSmall,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -346,6 +366,15 @@ class _JobCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                jobKind(job),
+                                key: Key('kind-${job.id}'),
+                                overflow: TextOverflow.ellipsis,
+                                style: muted,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -359,11 +388,17 @@ class _JobCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                failed ? job.error : jobProgress(job),
-                style: failed
-                    ? theme.textTheme.bodySmall?.copyWith(color: scheme.error)
-                    : muted,
+              Tooltip(
+                message: failed || !job.measured
+                    ? ''
+                    : exploitabilityMeaning(job.exploitabilityKind),
+                child: Text(
+                  failed ? job.error : jobProgress(job),
+                  key: Key('progress-${job.id}'),
+                  style: failed
+                      ? theme.textTheme.bodySmall?.copyWith(color: scheme.error)
+                      : muted,
+                ),
               ),
               if (job.locks.isNotEmpty)
                 Text(
@@ -374,9 +409,8 @@ class _JobCard extends StatelessWidget {
                 ),
               if (job.measured)
                 Text(
-                  'EV: OOP ${job.oopEv.toStringAsFixed(2)}, '
-                  'IP ${job.ipEv.toStringAsFixed(2)} · '
-                  '${formatBytes(job.memoryBytes.toInt())}',
+                  '${evLine(job)} · ${formatBytes(job.memoryBytes.toInt())}',
+                  key: Key('ev-${job.id}'),
                   style: muted,
                 ),
               if (running) ...[
@@ -387,9 +421,7 @@ class _JobCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(3),
                     child: LinearProgressIndicator(
                       minHeight: 5,
-                      value: job.settings.maxIterations == 0
-                          ? null
-                          : job.iteration / job.settings.maxIterations,
+                      value: jobFraction(job),
                     ),
                   ),
                 ),
