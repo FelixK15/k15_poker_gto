@@ -20,6 +20,7 @@ target_compile_definitions(gto-server PRIVATE GTO_SERVER_VERSION="${PROJECT_VERS
 
 if(GTO_BUILD_TESTS)
   add_executable(server_tests
+    tests/engines_test.cpp
     tests/job_manager_test.cpp
     tests/services_test.cpp
     tests/zstd_stream_test.cpp
