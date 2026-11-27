@@ -14,6 +14,7 @@
 #include "convert.h"
 #include "gto/hands.h"
 #include "gto/mc/abstraction.h"
+#include "gto/mc/preflop.h"
 #include "gto/mc/spot.h"
 #include "gto/omaha.h"
 #include "gto/range.h"
@@ -98,6 +99,15 @@ Error check_abstraction(const v1::Abstraction& abstraction) {
 
 Error check_preflop(const v1::Spot& spot) {
   const v1::PreflopSettings& preflop = spot.preflop();
+  if (!preflop.preset().empty()) {
+    if (preset_players(preflop.preset()) == 0) {
+      return invalid("preflop.preset: '" + preflop.preset() + "' is not hu, 6max or 9max");
+    }
+    if (!(preflop.stack_bb() > 2) || !std::isfinite(preflop.stack_bb())) {
+      return invalid("preflop.stack_bb: a preset needs more than 2 big blinds");
+    }
+    return {};
+  }
   if (preflop.players() < 2 || preflop.players() > 9) {
     return invalid("preflop.players: a table has 2 to 9 players");
   }
@@ -252,44 +262,70 @@ void apply_abstraction(const v1::Abstraction& abstraction, mc::AbstractionConfig
   }
 }
 
+/// The engine's preflop settings for a spot.
+std::optional<mc::PreflopSettings> preflop_settings(const v1::Spot& spot, std::string* error) {
+  const v1::PreflopSettings& pf = spot.preflop();
+  mc::PreflopSettings settings;
+  if (!pf.preset().empty()) {
+    auto preset = mc::preflop_preset(pf.preset(), pf.stack_bb(), error);
+    if (!preset) return std::nullopt;
+    settings = std::move(preset->settings);
+  } else {
+    settings.players = static_cast<int>(pf.players());
+    settings.small_blind = pf.has_small_blind() ? pf.small_blind() : 0.5;
+    settings.big_blind = pf.has_big_blind() ? pf.big_blind() : 1.0;
+    settings.ante = pf.ante();
+    settings.bb_ante = pf.bb_ante();
+    settings.open_sizes_bb.assign(pf.open_sizes_bb().begin(), pf.open_sizes_bb().end());
+    for (const v1::PositionSizes& sizes : pf.open_sizes_by_position()) {
+      settings.open_sizes_by_position[sizes.position()] =
+          std::vector<double>(sizes.sizes_bb().begin(), sizes.sizes_bb().end());
+    }
+    settings.sb_open_sizes_bb.assign(pf.sb_open_sizes_bb().begin(), pf.sb_open_sizes_bb().end());
+    settings.allow_limp = pf.allow_limp();
+    settings.allow_sb_complete = pf.allow_sb_complete();
+    if (pf.has_three_bet_ip_multiplier()) {
+      settings.three_bet_ip_multiplier = pf.three_bet_ip_multiplier();
+    }
+    if (pf.has_three_bet_oop_multiplier()) {
+      settings.three_bet_oop_multiplier = pf.three_bet_oop_multiplier();
+    }
+    if (pf.has_four_bet_multiplier()) settings.four_bet_multiplier = pf.four_bet_multiplier();
+    settings.allow_cold_calls = pf.allow_cold_calls();
+    settings.allow_cold_call_3bet = pf.allow_cold_call_3bet();
+    settings.allow_cold_call_4bet = pf.allow_cold_call_4bet();
+    if (pf.has_squeeze_per_caller()) settings.squeeze_per_caller = pf.squeeze_per_caller();
+    if (pf.has_raise_cap()) settings.raise_cap = static_cast<int>(pf.raise_cap());
+    settings.solve_postflop = pf.solve_postflop();
+    if (settings.solve_postflop) {
+      settings.flop_sizing = to_street(spot.tree().flop(), settings.players);
+      if (spot.tree().has_raise_cap()) {
+        settings.flop_raise_cap = static_cast<int>(std::min<std::uint32_t>(spot.tree().raise_cap(), 100));
+      }
+    }
+  }
+  settings.stack_bb = pf.stack_bb();
+  settings.rake_rate = spot.rake_pct() / 100.0;
+  settings.rake_cap = spot.rake_cap();
+  return settings;
+}
+
 std::optional<mc::GameConfig> preflop_config(const v1::Spot& spot, const EngineLimits& limits,
                                              std::string* error) {
-  const v1::PreflopSettings& pf = spot.preflop();
-  const int players = static_cast<int>(pf.players());
-  const double big_blind = pf.has_big_blind() ? pf.big_blind() : 1.0;
-  const double small_blind = (pf.has_small_blind() ? pf.small_blind() : 0.5) / big_blind;
-  const double ante = pf.ante() / big_blind;
-  mc::GameConfig config =
-      mc::GameConfig::preflop_game(players, pf.stack_bb(), small_blind, pf.bb_ante() ? 0 : ante);
-  if (pf.bb_ante() && ante > 0) {
-    config.stacks[static_cast<std::size_t>(players - 1)] -= ante;
-    config.dead_pot += ante;
+  const auto settings = preflop_settings(spot, error);
+  if (!settings) return std::nullopt;
+  auto config = mc::make_preflop_config(*settings, error);
+  if (!config) return std::nullopt;
+  if (spot.variant() == v1::VARIANT_OMAHA4) {
+    config->variant = Variant::Omaha4;
+    config->ranges.clear();
   }
-  config.variant = spot.variant() == v1::VARIANT_OMAHA4 ? Variant::Omaha4 : Variant::Holdem;
-  config.pot_limit = spot.has_pot_limit() ? spot.pot_limit() : config.variant == Variant::Omaha4;
-
-  mc::PreflopSizing& sizing = config.preflop;
-  if (pf.open_sizes_bb_size() > 0) sizing.open_bb.assign(pf.open_sizes_bb().begin(), pf.open_sizes_bb().end());
-  if (pf.sb_open_sizes_bb_size() > 0) {
-    sizing.sb_open_bb.assign(pf.sb_open_sizes_bb().begin(), pf.sb_open_sizes_bb().end());
+  if (spot.has_pot_limit() || spot.variant() == v1::VARIANT_OMAHA4) {
+    config->pot_limit = spot.has_pot_limit() ? spot.pot_limit() : true;
   }
-  sizing.allow_limp = pf.allow_limp();
-  if (pf.has_three_bet_ip_multiplier()) sizing.threebet_ip = {pf.three_bet_ip_multiplier()};
-  if (pf.has_three_bet_oop_multiplier()) sizing.threebet_oop = {pf.three_bet_oop_multiplier()};
-  if (pf.has_four_bet_multiplier()) sizing.fourbet = {pf.four_bet_multiplier()};
-  sizing.cold_call_3bet = pf.allow_cold_calls();
-  sizing.cold_call_4bet = pf.allow_cold_calls();
-  if (pf.has_raise_cap()) sizing.raise_cap = static_cast<int>(pf.raise_cap());
-
-  if (pf.solve_postflop()) {
-    config.last_street = mc::Street::River;
-    apply_tree(spot.tree(), players, &config.sizing, &config.raise_cap, &config.allin_threshold);
-  }
-  config.rake.rate = spot.rake_pct() / 100.0;
-  config.rake.cap = spot.rake_cap();
-  apply_abstraction(spot.abstraction(), &config.abstraction);
-  config.max_nodes = static_cast<std::size_t>(limits.max_nodes);
-  if (!config.validate(error)) return std::nullopt;
+  apply_abstraction(spot.abstraction(), &config->abstraction);
+  config->max_nodes = static_cast<std::size_t>(limits.max_nodes);
+  if (!config->validate(error)) return std::nullopt;
   return config;
 }
 
@@ -319,7 +355,8 @@ std::optional<mc::GameConfig> postflop_config(const v1::Spot& spot, const Engine
   return mc::make_game_config(mw, error);
 }
 
-std::vector<std::string> positions_of(const v1::Spot& spot) {
+std::vector<std::string> positions_of(const v1::Spot& spot, const mc::GameConfig& config) {
+  if (spot.has_preflop()) return preflop_positions(static_cast<std::size_t>(config.num_players));
   return spot_positions(spot);
 }
 
@@ -601,7 +638,7 @@ Error McEngine::estimate(const v1::Spot& spot, const EngineLimits& limits,
                                    ? v1::EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY
                                    : v1::EXPLOITABILITY_KIND_ESTIMATED_TWO_PLAYER);
   out->set_player_count(static_cast<std::uint32_t>(config->num_players));
-  for (const std::string& position : positions_of(spot)) out->add_positions(position);
+  for (const std::string& position : positions_of(spot, *config)) out->add_positions(position);
   for (int s = 0; s < mc::kNumStreets; ++s) {
     const mc::StreetPlan& plan = estimate->abstraction[static_cast<std::size_t>(s)];
     if (plan.description.empty()) continue;
@@ -631,17 +668,17 @@ std::unique_ptr<McEngine> McEngine::create(const v1::Spot& spot, const EngineLim
   std::unique_ptr<McEngine> engine(new McEngine());
   engine->solver_ = std::move(solver);
   engine->spot_ = spot;
-  engine->positions_ = positions_of(spot);
+  engine->positions_ = positions_of(spot, *config);
   engine->preflop_ = spot.has_preflop();
   engine->posted_.assign(static_cast<std::size_t>(config->num_players), 0.0);
   if (engine->preflop_) {
-    const v1::PreflopSettings& pf = spot.preflop();
-    const double ante = pf.ante() / (pf.has_big_blind() ? pf.big_blind() : 1.0);
+    // Blinds are in `committed`; antes came off the stacks into the dead pot.
+    const auto settings = preflop_settings(spot, error);
+    const double stack = settings ? settings->stack_bb : 0.0;
     for (int p = 0; p < config->num_players; ++p) {
-      double posted = config->committed_of(p);
-      if (!pf.bb_ante()) posted += ante;
-      if (pf.bb_ante() && p == config->num_players - 1) posted += ante;
-      engine->posted_[static_cast<std::size_t>(p)] = posted;
+      const auto seat = static_cast<std::size_t>(p);
+      const double ante = seat < config->stacks.size() ? stack - config->stacks[seat] : 0.0;
+      engine->posted_[seat] = config->committed_of(p) + std::max(0.0, ante);
     }
   }
   return engine;
@@ -696,6 +733,11 @@ EngineEvaluation McEngine::evaluate() const {
 std::optional<std::string> McEngine::expand_path(std::string_view path,
                                                  std::string* error) const {
   if (path.find(':') == std::string_view::npos) return std::string(path);
+  if (preflop_) {
+    const auto resolved = mc::resolve_preflop_path(solver_->tree(), path, error);
+    if (!resolved) return std::nullopt;
+    return resolved->engine_path;
+  }
   const mc::BettingTree& tree = solver_->tree();
   std::uint32_t node = mc::BettingTree::kRoot;
   std::string out;
@@ -899,14 +941,90 @@ Error McEngine::runouts(std::string_view path, v1::GetRunoutReportResponse* out)
   return {};
 }
 
-Error McEngine::preflop_scenarios(std::uint32_t, v1::ListPreflopScenariosResponse*) const {
-  if (!preflop_) return SolveEngine::preflop_scenarios(0, nullptr);
-  return make_error(ErrorKind::FailedPrecondition, "preflop scenarios are not available yet");
+namespace {
+
+v1::PreflopScenarioKind to_proto(mc::PreflopScenarioKind kind) {
+  switch (kind) {
+    case mc::PreflopScenarioKind::Limped: return v1::PREFLOP_SCENARIO_KIND_LIMPED;
+    case mc::PreflopScenarioKind::SingleRaised: return v1::PREFLOP_SCENARIO_KIND_SINGLE_RAISED;
+    case mc::PreflopScenarioKind::ThreeBet: return v1::PREFLOP_SCENARIO_KIND_THREE_BET;
+    case mc::PreflopScenarioKind::FourBet: return v1::PREFLOP_SCENARIO_KIND_FOUR_BET;
+    case mc::PreflopScenarioKind::FiveBetPlus: return v1::PREFLOP_SCENARIO_KIND_FIVE_BET_PLUS;
+  }
+  return v1::PREFLOP_SCENARIO_KIND_UNSPECIFIED;
 }
 
-Error McEngine::preflop_ranges(std::string_view, v1::GetPreflopRangesResponse*) const {
-  if (!preflop_) return SolveEngine::preflop_ranges({}, nullptr);
-  return make_error(ErrorKind::FailedPrecondition, "preflop ranges are not available yet");
+}  // namespace
+
+Error McEngine::preflop_scenarios(std::uint32_t max_raises,
+                                  v1::ListPreflopScenariosResponse* out) const {
+  if (!preflop_) return SolveEngine::preflop_scenarios(max_raises, out);
+  if (solver_->config().variant != Variant::Holdem) {
+    return make_error(ErrorKind::FailedPrecondition, "preflop scenarios exist for Hold'em only");
+  }
+  const int raises = static_cast<int>(std::min<std::uint32_t>(std::max(max_raises, 1u), 10u));
+  for (const mc::PreflopScenario& scenario : mc::list_preflop_scenarios(*solver_, raises)) {
+    v1::PreflopScenario* proto = out->add_scenarios();
+    proto->set_name(scenario.name);
+    proto->set_path(scenario.path.short_path);
+    proto->set_kind(to_proto(scenario.kind));
+    for (const std::string& position : scenario.positions) proto->add_positions(position);
+    proto->set_aggressor(scenario.aggressor_position);
+    proto->set_pot(scenario.pot);
+    proto->set_effective_stack(scenario.effective_stack);
+    proto->set_frequency(scenario.frequency);
+  }
+  return {};
+}
+
+Error McEngine::preflop_ranges(std::string_view path, v1::GetPreflopRangesResponse* out) const {
+  if (!preflop_) return SolveEngine::preflop_ranges(path, out);
+  if (solver_->config().variant != Variant::Holdem) {
+    return make_error(ErrorKind::FailedPrecondition, "preflop ranges exist for Hold'em only");
+  }
+  std::string error;
+  const auto ranges = mc::preflop_ranges(*solver_, path, &error);
+  if (!ranges) return make_error(ErrorKind::NotFound, "path '" + std::string(path) + "': " + error);
+
+  out->set_path(ranges->path.full_path);
+  out->set_complete(ranges->complete);
+  out->set_pot(ranges->pot);
+  out->set_effective_stack(ranges->effective_stack);
+  out->set_iteration(static_cast<std::uint32_t>(
+      std::min<std::uint64_t>(solver_->iterations(), std::numeric_limits<std::uint32_t>::max())));
+
+  v1::Spot& spot = *out->mutable_spot();
+  spot.set_variant(v1::VARIANT_HOLDEM);
+  spot.set_pot(ranges->pot);
+  spot.set_effective_stack(ranges->effective_stack);
+  spot.set_rake_pct(spot_.rake_pct());
+  spot.set_rake_cap(spot_.rake_cap());
+  const bool heads_up = ranges->players.size() == 2;
+  for (std::size_t i = 0; i < ranges->players.size(); ++i) {
+    const mc::PreflopPlayerRange& player = ranges->players[i];
+    v1::PreflopRange* proto = out->add_players();
+    proto->set_position(player.position);
+    const std::string text = player.range.to_string();
+    proto->set_range(text);
+    proto->set_committed(player.committed);
+    proto->set_stack(player.stack);
+    for (int cls = 0; cls < 169; ++cls) {
+      v1::HandClass* c = proto->add_classes();
+      c->set_name(mc::holdem_class_name(cls));
+      const float weight = player.class_weight[static_cast<std::size_t>(cls)];
+      c->set_weight(weight);
+      c->set_combos(weight * static_cast<float>(mc::holdem_class_combos(cls)));
+    }
+    if (heads_up) {
+      (i == 0 ? spot.mutable_oop_range() : spot.mutable_ip_range())->assign(text);
+    } else {
+      v1::PlayerSpot* seat = spot.add_players();
+      seat->set_position(player.position);
+      seat->set_range(text);
+      seat->set_stack(player.stack);
+    }
+  }
+  return {};
 }
 
 // --- State -----------------------------------------------------------------------------

@@ -788,5 +788,111 @@ TEST(MonteCarlo, NamesPositions) {
   EXPECT_EQ(spot_positions(quick_spot()), (std::vector<std::string>{"OOP", "IP"}));
 }
 
+// --- Preflop solves ------------------------------------------------------------------
+
+TEST(Preflop, SolvesAHeadsUpPresetAndExportsRanges) {
+  v1::Spot spot;
+  spot.mutable_preflop()->set_preset("hu");
+  spot.mutable_preflop()->set_stack_bb(20);
+  JobManager jobs(memory_config());
+  v1::EstimateTreeResponse estimate;
+  ASSERT_FALSE(jobs.estimate(spot, &estimate));
+  EXPECT_EQ(estimate.engine(), v1::ENGINE_MONTE_CARLO);
+  EXPECT_EQ(estimate.player_count(), 2u);
+
+  const v1::Job job = solve(jobs, mc_request(spot, 300'000));
+  EXPECT_EQ(job.exploitability_kind(), v1::EXPLOITABILITY_KIND_ESTIMATED_TWO_PLAYER);
+  ASSERT_EQ(job.positions_size(), 2);
+  EXPECT_EQ(job.positions(0), "BTN");
+  EXPECT_EQ(job.positions(1), "BB");
+  ASSERT_EQ(job.evs_size(), 2);
+  // Relative to the stacks before posting: zero-sum without rake.
+  EXPECT_NEAR(job.evs(0) + job.evs(1), 0.0, 1e-6);
+
+  NodeOptions classes;
+  classes.detail = v1::HAND_DETAIL_CLASSES;
+  v1::GetNodeResponse root;
+  ASSERT_FALSE(jobs.node(job.id(), "", classes, &root));
+  EXPECT_EQ(root.acting_player(), 0u);
+  EXPECT_EQ(root.board(), "");
+  ASSERT_EQ(root.committed_size(), 2);
+  EXPECT_DOUBLE_EQ(root.committed(0), 0.5);
+  EXPECT_DOUBLE_EQ(root.committed(1), 1.0);
+  const v1::PlayerRange& button = root.players(0);
+  ASSERT_EQ(button.classes_size(), 169);
+  EXPECT_EQ(button.classes(0).name(), "AA");
+  ASSERT_EQ(button.classes(0).strategy_size(), root.actions_size());
+  EXPECT_FLOAT_EQ(button.classes(0).weight(), 1.0f);
+
+  v1::ListPreflopScenariosResponse scenarios;
+  ASSERT_FALSE(jobs.preflop_scenarios(job.id(), 4, &scenarios));
+  ASSERT_GT(scenarios.scenarios_size(), 0);
+  const v1::PreflopScenario* srp = nullptr;
+  for (const v1::PreflopScenario& scenario : scenarios.scenarios()) {
+    EXPECT_EQ(scenario.positions_size(), 2);
+    EXPECT_GT(scenario.pot(), 0);
+    if (scenario.kind() == v1::PREFLOP_SCENARIO_KIND_SINGLE_RAISED && srp == nullptr) {
+      srp = &scenario;
+    }
+  }
+  ASSERT_NE(srp, nullptr);
+  EXPECT_EQ(srp->aggressor(), "BTN");
+  EXPECT_NE(srp->path().find("BTN:raise"), std::string::npos) << srp->path();
+
+  v1::GetPreflopRangesResponse ranges;
+  ASSERT_FALSE(jobs.preflop_ranges(job.id(), srp->path(), &ranges));
+  EXPECT_TRUE(ranges.complete());
+  ASSERT_EQ(ranges.players_size(), 2);
+  EXPECT_DOUBLE_EQ(ranges.pot(), srp->pot());
+  for (const v1::PreflopRange& player : ranges.players()) {
+    EXPECT_EQ(player.classes_size(), 169);
+    std::string error;
+    EXPECT_TRUE(Range::parse(player.range(), &error)) << error;
+    EXPECT_FALSE(player.range().empty());
+  }
+  EXPECT_EQ(ranges.spot().oop_range(), ranges.players(0).range());
+  EXPECT_EQ(ranges.spot().ip_range(), ranges.players(1).range());
+  EXPECT_DOUBLE_EQ(ranges.spot().pot(), ranges.pot());
+  EXPECT_DOUBLE_EQ(ranges.spot().effective_stack(), ranges.effective_stack());
+
+  // The positional path browses too.
+  v1::GetNodeResponse node;
+  ASSERT_FALSE(jobs.node(job.id(), srp->path(), &node));
+  EXPECT_EQ(jobs.preflop_ranges(job.id(), "BB:banana", &ranges).kind, ErrorKind::NotFound);
+}
+
+TEST(Preflop, SolvesThreeHandedSettings) {
+  v1::Spot spot;
+  v1::PreflopSettings& preflop = *spot.mutable_preflop();
+  preflop.set_players(3);
+  preflop.set_stack_bb(25);
+  preflop.add_open_sizes_bb(2.5);
+  preflop.set_raise_cap(3);
+  JobManager jobs(memory_config());
+  const v1::Job job = solve(jobs, mc_request(spot, 200'000));
+  ASSERT_EQ(job.positions_size(), 3);
+  EXPECT_EQ(job.positions(0), "BTN");
+  EXPECT_EQ(job.positions(2), "BB");
+  EXPECT_EQ(job.exploitability_kind(), v1::EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY);
+  ASSERT_EQ(job.evs_size(), 3);
+
+  v1::ListPreflopScenariosResponse scenarios;
+  ASSERT_FALSE(jobs.preflop_scenarios(job.id(), 2, &scenarios));
+  ASSERT_GT(scenarios.scenarios_size(), 0);
+  for (const v1::PreflopScenario& scenario : scenarios.scenarios()) {
+    EXPECT_LE(scenario.kind(), v1::PREFLOP_SCENARIO_KIND_SINGLE_RAISED) << scenario.name();
+  }
+  v1::GetPreflopRangesResponse ranges;
+  ASSERT_FALSE(jobs.preflop_ranges(job.id(), "BTN:raise2.5", &ranges));
+  EXPECT_FALSE(ranges.complete());
+  EXPECT_EQ(ranges.players_size(), 3);
+
+  v1::Spot bad;
+  bad.mutable_preflop()->set_preset("7max");
+  bad.mutable_preflop()->set_stack_bb(100);
+  v1::EstimateTreeResponse estimate;
+  EXPECT_EQ(jobs.estimate(bad, &estimate).kind, ErrorKind::InvalidArgument);
+}
+
 }  // namespace
 }  // namespace gto::server
