@@ -154,7 +154,7 @@ class _PloHandTableState extends State<PloHandTable> {
           children: [
             chip('Weight', PloSort.weight),
             chip('EV', PloSort.ev),
-            chip('Equity', PloSort.equity),
+            if (list.hasEquity) chip('Equity', PloSort.equity),
             for (var a = 0; a < list.actionCount; ++a)
               chip(
                 actionTitle(widget.actions[a]),
@@ -171,6 +171,7 @@ class _PloHandTableState extends State<PloHandTable> {
     Widget row(int index) => _PloHandRow(
       key: Key('plo-hand-${hands[index].name}'),
       hand: hands[index],
+      showEquity: list.hasEquity,
       actions: widget.actions,
       colors: widget.colors,
     );
@@ -228,9 +229,11 @@ class _PloHandRow extends StatelessWidget {
     required this.hand,
     required this.actions,
     required this.colors,
+    this.showEquity = true,
   });
 
   final PloHand hand;
+  final bool showEquity;
   final List<NodeAction> actions;
   final List<Color> colors;
 
@@ -279,7 +282,7 @@ class _PloHandRow extends StatelessWidget {
           SizedBox(
             width: 52,
             child: Text(
-              formatPercent(hand.equity, digits: 0),
+              showEquity ? formatPercent(hand.equity, digits: 0) : '',
               style: small,
               textAlign: TextAlign.right,
             ),

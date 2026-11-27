@@ -46,7 +46,16 @@ class PloHand {
 /// four-card hands). The server sends the hands with the most reach,
 /// up to GetNodeRequest.max_hands.
 class PloHandList {
-  PloHandList._(this.hands, this.actionCount, this.totalHands, this.shown);
+  PloHandList._(
+    this.hands,
+    this.actionCount,
+    this.totalHands,
+    this.shown,
+    this.hasEquity,
+  );
+
+  /// Whether the hands carry equities (exact engine only).
+  final bool hasEquity;
 
   factory PloHandList.fromRange(
     PlayerRange range, {
@@ -72,8 +81,10 @@ class PloHandList {
         ),
     ];
     final total = range.totalHands > 0 ? range.totalHands : count;
+    // Monte Carlo sends no equities.
+    final hasEquity = range.equity.isNotEmpty;
     final shown = range.shownReachFraction > 0 ? range.shownReachFraction : 1.0;
-    return PloHandList._(hands, actions, total, shown);
+    return PloHandList._(hands, actions, total, shown, hasEquity);
   }
 
   /// In the order the server sent them (the range's own order).

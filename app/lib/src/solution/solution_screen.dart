@@ -58,6 +58,9 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// PLO: hands per player to ask for.
   int _ploMaxHands = 1000;
 
+  /// Cards picked so far for a flop dealt at once (preflop solves).
+  final List<String> _flopPicks = [];
+
   /// Cell under the mouse, shown in the details while it is there.
   int? _hovered;
 
@@ -181,6 +184,7 @@ class _SolutionScreenState extends State<SolutionScreen> {
       _highlight = null;
       _view = null;
       _runouts = null;
+      _flopPicks.clear();
       // A node seen before shows at once, and is read again behind it.
       if (cached != null) {
         _node = cached;
@@ -699,9 +703,28 @@ class _SolutionScreenState extends State<SolutionScreen> {
     GetNodeResponse node, {
     required bool compact,
   }) {
+    // A preflop solve deals the whole flop in one step: three picks.
+    final flop = _isPreflop && node.board.trim().isEmpty;
+    final seats = NodeSeats(node, _job);
+    final seat = _viewedSeat(node);
+    void pick(String card) {
+      if (!flop) {
+        _go([..._path, card]);
+        return;
+      }
+      setState(() {
+        if (!_flopPicks.remove(card)) _flopPicks.add(card);
+      });
+      if (_flopPicks.length == 3) _go([..._path, _flopPicks.join()]);
+    }
+
     return PanelSection(
-      title: 'Deal the next card',
-      trailing: _runouts != null
+      title: flop
+          ? 'Deal the flop: pick three cards'
+                '${_flopPicks.isEmpty ? '' : ' (${_flopPicks.map(cardTitle).join(' ')})'}'
+          : 'Deal the next card',
+      // Runout reports cover single turn and river cards.
+      trailing: _runouts != null || flop
           ? null
           : TextButton.icon(
               key: const Key('runouts-button'),
@@ -722,15 +745,19 @@ class _SolutionScreenState extends State<SolutionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CardPicker(
-            cards: node.nextCards,
+            cards: [
+              for (final card in node.nextCards)
+                if (!_flopPicks.contains(card)) card,
+            ],
             compact: compact,
-            onPick: (card) => _go([..._path, card]),
+            onPick: pick,
           ),
           if (_runouts != null) ...[
             const SizedBox(height: 10),
             RunoutReport(
               runouts: _runouts!,
-              firstSeat: NodeSeats(node, _job).positions.first,
+              seat: seat,
+              seatName: seats.positions[seat],
               onPick: (card) => _go([..._path, card]),
             ),
           ],

@@ -220,7 +220,7 @@ void main() {
           strategy: strategy[cell.label] ?? const [1, 0],
         ),
     ];
-    final positions = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
+    final positions = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
     api.nodes[''] = GetNodeResponse(
       type: NodeType.NODE_TYPE_ACTION,
       path: '',
@@ -230,7 +230,7 @@ void main() {
           PlayerRange(
             position: positions[i],
             classes: classes(
-              i == 2
+              i == 0
                   ? {
                       'AA': [0, 1],
                     }
@@ -238,8 +238,8 @@ void main() {
             ),
           ),
       ],
-      actingPlayer: 2,
-      committed: [0.5, 1, 0, 0, 0, 0],
+      actingPlayer: 0,
+      committed: [0, 0, 0, 0, 0.5, 1],
       folded: List.filled(6, false),
       allIn: List.filled(6, false),
       actions: [

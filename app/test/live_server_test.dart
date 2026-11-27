@@ -19,6 +19,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:grpc/grpc.dart';
 import 'package:k15_gto/src/api/gto_api.dart';
 import 'package:k15_gto/src/connection/local_server.dart';
+import 'package:k15_gto/src/range/preflop_source.dart';
+import 'package:k15_gto/src/solution/matrix_model.dart';
+import 'package:k15_gto/src/solution/node_view.dart';
+import 'package:k15_gto/src/spot/preflop_form.dart';
+import 'package:k15_gto/src/spot/spot_form.dart';
 
 // Nuts or air against bluff-catchers; the answer is known exactly.
 Spot quickSpot() => Spot(
@@ -291,7 +296,7 @@ void main() {
       );
     });
 
-    test('solves heads-up PLO and sizes up a multiway spot', () async {
+    test('solves heads-up PLO on the exact engine', () async {
       final api = await LocalServer.start(
         executable: serverPath,
         dataDir: dataDir.path,
@@ -335,34 +340,112 @@ void main() {
       expect(node.players[1].hands.length, lessThanOrEqualTo(20));
       expect(node.players[1].hands.first, hasLength(8));
       expect(node.players[1].totalHands, greaterThan(20));
+    });
 
-      // Multiway: refused until the Monte Carlo engine is in, then sized.
-      final multiway = Spot(
-        board: 'Kc 8d 5h',
-        pot: 10,
-        effectiveStack: 95,
-        players: [
-          PlayerSpot(position: 'BB', range: '22+, A2s+'),
-          PlayerSpot(position: 'CO', range: '22+, A2s+'),
-          PlayerSpot(position: 'BTN', range: '22+, A2s+'),
-        ],
-        tree: TreeSettings(
-          flop: StreetSizing(all: BetSizing(betPct: [50])),
-          turn: StreetSizing(all: BetSizing(betPct: [50])),
-          river: StreetSizing(all: BetSizing(betPct: [50])),
-        ),
+    test('solves a three-way river on Monte Carlo and browses it', () async {
+      final api = await LocalServer.start(
+        executable: serverPath,
+        dataDir: dataDir.path,
       );
-      try {
-        final sized = await api.estimate(multiway);
-        expect(sized.engine, Engine.ENGINE_MONTE_CARLO);
-        expect(
-          sized.exploitabilityKind,
-          ExploitabilityKind.EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY,
-        );
-        expect(sized.positions, ['BB', 'CO', 'BTN']);
-      } on GrpcError catch (error) {
-        expect(error.code, StatusCode.failedPrecondition);
+      addTearDown(api.close);
+      if (!supportsVariants(api.info)) {
+        markTestSkipped('the server predates API 1.4');
+        return;
       }
+      final input = SpotInput()
+        ..board = 'Kc 8d 5h 3s 2d'
+        ..pot = '30'
+        ..stack = '50'
+        ..raiseCap = '1'
+        ..setPlayerCount(3)
+        ..mcIterations = '0.2'
+        ..maxSeconds = '20';
+      for (final player in input.players) {
+        player.range = 'AA, KQs, 88, 55, 76s, A4s';
+      }
+      input.multiwaySizing[2].bet = '50';
+      final spot = input.toSpot().spot!;
+      final estimate = await api.estimate(spot);
+      expect(estimate.engine, Engine.ENGINE_MONTE_CARLO);
+      expect(
+        estimate.exploitabilityKind,
+        ExploitabilityKind.EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY,
+      );
+      expect(estimate.positions, ['BB', 'CO', 'BTN']);
+      expect(estimate.infoSets.toInt(), greaterThan(0));
+
+      final job = await api.submit(
+        spot,
+        input.toSettings().settings!,
+        'dart live 3-way',
+      );
+      final done = (await api.watch(job.id).toList()).last;
+      expect(done.state, JobState.JOB_STATE_DONE);
+      expect(done.engine, Engine.ENGINE_MONTE_CARLO);
+      expect(done.positions, ['BB', 'CO', 'BTN']);
+      expect(done.evs, hasLength(3));
+      expect(done.mcIterations.toInt(), greaterThan(0));
+
+      final root = await api.getNode(job.id, '');
+      expect(root.players, hasLength(3));
+      expect(root.actingPlayer, 0);
+      expect(root.evEstimated, isTrue);
+      final seats = NodeSeats(root, done);
+      expect(seats.positions, ['BB', 'CO', 'BTN']);
+      final model = MatrixModel.fromRange(
+        root.players[0],
+        strategy: root.strategy,
+        actionCount: root.actions.length,
+      );
+      expect(model.actionCount, root.actions.length);
+      // The next seat acts after a check.
+      final next = await api.getNode(job.id, root.actions.first.label);
+      expect(NodeSeats(next, done).acting, 1);
+    });
+
+    test('runs a heads-up preflop solve and fills a spot from it', () async {
+      final api = await LocalServer.start(
+        executable: serverPath,
+        dataDir: dataDir.path,
+      );
+      addTearDown(api.close);
+      if (!supportsVariants(api.info)) {
+        markTestSkipped('the server predates API 1.4');
+        return;
+      }
+      final form = PreflopInput()
+        ..players = 2
+        ..mcIterations = '1'
+        ..maxSeconds = '20';
+      final job = await api.submit(
+        form.toSpot().spot!,
+        form.toSettings().settings!,
+        form.jobName,
+      );
+      final done = (await api.watch(job.id).toList()).last;
+      expect(done.state, JobState.JOB_STATE_DONE);
+      expect(done.positions, ['BTN', 'BB']);
+
+      final root = await api.getNode(
+        job.id,
+        '',
+        detail: HandDetail.HAND_DETAIL_CLASSES,
+      );
+      expect(root.players[root.actingPlayer].classes, hasLength(169));
+
+      final scenarios = await api.listPreflopScenarios(job.id);
+      expect(scenarios, isNotEmpty);
+      final line = scenarios.first;
+      final ranges = await api.getPreflopRanges(job.id, line.path);
+      expect(ranges.players, hasLength(2));
+
+      final input = SpotInput()..board = 'Ks 7d 2c';
+      applyPreflopRanges(input, ranges);
+      expect(input.oopRange, isNotEmpty);
+      final spot = input.toSpot().spot!;
+      expect(spot.pot, closeTo(line.pot, 0.01));
+      final estimate = await api.estimate(spot);
+      expect(estimate.nodes.toInt(), greaterThan(0));
     });
 
     test('reports a missing executable', () async {

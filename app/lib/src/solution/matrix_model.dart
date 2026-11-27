@@ -108,8 +108,9 @@ class MatrixModel {
       final name = range.hands[h];
       final index = cellIndex(name);
       if (index == null) continue;
-      final reach = range.reach[h].toDouble();
-      final ev = range.ev[h].toDouble();
+      final reach = h < range.reach.length ? range.reach[h].toDouble() : 0.0;
+      // Monte Carlo leaves EVs out for very wide ranges.
+      final ev = h < range.ev.length ? range.ev[h].toDouble() : 0.0;
       final equity = h < range.equity.length ? range.equity[h].toDouble() : 0.0;
       final frequencies = [
         for (var a = 0; a < actions; ++a)

@@ -169,7 +169,7 @@ class NodeSummary extends StatelessWidget {
                   : '$approx${seats.ranges[seat].rangeEv.toStringAsFixed(2)}',
             ),
             cell(
-              seats.folded(seat)
+              seats.folded(seat) || node.evEstimated
                   ? '–'
                   : formatPercent(seats.ranges[seat].rangeEquity),
             ),
@@ -663,30 +663,47 @@ class RunoutReport extends StatelessWidget {
     super.key,
     required this.runouts,
     required this.onPick,
-    this.firstSeat = 'OOP',
+    this.seat = 0,
+    this.seatName = 'OOP',
   });
 
   final List<Runout> runouts;
   final ValueChanged<String> onPick;
 
-  /// Position of the first player in seat order, whose value orders the
-  /// cards.
-  final String firstSeat;
+  /// The seat whose value orders the cards (the player viewed), and its
+  /// position name.
+  final int seat;
+  final String seatName;
+
+  /// The seat's EV after [runout]: from the per-seat list where the server
+  /// fills it, else the heads-up fields.
+  double valueOf(Runout runout) {
+    if (seat < runout.evs.length) return runout.evs[seat];
+    return seat == 1 ? runout.ipEv : runout.oopEv;
+  }
+
+  double equityOf(Runout runout) {
+    if (seat < runout.equities.length) return runout.equities[seat];
+    return seat == 1 ? runout.ipEquity : runout.oopEquity;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     // Best cards for the out-of-position player first.
-    final sorted = [...runouts]..sort((a, b) => b.oopEv.compareTo(a.oopEv));
-    final lowest = sorted.isEmpty ? 0.0 : sorted.last.oopEv;
-    final highest = sorted.isEmpty ? 1.0 : sorted.first.oopEv;
+    final sorted = [...runouts]
+      ..sort((a, b) => valueOf(b).compareTo(valueOf(a)));
+    final lowest = sorted.isEmpty ? 0.0 : valueOf(sorted.last);
+    final highest = sorted.isEmpty ? 1.0 : valueOf(sorted.first);
+    // Monte Carlo runouts carry no equities.
+    final hasEquity = runouts.any((r) => equityOf(r) > 0);
 
     return Column(
       key: const Key('runout-report'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Cards by $firstSeat\'s value after them. The bar shows what the next '
+          'Cards by $seatName\'s value after them. The bar shows what the next '
           'player does.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
@@ -713,7 +730,7 @@ class RunoutReport extends StatelessWidget {
                       border: Border(
                         left: BorderSide(
                           width: 3,
-                          color: valueColor(runout.oopEv, lowest, highest),
+                          color: valueColor(valueOf(runout), lowest, highest),
                         ),
                       ),
                     ),
@@ -729,13 +746,14 @@ class RunoutReport extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'EV ${runout.oopEv.toStringAsFixed(2)}',
+                                    'EV ${valueOf(runout).toStringAsFixed(2)}',
                                     style: theme.textTheme.bodySmall,
                                   ),
-                                  Text(
-                                    'Eq ${formatPercent(runout.oopEquity, digits: 0)}',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
+                                  if (hasEquity)
+                                    Text(
+                                      'Eq ${formatPercent(equityOf(runout), digits: 0)}',
+                                      style: theme.textTheme.bodySmall,
+                                    ),
                                 ],
                               ),
                             ),
