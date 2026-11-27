@@ -1,0 +1,25 @@
+// A 6-max preflop solve at 100 BB (Monte Carlo CFR over the 169 hand
+// classes). "format" starts from a preset (see gto/mc/preflop.h); any other
+// key overrides it (names as in the API's PreflopSettings, plus
+// open_sizes_by_position, allow_cold_call_3bet and max_cold_callers).
+//
+// Approximation: no postflop betting. When the preflop betting ends the
+// board is run out and every player realises 100% of their equity.
+//
+// Run with: gto-cli preflop examples/preflop_6max_100.json
+//       or: gto-cli solve examples/preflop_6max_100.json
+// Try: --node BTN:raise2.3 --node BTN:raise2.3/BB:call
+{
+  "preflop": {
+    "format": "6max",
+    "stack_bb": 100,
+    "open_sizes_by_position": { "UTG": [2.5], "HJ": [2.5], "CO": [2.5], "BTN": [2.3], "SB": [3] },
+    "three_bet_ip_multiplier": 3,
+    "three_bet_oop_multiplier": 4,
+    "four_bet_multiplier": 2.3,
+    "allow_cold_calls": true,
+    "raise_cap": 4
+  },
+  "solve": { "max_seconds": 60 },
+  "output": { "max_raises": 3 }
+}
