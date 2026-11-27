@@ -35,6 +35,7 @@ endif()
 find_package(Protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(zstd CONFIG REQUIRED)
 
 if(GTO_BUILD_TESTS)
   enable_testing()
