@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grpc/grpc.dart';
 import 'package:k15_gto/src/api/gto_api.dart';
+import 'package:k15_gto/src/common/format.dart';
+import 'package:k15_gto/src/range/preflop_library.dart';
+import 'package:k15_gto/src/range/solved_library.dart';
 import 'package:k15_gto/src/spot/spot_setup_screen.dart';
 
 import 'fake_api.dart';
@@ -211,8 +216,7 @@ void main() {
     );
     await pumpSetup(tester, api);
 
-    await tester.tap(find.text('Solved preflop job'));
-    await tester.pumpAndSettle();
+    await pick(tester, 'preflop-source', 'Server preflop job');
     expect(api.calls, contains('scenarios pf'));
 
     await pick(
@@ -233,8 +237,7 @@ void main() {
     expect(description, contains('iteration 4200'));
 
     // Back to the library: it is still there, and says what it is.
-    await tester.tap(find.text('Built-in rules'));
-    await tester.pumpAndSettle();
+    await pick(tester, 'preflop-source', 'Built-in rules');
     expect(find.byKey(const Key('scenario-format')), findsOneWidget);
     expect(
       tester.widget<Text>(find.byKey(const Key('preflop-source-label'))).data,
@@ -245,8 +248,40 @@ void main() {
   testWidgets('says so when the server has no preflop solve', (tester) async {
     final api = FakeApi();
     await pumpSetup(tester, api);
-    await tester.tap(find.text('Solved preflop job'));
-    await tester.pumpAndSettle();
+    await pick(tester, 'preflop-source', 'Server preflop job');
     expect(find.byKey(const Key('no-preflop-jobs')), findsOneWidget);
+  });
+
+  testWidgets('fills the ranges from the bundled solved library', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    await pumpSetup(tester, api);
+    final ruleRange = fieldText(tester, 'oop-range');
+
+    // The bundled file as the app ships it, read from disk: the asset
+    // bundle answers outside the test's fake clock.
+    final library = SolvedLibrary.parse(
+      File(SolvedLibrary.assetFor(TableFormat.sixMax, 100)).readAsStringSync(),
+    );
+    SolvedLibrary.preload(TableFormat.sixMax, 100, library);
+    await pick(tester, 'preflop-source', 'Solved library (bundled)');
+
+    final line = library.find(PotType.singleRaised, 'BTN', 'BB')!;
+    // The form still holds the defaults, so the line fills them in.
+    expect(fieldText(tester, 'oop-range'), line.oopRange);
+    expect(fieldText(tester, 'oop-range'), isNot(ruleRange));
+    expect(fieldText(tester, 'ip-range'), line.ipRange);
+    expect(fieldText(tester, 'pot'), formatChips(line.pot));
+    expect(
+      tester.widget<Text>(find.byKey(const Key('scenario-description'))).data,
+      'BTN open 2.3, BB call. OOP is BB, IP is BTN.',
+    );
+    final caveat = tester
+        .widget<Text>(find.byKey(const Key('preflop-source-label')))
+        .data!;
+    expect(caveat, contains('100% of their equity'));
+    expect(caveat, contains('G iterations'));
+    expect(caveat, contains('no equilibrium guarantee'));
   });
 }

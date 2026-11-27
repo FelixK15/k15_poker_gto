@@ -62,6 +62,16 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # The solved preflop range library (copies of ../ranges, see
+  # assets/ranges/SOURCE.txt).
+  assets:
+    - assets/ranges/6max_100bb.txt
+    - assets/ranges/6max_200bb.txt
+    - assets/ranges/6max_300bb.txt
+    - assets/ranges/9max_100bb.txt
+    - assets/ranges/9max_200bb.txt
+    - assets/ranges/9max_300bb.txt
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -7,8 +7,11 @@ enum PreflopSource {
   /// The client's rule-based library: always there, rough.
   library('Built-in rules'),
 
+  /// The solved library shipped with the app (assets/ranges).
+  bundled('Solved library (bundled)'),
+
   /// A preflop solve on the server.
-  solved('Solved preflop job');
+  solved('Server preflop job');
 
   const PreflopSource(this.label);
 
