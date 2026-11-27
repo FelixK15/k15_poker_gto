@@ -100,6 +100,11 @@ struct PreflopSizing {
   /// Players who have not yet put chips in voluntarily may call an open
   /// (the blinds always may).
   bool cold_call_open = true;
+  /// Most players who may cold call an open (call it without having put
+  /// chips in voluntarily), counted over everyone who called it so far;
+  /// the big blind may always call. -1 = no limit. Keeps 9-max trees
+  /// small: with 1, a second player behind a cold caller folds or 3-bets.
+  int max_cold_callers = -1;
   /// Players who have not yet raised or called a raise may call a 3-bet
   /// (cold call) / a 4-bet or more. The open-raiser may always call a 3-bet,
   /// a 3-bettor always a 4-bet, and so on: whoever has put chips in

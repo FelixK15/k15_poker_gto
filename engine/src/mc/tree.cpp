@@ -387,7 +387,12 @@ class TreeBuilder {
       return is_sb(p) ? (pf.allow_sb_complete || pf.allow_limp) : pf.allow_limp;
     }
     if (vol) return true;
-    if (s.raises == 1) return is_blind(p) || pf.cold_call_open;
+    if (s.raises == 1) {
+      const bool bb = is_blind(p) && !is_sb(p);
+      if (bb) return true;
+      if (pf.max_cold_callers >= 0 && s.callers >= pf.max_cold_callers) return false;
+      return is_blind(p) || pf.cold_call_open;
+    }
     if (s.raises == 2) return pf.cold_call_3bet;
     return pf.cold_call_4bet;
   }
