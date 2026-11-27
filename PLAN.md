@@ -168,9 +168,9 @@ These cost little now and are expensive to retrofit:
 | Service | Calls |
 |---|---|
 | `Server` | `GetInfo` (version, cores, RAM, limits), `Ping` |
-| `Trees` | `EstimateTree` (config → nodes, memory) |
+| `Trees` | `EstimateTree` (config → nodes, memory, per-player hands, engine that would solve it, meaning of its exploitability) |
 | `Jobs` | `Submit`, `List`, `Get`, `Pause`, `Resume`, `Cancel`, `Watch` (stream: iteration, exploitability, ETA) |
-| `Solutions` | `GetNode` (path → actions, per-hand strategy, EV, equity, locked hands for both players), `GetRunoutReport` (per card at a deal: EV, equity, next player's actions) |
+| `Solutions` | `GetNode` (path → actions, per-hand strategy, EV, equity, locked hands for both players), `GetRunoutReport` (per card at a deal: EV, equity, next player's actions), `ListPreflopScenarios` / `GetPreflopRanges` (preflop solves: standard lines, and 169-class ranges with pot and stacks after a line) |
 | `Locks` | `Resolve` (parent job, locks, settings → new job). A solution's locks never change; they are listed on its `Job` |
 | `Ranges` | Not built: the range library and saved ranges live in the client instead (see section 6), so they work the same against any server |
 
@@ -195,6 +195,13 @@ keeps the client stateless and makes deep links and "copy line" trivial.
   blocks ignored, tree defaults filled in. Re-solves under locks are never handed out, and
   `force_new` always queues a new job. Suit-isomorphic boards do not match, since browsing paths
   name the actual cards.
+- **Engines:** a job runs on a `SolveEngine` (`server/src/solve_engine.h`): the exact engine
+  (vector CFR over every hand, heads-up postflop NLH and PLO4, exact exploitability, locks) or the
+  Monte Carlo engine (multiway, preflop, heads-up spots too large to solve exactly; estimated
+  exploitability, labelled by `ExploitabilityKind`). `Spot.engine` AUTO picks exact when the
+  heads-up tree fits. Until `gto::mc` is plugged in, Monte Carlo spots are validated and refused
+  with FAILED_PRECONDITION. PLO nodes list at most 2,000 hands per player by default (the ones
+  with the most reach); `GetNodeRequest.max_hands` raises that to 20,000.
 - **Deployment:** single executable + config file; Windows zip/service and a Linux Docker image.
 
 ## 5. Client (Flutter)
