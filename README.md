@@ -1,6 +1,6 @@
 # K15 GTO
 
-A GTO solver for No-Limit Hold'em: a headless C++ solver server (Windows, Linux) and a Flutter
+A GTO solver for No-Limit Hold'em (heads-up and multiway, plus a preflop solver) and PLO4: a headless C++ solver server (Windows, Linux) and a Flutter
 client (Windows, Android). See [PLAN.md](PLAN.md) for the design and milestones.
 
 ## Layout
@@ -13,6 +13,7 @@ client (Windows, Android). See [PLAN.md](PLAN.md) for the design and milestones.
 | `cli/` | `gto-cli`, runs the engine without a server |
 | `app/` | Flutter client |
 | `examples/` | Spot files for `gto-cli` |
+| `ranges/` | Preflop range library solved by `gto-cli preflop` |
 | `tools/` | Code generation scripts |
 
 ## Building the server
@@ -96,6 +97,23 @@ by itself for large trees.
 
 Flop trees grow quickly with ranges and bet sizes; the tool prints the memory it needs before it
 starts. `examples/flop_3bet.json` is a small one, `examples/flop_srp_wide.json` a large one.
+
+PLO4 spots set `"variant": "omaha4"` and use PLO range text (`examples/plo_river.json`,
+`examples/plo_turn.json`); they are pot-limit by default. Spots with a `"players"` list (3–9
+players) or `"engine": "mc"` run on the Monte Carlo engine, which prints sampled EVs and an
+**estimated** exploitability (with 3+ players there is no Nash guarantee):
+`examples/multiway_river_3way.json`, `examples/multiway_flop_3way.json`,
+`examples/plo_mc_flop.json`.
+
+Preflop solves use the presets (6max, 9max, hu at 100, 200 or 300BB):
+
+```powershell
+build\windows\cli\Release\gto-cli.exe preflop --format 6max --stack 100 --seconds 60 --out my_6max_100.txt
+```
+
+It prints the opening grid per position, EVs, the exploitability estimate and the heads-up flop
+scenarios, and `--out` writes a range library file like those in [ranges/](ranges/). The solve has
+no postflop play: the board is run out when the preflop betting ends.
 
 ## Running the app
 

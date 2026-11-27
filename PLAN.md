@@ -13,7 +13,7 @@ a headless C++ solver server (Windows and Linux) and a Flutter client (Windows a
 | Engine language | **C++20** |
 | Client | **Flutter** (one codebase, Windows + Android) |
 | Local solving | **Windows only**. Android is always a remote client |
-| Later | Preflop solving, multiway spots, PLO4 |
+| After v1 (built, see 3.7 and M9) | Preflop solving, multiway postflop (3–9 players), PLO4: a separate Monte Carlo CFR engine (`gto::mc`) next to the exact heads-up solver; heads-up PLO4 also solves exactly |
 
 ## 2. Architecture
 
@@ -162,6 +162,78 @@ These cost little now and are expensive to retrofit:
 - Storage is addressed through an interface, so abstraction (bucketed hands) can be added for
   preflop and PLO.
 
+How this turned out: the generic hands carried PLO4 into the exact solver as planned (4-card
+inclusion–exclusion in `TerminalEvaluator`). Player count, side pots and bucketed storage did
+**not** go into the exact solver: its 2-player layout is what makes it fast, so they live in a
+separate engine (3.7) and the heads-up NLH results and speed stay exactly as they were.
+
+### 3.7 After v1: PLO4, the Monte Carlo engine, multiway and preflop
+
+**PLO4 in the exact solver.** `gto/omaha.h`: combo index over C(52,4) = 270,725 combos, the
+reference evaluator (exactly two hole cards and three board cards) and `OmahaBoardEvaluator`
+(per board, every two-card holding with every board triple is evaluated once; a hand is then the
+best of its six pairs), `OmahaRange` with a small syntax (`*`, exact combos, `AAxx`, `KQJx`,
+`ds`/`ss`/`r` suffixes, `top15%`, `:weight`), and `omaha_preflop_rank()`, a fixed point-count
+heuristic ranking (not equity-based) used by `topN%` and for preflop buckets. `TerminalEvaluator`
+handles 4-card hands with the long inclusion–exclusion (per card, pair and triple sums plus the
+identical hand), dispatched once per call so the 2-card loops are untouched. `SpotConfig::variant`
+and `TreeConfig::pot_limit` (bets capped at pot size) complete it. Heads-up PLO river spots with
+narrowed ranges solve in about half a second (`examples/plo_river.json`, 11k hands each); turn
+spots take seconds to a minute and around 1 GB (`examples/plo_turn.json`, 15.8 s, 1.07 GB, half
+with `--compress`). Wide flop spots do not fit exactly and go to the Monte Carlo engine.
+
+**Monte Carlo engine (`gto::mc`, `engine/include/gto/mc/`).** A second, independent engine:
+- `GameConfig`: Hold'em or PLO4, 2–9 players, start street with the board so far, last street
+  with betting (later cards are run out), stacks, blinds/antes/dead money, per-player ranges,
+  per-street sizing with per-player overrides, preflop sizing (opens in BB per seat, SB open,
+  limp/complete, 3-bets as multiples in and out of position, 4-bet multiplier, squeeze per caller,
+  cold-call limits, raise cap), all-in threshold, pot limit, rake with cap and no-flop-no-drop.
+- N-player betting tree with side pots (multi-layer pots, ties split per layer, folded chips stay
+  in the layers they reached). Paths use the same labels as the exact engine; turn and river are
+  one card per entry, a flop dealt inside the tree is one three-card entry. `count_tree` sizes a
+  tree without building it.
+- Hand abstraction per street behind an interface: preflop Hold'em uses the 169 classes
+  (lossless), preflop PLO percentiles of the preflop ranking, postflop either lossless (exact
+  combo, while it fits a bucket limit) or strength buckets (EHS × EHS², cached per board; PLO via
+  `OmahaBoardEvaluator` with sampled estimates).
+- Storage interface (`storage.h`) with dense floats as the only implementation so far.
+- External-sampling MCCFR with linear discounting, lock-free shared tables on all threads, fixed
+  seed and one thread deterministic. Save/load in a versioned format through the server's zstd
+  streams.
+- Evaluation: Monte Carlo EVs with standard errors and an **estimated** best-response gain per
+  player within the abstraction: an in-sample estimate (biased upwards, deviations only where
+  significant) and a holdout estimate (tends to understate). `nash_guarantee` is true only for two
+  players without rake. With 3+ players the reported "exploitability" is the mean gain of one
+  player deviating alone, not a distance to a unique equilibrium, and the API (`ExploitabilityKind`),
+  `gto-cli` and the app say so. Toy games and small river spots can be evaluated exactly.
+- Verified: side-pot payouts by hand-built cases; Kuhn poker (2 players, −1/18; 3 players reaches
+  an ε-equilibrium with exact total gain ≈ 0.003 — the value fixed at −1/48 lands on the second
+  seat in our numbering, not the first as the brief assumed; to check against Szafron et al. 2013);
+  a narrow heads-up river spot gives the same game value as the exact solver (2.2013 vs 2.2013,
+  root frequencies within 0.06); 3-way river EVs add up to the pot; heads-up 10BB push/fold
+  matches the Nash chart.
+- Speed on 32 threads: heads-up river 22 M iterations/s, 3-way river 11 M/s, 3-way flop 2.7 M/s
+  (13.7 M info sets, 251 MB), heads-up PLO flop with 128 buckets per street 1.2 M/s, 6-max preflop
+  4.9 M/s.
+
+**Multiway postflop** runs on it: `mc::MultiwaySpot` (board, N ranges, pot, stacks, sizing,
+rake, abstraction), from `gto-cli solve` (files with `"players"` or `"engine": "mc"`), the server
+(`Spot.players`, engine AUTO/EXACT/MONTE_CARLO) and the app. `examples/multiway_river_3way.json`
+reaches an estimated 0.28% of the pot in 10 s; `examples/multiway_flop_3way.json` is larger.
+
+**Preflop solver** (`mc/preflop.h`): presets for heads-up, 6-max and 9-max at 100/200/300BB
+(opens 2.5 early, 2.3 BTN, 3 SB; 3-bets 3x in position and 4x out of position, wider at 300BB;
+4-bet 2.3–2.5x; 5-bet all-in; no cold calls of 3-bets; 9-max allows one cold caller of an open
+besides the BB), a custom mode with every sizing field, scenario export (heads-up flop lines:
+single-raised, 3-bet and 4-bet pots per position pair, as 1326-combo ranges with pot and stack),
+and a text library format. The **main approximation**: no postflop play — when the preflop
+betting ends with two or more players the board is run out (100% equity realisation). This makes
+the big blind defend very wide and undervalues suited connectors. The solved library is in
+`ranges/` (6-max 9.8–13.9k decisions and 1.7–2.3 M info sets, 400 s each, estimated 0.27–0.63%;
+9-max 11.4k decisions, 440 s each, 0.46–1.18%). 6-max 100BB opens: UTG 14%, HJ 17%, CO 20%, BTN
+26%, SB 54%. Opening frequencies moved less than half a point between half-time and the end;
+single classes near indifference still flip.
+
 ## 4. Server
 
 ### 4.1 API (gRPC)
@@ -255,8 +327,14 @@ are ranked by the Chen formula, each seat opens the top slice of that ranking, a
 3-betting and 4-betting ranges are cut from it by rules of thumb, with the very top of the 4-bet
 ranges spelled out per stack depth. They are **rough starting points, not solver output**, and the
 app says so. Known weak spots: no mixed frequencies, opening ranges do not change with stack depth,
-and the big blind's calling range is too thin in strong pairs. They are to be replaced by ranges
-from our own preflop solver once it exists (section 8).
+and the big blind's calling range is too thin in strong pairs.
+
+**Solved ranges.** The preflop solver (3.7) produced `ranges/{6max,9max}_{100,200,300}bb.txt`
+(format in `ranges/README.txt`), which the app ships as a second, selectable library; a finished
+preflop job on a server can also fill a spot (`ListPreflopScenarios` / `GetPreflopRanges`). The
+rule-based library stays the default for now, because the solved ranges carry the 100%-equity
+approximation (no postflop play). Making the solved library the default needs postflop
+realisation in the preflop solve (an equity-realisation model or a coarse postflop abstraction).
 
 Saved ranges are kept by the client in a JSON file in its support directory, not on the server.
 
@@ -300,12 +378,26 @@ The lock hook in the CFR traversal and the un-merge support in the tree builder 
 during M1–M2, so M6 adds the feature without reworking the engine.
 
 **After v1**
-- Aggregated reports across flop subsets.
-- Preflop solver (Monte Carlo CFR with hand abstraction) → own range library.
-- Multiway postflop. Caveat: CFR has no Nash guarantee with 3+ players; results are useful in
-  practice but the "exploitability" number loses its strict meaning, and memory grows sharply.
-- PLO4: 270,725 starting combos instead of 1,326, so it needs hand bucketing and is a large
-  project of its own.
+
+| # | Milestone | Status |
+|---|---|---|
+| M9 | PLO4, multiway, preflop (3.7) | **Done, first version.** PLO4 evaluator, ranges and exact heads-up PLO solving with pot limit; the Monte Carlo engine with N-player trees, side pots, buckets, sampled evaluation and estimated exploitability; multiway postflop and Monte Carlo PLO; preflop solver with presets and the solved 6-max/9-max library; all of it in `gto-cli`, the server (engine choice, `ExploitabilityKind`, per-player node data, preflop scenario export) and the app (game and player-count choice, preflop setup, seat-wise browsing, PLO hand list, solved library as a range source). Heads-up NLH results and speed unchanged |
+
+Still open after M9:
+- Preflop: postflop equity realisation (now 100%), so that the solved library can become the
+  default; a cleaner convergence measure (the estimate uses only 9–16 samples per info set);
+  PLO preflop scenarios (PLO preflop solves, but ranges are exported for Hold'em only).
+- Monte Carlo engine: node locking, 16-bit storage, regret-based pruning; a short all-in raise
+  reopens betting for everyone (simpler than the real rule); strength-bucket caches can grow large
+  for preflop games that bet on the turn and river; per-hand equities are not reported.
+- Exact engine: river spots have no chance node to split across threads, so PLO river spots run
+  on one thread.
+- Server/app: runout reports at a flop dealt inside a Monte Carlo tree; PLO lock editor in the
+  app (the server accepts PLO locks); UI for bucket counts, per-seat bet sizes and open sizes by
+  position.
+- Verification: compare multiway results with another solver; confirm the 3-player Kuhn values
+  against the literature.
+- Aggregated reports across flop subsets (unchanged).
 
 ## 9. Main risks
 
