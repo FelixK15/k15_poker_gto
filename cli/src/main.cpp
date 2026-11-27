@@ -13,6 +13,7 @@
 #include "gto/cpu.h"
 #include "gto/solver.h"
 #include "gto/version.h"
+#include "mc_cli.h"
 #include "spot_config.h"
 
 namespace {
@@ -21,15 +22,32 @@ void print_usage() {
   std::puts(
       "Usage:\n"
       "  gto-cli solve <spot.json> [--node <path>]... [--threads <n>] [--compress]\n"
+      "  gto-cli preflop [--format hu|6max|9max] [--stack <bb>] [<settings.json>]\n"
+      "                  [--seconds <s> | --iterations <n>] [--threads <n>]\n"
+      "                  [--out <library.txt>] [--node <path>]... [--estimate]\n"
+      "                  [--max-raises <n>] [--min-frequency <f>] [--no-eval]\n"
       "  gto-cli --version\n\n"
       "solve  Solves the spot described in the JSON file (see examples/) and\n"
-      "       prints the strategy at the root.\n"
+      "       prints the strategy at the root. Heads-up spots use the exact\n"
+      "       solver; files with a \"players\" list or \"engine\": \"mc\" use the\n"
+      "       Monte Carlo engine (multiway, PLO with buckets) and print EVs and an\n"
+      "       estimated exploitability; files with a \"preflop\" object run a\n"
+      "       preflop solve.\n"
       "  --node <path>  Also print the node reached by this line of actions and\n"
       "                 dealt cards, e.g. --node check/bet50/call/Ts. May be\n"
       "                 given several times.\n"
       "  --threads <n>  Threads to use (default: all).\n"
       "  --compress     Keep regrets and strategies in 16 bits: half the\n"
-      "                 memory, slightly less precise.");
+      "                 memory, slightly less precise (exact solver only).\n\n"
+      "preflop  Solves a preflop preset (or a settings file, see\n"
+      "         examples/preflop_6max_100.json) with Monte Carlo CFR and prints\n"
+      "         the opening charts, an estimated exploitability and the heads-up\n"
+      "         flop scenarios. No postflop play: equity is realised in full.\n"
+      "  --node <path>  Positional line, e.g. BTN:raise2.3 (the BB's decision) or\n"
+      "                 BTN:raise2.3/BB:call (prints both ranges).\n"
+      "  --out <file>   Writes the range library (see ranges/README.txt).\n"
+      "  --estimate     Only prints the tree size and memory.\n"
+      "  Default budget: 30 seconds.");
 }
 
 /// Sort key that lists hand classes from AA down: pairs and high cards first.
@@ -252,6 +270,9 @@ int main(int argc, char** argv) {
     std::printf("gto-cli (engine %.*s)\n", static_cast<int>(version.size()), version.data());
     return EXIT_SUCCESS;
   }
+  if (args[0] == "preflop") {
+    return gto::cli::run_preflop(std::vector<std::string>(args.begin() + 1, args.end()));
+  }
   if (args[0] == "solve") {
     std::string config_path;
     std::vector<std::string> node_paths;
@@ -287,6 +308,9 @@ int main(int argc, char** argv) {
     if (config_path.empty()) {
       std::fputs("error: solve needs a spot file\n", stderr);
       return EXIT_FAILURE;
+    }
+    if (gto::cli::is_mc_spot(config_path)) {
+      return gto::cli::run_mc_solve(config_path, node_paths, threads);
     }
     return run_solve(config_path, node_paths, threads, compress);
   }

@@ -1,0 +1,29 @@
+// A three-way single-raised pot on the flop (Monte Carlo engine): the BTN
+// opened, the SB and BB called. Chips are big blinds; players are listed in
+// postflop order (first to act first).
+//
+// Three players: CFR has no Nash guarantee, so the exploitability printed at
+// the end is an estimate of what one player could gain by deviating alone.
+// The flop is solved hand by hand; turn and river use strength buckets (see the
+// abstraction lines printed before the solve).
+//
+// Try: --node check/check/bet3.75 --node check/check/check/Th
+{
+  "engine": "mc",
+  "board": "Kh 8d 4c",
+  "pot": 7.5,
+  "players": [
+    { "position": "SB", "range": "TT-22, AJs-A2s, KTs+, QTs+, JTs, T9s, 98s, 87s, 76s, AQo-ATo, KQo", "stack": 97.5 },
+    { "position": "BB", "range": "99-22, A9s-A2s, K9s+, Q9s+, J9s+, T8s+, 97s+, 86s+, 75s+, 65s, 54s, AJo-A8o, KTo+, QTo+, JTo", "stack": 97.5 },
+    { "position": "BTN", "range": "22+, A2s+, K8s+, Q9s+, J9s+, T9s, 98s, 87s, 76s, 65s, A9o+, KTo+, QJo", "stack": 97.5 }
+  ],
+  "tree": {
+    "flop": { "all": { "bet_pct": [50], "raise_pct": [100] } },
+    "turn": { "all": { "bet_pct": [66], "allin": true } },
+    "river": { "all": { "bet_pct": [75], "allin": true } },
+    "raise_cap": 1,
+    "allin_threshold_pct": 67
+  },
+  "abstraction": { "turn_buckets": 128, "river_buckets": 64 },
+  "solve": { "max_seconds": 30 }
+}

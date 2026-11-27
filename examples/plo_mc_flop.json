@@ -1,0 +1,27 @@
+// Heads-up Pot-Limit Omaha on the flop with the Monte Carlo engine and hand
+// buckets (the exact solver would need every 4-card hand on every turn and
+// river). Chips are big blinds; bets are capped at the pot.
+//
+// Two players: the exploitability is the usual one, but estimated by
+// sampling and measured within the buckets.
+//
+// Try: --node check --node bet5/call/2c
+{
+  "engine": "mc",
+  "variant": "omaha4",
+  "board": "Js Th 4d",
+  "pot": 10,
+  "effective_stack": 95,
+  "ranges": {
+    "oop": "top20%",
+    "ip": "top15%"
+  },
+  "tree": {
+    "flop": { "all": { "bet_pct": [50] , "raise_pct": [100] } },
+    "turn": { "all": { "bet_pct": [66], "raise_pct": [100] } },
+    "river": { "all": { "bet_pct": [75], "raise_pct": [100] } },
+    "raise_cap": 1
+  },
+  "abstraction": { "flop_buckets": 128, "turn_buckets": 128, "river_buckets": 128 },
+  "solve": { "max_seconds": 30 }
+}

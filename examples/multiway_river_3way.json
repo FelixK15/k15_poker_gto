@@ -1,0 +1,22 @@
+// A three-way river (Monte Carlo engine), every hand its own information
+// set. Chips are big blinds; players are listed in postflop order.
+//
+// The exploitability printed for three players is an ESTIMATE without a
+// Nash guarantee: the mean gain one player could get by deviating alone.
+//
+// Try: --node check/check/bet22.5 --node bet10
+{
+  "engine": "mc",
+  "board": "Qs 9h 6d 3c 2s",
+  "pot": 30,
+  "players": [
+    { "position": "SB", "range": "QQ, 99, 66, AQs, KQs, QJs, QTs, J9s, T9s, 98s, 87s, 76s, 65s, AQo, KQo", "stack": 80 },
+    { "position": "BB", "range": "TT-44, Q9s, Q6s, 96s, A9s, K9s, T8s, 87s, 54s, 75s, AJo, KJo, QJo, JTo", "stack": 80 },
+    { "position": "BTN", "range": "AA-JJ, 33, 22, AKs, AQs, AJs, KJs, QJs, JTs, T9s, 98s, AKo, AQo, KQo", "stack": 80 }
+  ],
+  "tree": {
+    "river": { "all": { "bet_pct": [33, 75], "raise_pct": [100], "allin": true } },
+    "raise_cap": 1
+  },
+  "solve": { "max_seconds": 10 }
+}
