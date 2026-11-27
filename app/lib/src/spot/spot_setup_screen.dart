@@ -1281,6 +1281,18 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
       'Preflop solves run on the Monte Carlo engine. With three or more '
       'players its result is an estimate without an equilibrium guarantee.';
 
+  static const _preflopSizesInfo =
+      'Preset: the server\'s tuned settings for the table, the ones its '
+      'preflop library is built with. Only the stacks and the rake are '
+      'sent.\n\n'
+      'Custom: your own sizes. Opens are raise-to amounts in big blinds; '
+      '3-bets are multiples of the open (in and out of position), 4-bets '
+      'multiples of the 3-bet. Cold calls are calls by a player who has not '
+      'put money in yet; the blinds may always call an open.\n\n'
+      'Play the flop: also bet on the flop (no turn or river betting). '
+      'Without it the hand is valued by equity once the preflop betting is '
+      'over, as if everyone realised all of their equity.';
+
   /// The form of a preflop solve.
   List<Widget> _preflopSections() {
     final p = _preflop;
@@ -1371,74 +1383,157 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
           style: theme.textTheme.bodyMedium,
         ),
       ]),
-      _section('Sizes', [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _field(
-              'preflop-open',
-              'Open to (BB)',
-              p.openSizes,
-              (v) => p.openSizes = v,
-              width: 150,
-              hint: '2.5',
-              info:
-                  'Raise-to amount of a first raise, in big blinds, for every '
-                  'seat but the small blind. Several sizes separated by '
-                  'commas make a larger tree.',
-            ),
-            _field(
-              'preflop-sb-open',
-              'SB open to (BB)',
-              p.sbOpenSizes,
-              (v) => p.sbOpenSizes = v,
-              width: 160,
-              hint: '3',
-            ),
-            _field(
-              'preflop-3bet-ip',
-              '3-bet IP (× open)',
-              p.threeBetIp,
-              (v) => p.threeBetIp = v,
-              width: 170,
-              hint: '3',
-            ),
-            _field(
-              'preflop-3bet-oop',
-              '3-bet OOP (× open)',
-              p.threeBetOop,
-              (v) => p.threeBetOop = v,
-              width: 170,
-              hint: '4',
-            ),
-            _field(
-              'preflop-4bet',
-              '4-bet (× 3-bet)',
-              p.fourBet,
-              (v) => p.fourBet = v,
-              width: 160,
-              hint: '2.3',
-            ),
+      _section('Sizes and options', info: _preflopSizesInfo, [
+        SegmentedButton<bool>(
+          key: const Key('preflop-sizes-mode'),
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: false, label: Text('Preset')),
+            ButtonSegment(value: true, label: Text('Custom')),
           ],
+          selected: {p.custom},
+          onSelectionChanged: (selection) {
+            setState(() => p.custom = selection.first);
+            _changed();
+          },
         ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 16,
-          children: [
-            toggle(
-              'limp',
-              'Allow limping',
-              p.allowLimp,
-              (v) => p.allowLimp = v,
-            ),
-            toggle(
-              'cold-call',
-              'Allow cold calls',
-              p.allowColdCalls,
-              (v) => p.allowColdCalls = v,
+        const SizedBox(height: 12),
+        if (!p.custom)
+          Text(
+            'The server\'s tuned "${presetFor(p.players)}" preset: its '
+            'opening, 3-bet and 4-bet sizes and options for this table and '
+            'stack depth. Only the stacks and the rake below are sent.',
+            key: const Key('preflop-preset-note'),
+            style: theme.textTheme.bodyMedium,
+          )
+        else ...[
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _field(
+                'preflop-open',
+                'Open to (BB)',
+                p.openSizes,
+                (v) => p.openSizes = v,
+                width: 150,
+                hint: '2.5',
+                info:
+                    'Raise-to amount of a first raise, in big blinds, for '
+                    'every seat but the small blind. Several sizes separated '
+                    'by commas make a larger tree.',
+              ),
+              _field(
+                'preflop-sb-open',
+                'SB open to (BB)',
+                p.sbOpenSizes,
+                (v) => p.sbOpenSizes = v,
+                width: 160,
+                hint: '3',
+              ),
+              _field(
+                'preflop-3bet-ip',
+                '3-bet IP (× open)',
+                p.threeBetIp,
+                (v) => p.threeBetIp = v,
+                width: 170,
+                hint: '3',
+              ),
+              _field(
+                'preflop-3bet-oop',
+                '3-bet OOP (× open)',
+                p.threeBetOop,
+                (v) => p.threeBetOop = v,
+                width: 170,
+                hint: '4',
+              ),
+              _field(
+                'preflop-4bet',
+                '4-bet (× 3-bet)',
+                p.fourBet,
+                (v) => p.fourBet = v,
+                width: 160,
+                hint: '2.3',
+              ),
+              _field(
+                'preflop-squeeze',
+                'Squeeze (+ × per caller)',
+                p.squeeze,
+                (v) => p.squeeze = v,
+                width: 210,
+                hint: '1',
+                info:
+                    'Added to a 3-bet or 4-bet for every player who called '
+                    'the raise, in multiples of that raise.',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 16,
+            children: [
+              toggle(
+                'limp',
+                'Allow limping',
+                p.allowLimp,
+                (v) => p.allowLimp = v,
+              ),
+              toggle(
+                'sb-complete',
+                'SB may complete',
+                p.allowSbComplete,
+                (v) => p.allowSbComplete = v,
+              ),
+              toggle(
+                'cold-call',
+                'Cold-call opens',
+                p.allowColdCalls,
+                (v) => p.allowColdCalls = v,
+              ),
+              toggle(
+                'cold-call-3bet',
+                'Cold-call 3-bets',
+                p.allowColdCall3bet,
+                (v) => p.allowColdCall3bet = v,
+              ),
+              toggle(
+                'cold-call-4bet',
+                'Cold-call 4-bets',
+                p.allowColdCall4bet,
+                (v) => p.allowColdCall4bet = v,
+              ),
+              toggle(
+                'solve-flop',
+                'Play the flop',
+                p.solvePostflop,
+                (v) => p.solvePostflop = v,
+              ),
+            ],
+          ),
+          if (p.solvePostflop) ...[
+            const SizedBox(height: 8),
+            _field(
+              'preflop-flop-bets',
+              'Flop bets (% pot)',
+              p.flopBets,
+              (v) => p.flopBets = v,
+              width: 180,
+              hint: '33',
             ),
           ],
+        ],
+        const SizedBox(height: 8),
+        Text(
+          p.custom && p.solvePostflop
+              ? 'The flop is played with these sizes; turn and river are '
+                    'valued by equity.'
+              : 'After the preflop betting the hand is valued by equity: '
+                    'every player realises all of their equity. That is the '
+                    'main approximation of this solve.',
+          key: const Key('preflop-approximation'),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ]),
       _section('Rake and solve', [
@@ -1532,6 +1627,14 @@ class _SpotSetupScreenState extends State<SpotSetupScreen> {
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
+              ),
+            ),
+          if (estimate.abstraction.isNotEmpty)
+            Text(
+              estimate.abstraction.join('\n'),
+              key: const Key('spot-abstraction'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           if (verdict != null)

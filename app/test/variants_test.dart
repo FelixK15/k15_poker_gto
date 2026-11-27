@@ -200,12 +200,36 @@ void main() {
       expect(seatPositions(7), ['SB', 'BB', 'UTG', 'LJ', 'HJ', 'CO', 'BTN']);
       expect(seatPositions(9), hasLength(9));
       expect(multiwayPositions(3), ['BB', 'CO', 'BTN']);
+      // Preflop solves number seats in the order of preflop action.
+      expect(preflopSeats(2), ['BTN', 'BB']);
+      expect(preflopSeats(3), ['BTN', 'SB', 'BB']);
+      expect(preflopSeats(6), ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB']);
+      expect(preflopSeats(9).first, 'UTG');
     });
   });
 
   group('PreflopInput', () {
-    test('builds a preflop spot', () {
+    test('sends the server preset by default', () {
       final input = PreflopInput()
+        ..players = 2
+        ..stackBb = 200
+        ..rakePct = '5';
+      final spot = input.toSpot().spot!;
+      expect(spot.preflop.preset, 'hu');
+      expect(spot.preflop.stackBb, 200);
+      expect(spot.preflop.openSizesBb, isEmpty);
+      expect(spot.rakePct, 5);
+      expect(presetFor(6), '6max');
+      expect(presetFor(9), '9max');
+      expect(input.jobName, 'Preflop · Heads-up · 200 BB');
+    });
+
+    test('builds a custom preflop spot', () {
+      final input = PreflopInput()
+        ..custom = true
+        ..allowColdCall3bet = true
+        ..solvePostflop = true
+        ..flopBets = '33, 75'
         ..players = 9
         ..stackBb = 200
         ..openSizes = '2.2, 3'
@@ -223,18 +247,32 @@ void main() {
       expect(spot.preflop.fourBetMultiplier, 2.3);
       expect(spot.preflop.allowLimp, isTrue);
       expect(spot.preflop.allowColdCalls, isTrue);
+      expect(spot.preflop.allowColdCall3bet, isTrue);
+      expect(spot.preflop.allowSbComplete, isTrue);
+      expect(spot.preflop.squeezePerCaller, 1);
+      expect(spot.preflop.solvePostflop, isTrue);
+      expect(spot.preflop.hasPreset(), isFalse);
+      expect(spot.tree.flop.all.betPct, [33, 75]);
       expect(spot.rakePct, 5);
       expect(spot.rakeCap, 3);
-      expect(input.jobName, 'Preflop · 9-max · 200 BB');
+      expect(input.jobName, 'Preflop · 9-max · 200 BB · custom');
     });
 
     test('names what cannot be read', () {
       expect(
-        (PreflopInput()..openSizes = '1').toSpot().error,
+        (PreflopInput()
+              ..custom = true
+              ..openSizes = '1')
+            .toSpot()
+            .error,
         contains('Open sizes'),
       );
       expect(
-        (PreflopInput()..threeBetOop = 'x').toSpot().error,
+        (PreflopInput()
+              ..custom = true
+              ..threeBetOop = 'x')
+            .toSpot()
+            .error,
         contains('3-bet'),
       );
       expect((PreflopInput()..rakePct = '-1').toSpot().error, contains('rake'));

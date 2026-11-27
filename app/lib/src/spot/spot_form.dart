@@ -25,10 +25,9 @@ int? countBoardCards(String text) {
   return compact.length ~/ 2;
 }
 
-/// Position names of a [players]-handed table in seat order, which is also
-/// the postflop order (first to act first), as the server names them:
-/// 2: BB, BTN; 3: SB, BB, BTN; 4: + CO; 5: + HJ; 6: SB, BB, UTG, HJ, CO, BTN;
-/// 7: + LJ; 8: + UTG1; 9: SB, BB, UTG, UTG1, UTG2, LJ, HJ, CO, BTN.
+/// Position names of a [players]-handed table in postflop order (first to
+/// act first): 2: BB, BTN; 3: SB, BB, BTN; 4: + CO; 5: + HJ;
+/// 6: SB, BB, UTG, HJ, CO, BTN; 7: + LJ; 8: + UTG1; 9: + UTG2.
 List<String> seatPositions(int players) {
   const full = ['SB', 'BB', 'UTG', 'UTG1', 'UTG2', 'LJ', 'HJ', 'CO', 'BTN'];
   if (players <= 2) return const ['BB', 'BTN'];
@@ -39,6 +38,14 @@ List<String> seatPositions(int players) {
     for (final p in full)
       if (!drop.contains(p)) p,
   ];
+}
+
+/// Seats of a [players]-handed preflop solve in the server's seat order,
+/// the order of preflop action: UTG … BTN, SB, BB (heads-up: BTN, BB).
+List<String> preflopSeats(int players) {
+  if (players <= 2) return const ['BTN', 'BB'];
+  final postflop = seatPositions(players);
+  return [...postflop.sublist(2), 'SB', 'BB'];
 }
 
 /// Positions for a multiway postflop spot: the big blind and the latest

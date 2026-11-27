@@ -116,11 +116,15 @@ void main() {
     expect(find.byKey(const Key('field-board')), findsNothing);
     expect(
       tester.widget<Text>(find.byKey(const Key('preflop-positions'))).data,
-      'Seats: SB, BB, UTG, HJ, CO, BTN',
+      'Seats: UTG, HJ, CO, BTN, SB, BB',
     );
 
     await pick(tester, 'preflop-table', '9-max');
     await pick(tester, 'preflop-stack', '200 BB');
+    expect(api.estimated.last.preflop.preset, '9max');
+    expect(find.byKey(const Key('preflop-limp')), findsNothing);
+    await tester.tap(find.text('Custom'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('preflop-limp')));
     await tester.enterText(find.byKey(const Key('field-preflop-rake')), '5');
     await tester.pumpAndSettle();
@@ -133,7 +137,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('solve-button')));
     await tester.pumpAndSettle();
-    expect(api.submitted.single.name, 'Preflop · 9-max · 200 BB');
+    expect(api.submitted.single.name, 'Preflop · 9-max · 200 BB · custom');
     expect(api.submitted.single.spot.hasPreflop(), isTrue);
   });
 
