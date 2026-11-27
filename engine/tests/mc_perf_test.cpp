@@ -80,6 +80,20 @@ TEST(McPerf, DISABLED_ThreeWayFlop) {
   measure("3-way NLH flop", *make_game_config(mw));
 }
 
+TEST(McPerf, DISABLED_ThreeWayPloRiver) {
+  MultiwaySpot mw;
+  mw.variant = Variant::Omaha4;
+  mw.board = *parse_cards("AsKd7h4c2s");
+  const OmahaRange r = *OmahaRange::parse("top40%");
+  mw.omaha_ranges = {r, r, r};
+  mw.pot = 30;
+  mw.stacks = {100, 100, 100};
+  mw.sizing[3].sizing.bet = {0.5, 1.0};
+  mw.sizing[3].sizing.raise = {1.0};
+  mw.raise_cap = 1;
+  measure("3-way PLO river", *make_game_config(mw));
+}
+
 TEST(McPerf, DISABLED_SixMaxPreflop) {
   GameConfig c = GameConfig::preflop_game(6, 100);
   c.preflop.open_bb = {2.5};

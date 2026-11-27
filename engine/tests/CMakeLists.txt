@@ -3,8 +3,10 @@ add_executable(solver_tests
   game_tree_test.cpp
   hand_evaluator_test.cpp
   lock_test.cpp
+  mc_abstraction_test.cpp
   mc_kuhn_test.cpp
   mc_perf_test.cpp
+  mc_plo_test.cpp
   mc_pot_test.cpp
   mc_river_test.cpp
   mc_tree_test.cpp
