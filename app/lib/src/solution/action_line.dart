@@ -4,6 +4,7 @@ import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../common/playing_card.dart';
 import 'action_style.dart';
+import 'node_view.dart';
 
 const _streets = ['Flop', 'Turn', 'River'];
 
@@ -18,7 +19,7 @@ class ActionLine extends StatefulWidget {
     required this.board,
     required this.current,
     required this.nodeAt,
-    required this.effectiveStack,
+    required this.job,
     required this.onGo,
     this.compact = false,
   });
@@ -35,7 +36,8 @@ class ActionLine extends StatefulWidget {
   /// A node along the path by its depth, if it has been read.
   final GetNodeResponse? Function(int depth) nodeAt;
 
-  final double effectiveStack;
+  /// The job, for position names and starting stacks.
+  final Job job;
 
   /// Called with the path to show.
   final ValueChanged<List<String>> onGo;
@@ -91,7 +93,7 @@ class _ActionLineState extends State<ActionLine> {
       final isCurrent = depth == path.length;
       final node = isCurrent ? widget.current : widget.nodeAt(depth);
       final step = isCurrent ? null : path[depth];
-      if (step != null && cardTitle(step) != null) {
+      if (step != null && dealtCards(step) != null) {
         ++dealt;
         tiles.add(_cardTile(context, depth, step, dealt));
       } else if (isCurrent && node!.type == NodeType.NODE_TYPE_CHANCE) {
@@ -125,16 +127,15 @@ class _ActionLineState extends State<ActionLine> {
   }
 
   String _street(int dealt) {
+    // Preflop solves deal the flop as one step.
+    if (widget.board.isEmpty) dealt += 2;
     final index = widget.board.length - 3 + dealt;
     return index >= 0 && index < _streets.length ? _streets[index] : 'Card';
   }
 
   Widget _boardTile(BuildContext context) {
     final theme = Theme.of(context);
-    final dealt = [
-      for (final step in widget.path)
-        if (cardTitle(step) != null) step,
-    ];
+    final dealt = [for (final step in widget.path) ...?dealtCards(step)];
     return _Tile(
       header: Text(
         'Pot ${formatChips(widget.current.pot)}',
@@ -146,10 +147,12 @@ class _ActionLineState extends State<ActionLine> {
       child: Padding(
         padding: const EdgeInsets.all(6),
         child: Center(
-          child: CardRow([
-            ...widget.board,
-            ...dealt,
-          ], width: widget.compact ? 24 : 26),
+          child: widget.board.isEmpty && dealt.isEmpty
+              ? Text('Preflop', style: theme.textTheme.bodySmall)
+              : CardRow([
+                  ...widget.board,
+                  ...dealt,
+                ], width: widget.compact ? 24 : 26),
         ),
       ),
     );
@@ -165,7 +168,10 @@ class _ActionLineState extends State<ActionLine> {
       child: Padding(
         padding: const EdgeInsets.all(6),
         child: Center(
-          child: PlayingCard(card, width: widget.compact ? 26 : 28),
+          child: CardRow(
+            dealtCards(card) ?? [card],
+            width: widget.compact ? 26 : 28,
+          ),
         ),
       ),
     );
@@ -190,6 +196,13 @@ class _ActionLineState extends State<ActionLine> {
     );
   }
 
+  /// Position of the player acting (or folding) at [node].
+  String _seatName(GetNodeResponse node) {
+    final seats = NodeSeats(node, widget.job);
+    final positions = seats.positions;
+    return seats.acting < positions.length ? positions[seats.acting] : '?';
+  }
+
   Widget _endTile(BuildContext context, GetNodeResponse node) {
     final theme = Theme.of(context);
     final fold = node.type == NodeType.NODE_TYPE_FOLD;
@@ -202,8 +215,7 @@ class _ActionLineState extends State<ActionLine> {
         child: Center(
           child: Text(
             fold
-                ? '${node.player == Player.PLAYER_OOP ? 'OOP' : 'IP'} folds. '
-                      'The hand is over.'
+                ? '${_seatName(node)} folds. The hand is over.'
                 : 'The hand goes to showdown.',
             key: const Key('line-end'),
             style: theme.textTheme.bodySmall,
@@ -226,10 +238,9 @@ class _ActionLineState extends State<ActionLine> {
 
     String header;
     if (known) {
-      final oop = node.player == Player.PLAYER_OOP;
-      final behind =
-          widget.effectiveStack - (oop ? node.oopCommitted : node.ipCommitted);
-      header = '${oop ? 'OOP' : 'IP'} · ${formatChips(behind)}';
+      final seats = NodeSeats(node, widget.job);
+      header =
+          '${_seatName(node)} · ${formatChips(seats.behind(seats.acting))}';
     } else {
       header = 'Decision';
     }

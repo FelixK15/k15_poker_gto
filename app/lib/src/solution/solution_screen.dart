@@ -6,11 +6,15 @@ import 'package:flutter/services.dart';
 import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../common/playing_card.dart';
+import '../common/solve_labels.dart';
 import '../jobs/jobs_screen.dart';
 import 'action_line.dart';
 import 'action_style.dart';
 import 'lock_dialog.dart';
 import 'matrix_model.dart';
+import 'node_view.dart';
+import 'plo_hand_view.dart';
+import 'plo_hands.dart';
 import 'solution_panels.dart';
 import 'strategy_matrix.dart';
 
@@ -49,7 +53,10 @@ class _SolutionScreenState extends State<SolutionScreen> {
   /// Cell picked in the matrix, and whose range is shown; null follows the
   /// player to act.
   int? _selected;
-  Player? _view;
+  int? _view;
+
+  /// PLO: hands per player to ask for.
+  int _ploMaxHands = 1000;
 
   /// Cell under the mouse, shown in the details while it is there.
   int? _hovered;
@@ -87,6 +94,27 @@ class _SolutionScreenState extends State<SolutionScreen> {
     super.dispose();
   }
 
+  bool get _isOmaha => _job.spot.variant == Variant.VARIANT_OMAHA4;
+  bool get _isPreflop => _job.spot.hasPreflop();
+
+  /// Locking works on the exact heads-up Hold'em grid.
+  bool _canLock(NodeSeats seats) =>
+      !_isOmaha &&
+      !_isPreflop &&
+      seats.count == 2 &&
+      _job.engine != Engine.ENGINE_MONTE_CARLO;
+
+  Future<GetNodeResponse> _read(String jobId, String path) =>
+      widget.api.getNode(
+        jobId,
+        path,
+        maxHands: _isOmaha ? _ploMaxHands : 0,
+        // Preflop nodes hold every hand of every player: classes are enough.
+        detail: _isPreflop
+            ? HandDetail.HAND_DETAIL_CLASSES
+            : HandDetail.HAND_DETAIL_HANDS,
+      );
+
   bool get _running =>
       _job.state == JobState.JOB_STATE_RUNNING ||
       _job.state == JobState.JOB_STATE_QUEUED;
@@ -113,11 +141,11 @@ class _SolutionScreenState extends State<SolutionScreen> {
     });
     try {
       final path = _path.join('/');
-      final node = await widget.api.getNode(_job.id, path);
+      final node = await _read(_job.id, path);
       GetNodeResponse? parentNode;
       if (_job.parentId.isNotEmpty) {
         try {
-          parentNode = await widget.api.getNode(_job.parentId, path);
+          parentNode = await _read(_job.parentId, path);
         } catch (_) {
           // The parent may have been deleted; then there is nothing to compare.
         }
@@ -192,7 +220,8 @@ class _SolutionScreenState extends State<SolutionScreen> {
       locked: node.locked,
     );
     // A class picked in the grid counts only if the grid shows the actor.
-    final selected = _selected != null && _viewedPlayer(node) == node.player
+    final selected =
+        _selected != null && _viewedSeat(node) == NodeSeats(node, _job).acting
         ? model.cells[_selected!]
         : null;
     final lock = await showLockDialog(
@@ -332,17 +361,23 @@ class _SolutionScreenState extends State<SolutionScreen> {
     );
   }
 
-  Player _viewedPlayer(GetNodeResponse node) =>
-      _view ??
-      (node.type == NodeType.NODE_TYPE_ACTION
-          ? node.player
-          : Player.PLAYER_OOP);
+  /// The seat whose range is shown: the user's pick, else the player to
+  /// act, else the first.
+  int _viewedSeat(GetNodeResponse node) {
+    final seats = NodeSeats(node, _job);
+    final view = _view;
+    if (view != null && view < seats.count) return view;
+    return seats.isAction && seats.acting < seats.count ? seats.acting : 0;
+  }
 
   @override
   Widget build(BuildContext context) {
     final node = _node;
     final theme = Theme.of(context);
     final board = splitCards(_job.spot.board);
+    final progress = isMonteCarlo(_job)
+        ? '${formatSamples(_job.mcIterations.toInt())} samples'
+        : 'iteration ${_job.iteration}';
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -353,17 +388,14 @@ class _SolutionScreenState extends State<SolutionScreen> {
               const SizedBox(width: 10),
             ],
             Flexible(
-              child: Text(
-                _job.name.isEmpty ? _job.spot.board : _job.name,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(jobTitle(_job), overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
         actions: [
           _StatusChip(
             label: _running
-                ? '${jobStateLabel(_job.state)} · iteration ${_job.iteration}'
+                ? '${jobStateLabel(_job.state)} · $progress'
                 : jobStateLabel(_job.state),
             active: _running,
           ),
@@ -402,18 +434,43 @@ class _SolutionScreenState extends State<SolutionScreen> {
   }
 
   Widget _buildNode(BuildContext context, GetNodeResponse node) {
-    final viewed = _viewedPlayer(node);
-    final range = viewed == Player.PLAYER_OOP ? node.oop : node.ip;
-    final acting =
-        node.type == NodeType.NODE_TYPE_ACTION && node.player == viewed;
-    final model = MatrixModel.fromRange(
-      range,
-      strategy: acting ? node.strategy : const [],
-      actionCount: acting ? node.actions.length : 0,
-      locked: acting ? node.locked : const [],
-    );
+    final seats = NodeSeats(node, _job);
+    final positions = seats.positions;
+    final viewed = _viewedSeat(node);
+    final range = seats.ranges[viewed];
+    final acting = seats.isAction && seats.acting == viewed;
+    final actionCount = acting ? node.actions.length : 0;
     final colors = actionColors(node.actions);
     final shown = _hovered ?? _selected;
+
+    // PLO has no grid: its hands are listed. Hold'em shows the grid, built
+    // from the hands, or from the classes where only those are sent.
+    final PloHandList? ploList = _isOmaha
+        ? PloHandList.fromRange(
+            range,
+            strategy: acting ? node.strategy : const [],
+            actionCount: actionCount,
+            locked: acting ? node.locked : const [],
+          )
+        : null;
+    final model = ploList != null
+        ? MatrixModel.fromRange(PlayerRange())
+        : range.hands.isEmpty && range.classes.isNotEmpty
+        ? MatrixModel.fromClasses(range.classes, actionCount: actionCount)
+        : MatrixModel.fromRange(
+            range,
+            strategy: acting ? node.strategy : const [],
+            actionCount: actionCount,
+            locked: acting ? node.locked : const [],
+          );
+    final totalCombos = ploList != null
+        ? seats.combos(viewed)
+        : model.totalReach;
+    final comboCounts = ploList != null
+        ? (acting
+              ? [for (final a in node.actions) a.frequency * totalCombos]
+              : null)
+        : ActionSummary.matrixCombos(model);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -423,48 +480,75 @@ class _SolutionScreenState extends State<SolutionScreen> {
           board: splitCards(_job.spot.board),
           current: node,
           nodeAt: (depth) => _nodes[_path.sublist(0, depth).join('/')],
-          effectiveStack: _job.spot.effectiveStack,
+          job: _job,
           onGo: _go,
           compact: !wide,
         );
 
         final toolbar = _MatrixToolbar(
+          positions: positions,
           viewed: viewed,
-          acting: node.type == NodeType.NODE_TYPE_ACTION ? node.player : null,
-          onView: (player) => setState(() {
-            _view = player;
+          acting: seats.isAction ? seats.acting : null,
+          folded: [for (var i = 0; i < seats.count; ++i) seats.folded(i)],
+          onView: (seat) => setState(() {
+            _view = seat;
             _selected = null;
             _highlight = null;
           }),
           matrixView: _matrixView,
-          onMatrixView: (view) => setState(() => _matrixView = view),
+          onMatrixView: ploList != null
+              ? null
+              : (view) => setState(() => _matrixView = view),
           compact: !wide,
         );
-        final matrix = StrategyMatrix(
-          key: const Key('matrix'),
-          model: model,
-          colors: colors,
-          view: _matrixView,
-          selected: _selected,
-          hovered: wide ? _hovered : null,
-          highlightAction: _highlight,
-          onSelected: (index) =>
-              setState(() => _selected = _selected == index ? null : index),
-          onHover: wide ? (index) => setState(() => _hovered = index) : null,
-        );
+        final Widget matrix = ploList != null
+            ? PloHandTable(
+                key: const Key('plo-table'),
+                list: ploList,
+                actions: node.actions,
+                colors: colors,
+                maxHands: _ploMaxHands,
+                highlightAction: _highlight,
+                expand: wide,
+                onMaxHands: (limit) {
+                  setState(() {
+                    _ploMaxHands = limit;
+                    _nodes.clear();
+                  });
+                  _load(quiet: true);
+                },
+              )
+            : StrategyMatrix(
+                key: const Key('matrix'),
+                model: model,
+                colors: colors,
+                view: _matrixView,
+                selected: _selected,
+                hovered: wide ? _hovered : null,
+                highlightAction: _highlight,
+                onSelected: (index) => setState(
+                  () => _selected = _selected == index ? null : index,
+                ),
+                onHover: wide
+                    ? (index) => setState(() => _hovered = index)
+                    : null,
+              );
 
         final deal = node.type == NodeType.NODE_TYPE_CHANCE
             ? _dealSection(context, node, compact: !wide)
             : null;
         final summary = ActionSummary(
           node: node,
-          model: model,
+          who: positions[viewed],
+          totalCombos: totalCombos,
+          comboCounts: comboCounts,
           colors: colors,
-          viewed: viewed,
           highlight: _highlight,
           onHighlight: (action) => setState(() => _highlight = action),
         );
-        final details = shown == null
+        final Widget? details = ploList != null
+            ? null
+            : shown == null
             ? _hint(
                 context,
                 wide
@@ -477,20 +561,20 @@ class _SolutionScreenState extends State<SolutionScreen> {
                 colors: colors,
                 actionCount: model.actionCount,
               );
-        final lockRow = node.type == NodeType.NODE_TYPE_ACTION
+        final lockRow = seats.isAction && _canLock(seats)
             ? _lockRow(context, node)
             : null;
         // Locking is one task: the button, then what is locked so far.
         final locking = [?lockRow, if (_locks.isNotEmpty) _locksCard(context)];
         final extras = [
-          NodeSummary(node: node),
+          NodeSummary(node: node, job: _job),
           if (_parentNode != null && node.type == NodeType.NODE_TYPE_ACTION)
             _compareCard(context, node),
         ];
 
         if (wide) {
           final panelWidth = constraints.maxWidth >= 1280 ? 420.0 : 360.0;
-          final panel = [?deal, summary, ...locking, details, ...extras];
+          final panel = [?deal, summary, ...locking, ?details, ...extras];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -509,10 +593,12 @@ class _SolutionScreenState extends State<SolutionScreen> {
                             toolbar,
                             const SizedBox(height: 10),
                             Expanded(
-                              child: Align(
-                                alignment: Alignment.topCenter,
-                                child: matrix,
-                              ),
+                              child: ploList != null
+                                  ? matrix
+                                  : Align(
+                                      alignment: Alignment.topCenter,
+                                      child: matrix,
+                                    ),
                             ),
                           ],
                         ),
@@ -538,7 +624,7 @@ class _SolutionScreenState extends State<SolutionScreen> {
           toolbar,
           matrix,
           summary,
-          details,
+          ?details,
           ...locking,
           ...extras,
         ];
@@ -677,35 +763,35 @@ class _ScrollStack extends StatelessWidget {
   }
 }
 
-/// The range shown in the grid and what its colours mean.
+/// Whose range is shown, and what the grid's colours mean.
 class _MatrixToolbar extends StatelessWidget {
   const _MatrixToolbar({
+    required this.positions,
     required this.viewed,
     required this.acting,
+    required this.folded,
     required this.onView,
     required this.matrixView,
     required this.onMatrixView,
     this.compact = false,
   });
 
-  final Player viewed;
+  /// Position names in seat order.
+  final List<String> positions;
+  final int viewed;
   final bool compact;
 
-  /// The player to act, marked in the toggle; null if nobody acts here.
-  final Player? acting;
-  final ValueChanged<Player> onView;
+  /// The seat to act, marked in the picker; null if nobody acts here.
+  final int? acting;
+  final List<bool> folded;
+  final ValueChanged<int> onView;
   final MatrixView matrixView;
-  final ValueChanged<MatrixView> onMatrixView;
+
+  /// Null where there is no grid (PLO).
+  final ValueChanged<MatrixView>? onMatrixView;
 
   @override
   Widget build(BuildContext context) {
-    ButtonSegment<Player> player(Player value, String label) => ButtonSegment(
-      value: value,
-      label: Text(label),
-      icon: acting == value && !compact
-          ? const Icon(Icons.play_arrow_rounded, size: 16)
-          : null,
-    );
     // Tighter segments on a phone, so the labels fit on one line.
     final style = compact
         ? const ButtonStyle(
@@ -714,29 +800,62 @@ class _MatrixToolbar extends StatelessWidget {
             ),
           )
         : null;
-    final players = SegmentedButton<Player>(
-      style: style,
-      key: const Key('player-view'),
-      showSelectedIcon: false,
-      segments: [
-        player(Player.PLAYER_OOP, 'OOP'),
-        player(Player.PLAYER_IP, 'IP'),
-      ],
-      selected: {viewed},
-      onSelectionChanged: (selection) => onView(selection.first),
-    );
-    final views = SegmentedButton<MatrixView>(
-      style: style,
-      key: const Key('matrix-view'),
-      showSelectedIcon: false,
-      segments: [
-        for (final view in MatrixView.values)
-          ButtonSegment(value: view, label: Text(view.label)),
-      ],
-      selected: {matrixView},
-      onSelectionChanged: (selection) => onMatrixView(selection.first),
-    );
-    if (compact) {
+    final Widget players;
+    if (positions.length <= 3) {
+      players = SegmentedButton<int>(
+        style: style,
+        key: const Key('player-view'),
+        showSelectedIcon: false,
+        segments: [
+          for (var seat = 0; seat < positions.length; ++seat)
+            ButtonSegment(
+              value: seat,
+              label: Text(positions[seat]),
+              icon: acting == seat && !compact
+                  ? const Icon(Icons.play_arrow_rounded, size: 16)
+                  : null,
+            ),
+        ],
+        selected: {viewed},
+        onSelectionChanged: (selection) => onView(selection.first),
+      );
+    } else {
+      // Too many seats for segments: a menu, the player to act marked.
+      players = DropdownButton<int>(
+        key: const Key('player-view'),
+        value: viewed,
+        isDense: true,
+        items: [
+          for (var seat = 0; seat < positions.length; ++seat)
+            DropdownMenuItem(
+              value: seat,
+              child: Text(
+                '${positions[seat]}'
+                '${acting == seat ? ' ▸ to act' : ''}'
+                '${folded[seat] ? ' (folded)' : ''}',
+              ),
+            ),
+        ],
+        onChanged: (seat) {
+          if (seat != null) onView(seat);
+        },
+      );
+    }
+    final onViews = onMatrixView;
+    final views = onViews == null
+        ? null
+        : SegmentedButton<MatrixView>(
+            style: style,
+            key: const Key('matrix-view'),
+            showSelectedIcon: false,
+            segments: [
+              for (final view in MatrixView.values)
+                ButtonSegment(value: view, label: Text(view.label)),
+            ],
+            selected: {matrixView},
+            onSelectionChanged: (selection) => onViews(selection.first),
+          );
+    if (compact && views != null) {
       // One row on a phone, sharing the width.
       return Row(
         children: [
@@ -746,7 +865,7 @@ class _MatrixToolbar extends StatelessWidget {
         ],
       );
     }
-    return Wrap(spacing: 8, runSpacing: 8, children: [players, views]);
+    return Wrap(spacing: 8, runSpacing: 8, children: [players, ?views]);
   }
 }
 
