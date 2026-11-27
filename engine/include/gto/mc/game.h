@@ -73,6 +73,9 @@ struct StreetSizing {
 struct PreflopSizing {
   /// Open-raise sizes in big blinds (raise to), first in from any seat but the SB.
   std::vector<double> open_bb{2.5};
+  /// Per player overrides of open_bb: empty, or one entry per player where an
+  /// empty entry uses open_bb (preflop presets open smaller from the BTN).
+  std::vector<std::vector<double>> open_bb_by_seat;
   /// Open-raise sizes of the SB when everybody folded to it.
   std::vector<double> sb_open_bb{3.0};
   /// Added to an open (iso-raise) per limper, in big blinds.

@@ -400,7 +400,13 @@ class TreeBuilder {
     bool allin = pf.allin_every_level;
     if (level == 1) {
       const bool sb_first_in = is_sb(p) && s.limpers == 0;
-      for (const double size : sb_first_in ? pf.sb_open_bb : pf.open_bb) {
+      const auto seat = static_cast<std::size_t>(p);
+      const std::vector<double>& opens =
+          sb_first_in ? pf.sb_open_bb
+          : (seat < pf.open_bb_by_seat.size() && !pf.open_bb_by_seat[seat].empty())
+              ? pf.open_bb_by_seat[seat]
+              : pf.open_bb;
+      for (const double size : opens) {
         wishes.push_back(size * bb + s.limpers * pf.iso_per_limper_bb * bb);
       }
     } else if (level == 2 || level == 3) {
