@@ -5,6 +5,8 @@ syntax = "proto3";
 
 package gto.v1;
 
+import "gto/v1/common.proto";
+
 service SolutionService {
   // Everything about one node of a job's solution.
   rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
@@ -12,6 +14,18 @@ service SolutionService {
   // Where a card is dealt: how each possible card changes the spot. Fails
   // with INVALID_ARGUMENT if no card is dealt at the path.
   rpc GetRunoutReport(GetRunoutReportRequest) returns (GetRunoutReportResponse);
+
+  // Preflop solves only: the standard lines of the solution (limped,
+  // single-raised, 3-bet and 4-bet pots for each pair of positions) with
+  // their paths, ready for GetPreflopRanges. FAILED_PRECONDITION for other
+  // jobs.
+  rpc ListPreflopScenarios(ListPreflopScenariosRequest) returns (ListPreflopScenariosResponse);
+
+  // Preflop solves only: each remaining player's range after a preflop line,
+  // as weights of the 169 hand classes, with pot and stacks. This is what a
+  // client's preflop range library is built from. FAILED_PRECONDITION for
+  // other jobs.
+  rpc GetPreflopRanges(GetPreflopRangesRequest) returns (GetPreflopRangesResponse);
 }
 
 message GetNodeRequest {
@@ -19,7 +33,33 @@ message GetNodeRequest {
   // Line from the start of the spot: actions and dealt cards separated by
   // '/', e.g. "check/bet50/call/Ts/check". Empty for the root. Actions are
   // named as in NodeAction.label.
+  //
+  // Preflop solves: preflop actions are "fold", "check", "call", "raise2.5"
+  // (raise to 2.5 big blinds in total) and "allin". A segment may name the
+  // player as "POS:action", e.g. "BTN:raise2.5/BB:call": everyone whose turn
+  // comes before the named position folds. The flop is dealt as its three
+  // cards in one segment, e.g. ".../Ks7d2c".
   string path = 2;
+  // Most hands to list per player. 0: the server default, which is every
+  // hand for Hold'em and 2,000 for PLO4 (a PLO range can hold 270,725
+  // combos). The server never sends more than 20,000 per player. When a range
+  // holds more, the hands with the most reach at this node are sent, still in
+  // the range's own order; PlayerRange.total_hands tells how many there are.
+  // Action frequencies and range EVs always cover the whole range.
+  uint32 max_hands = 3;
+  // Individual hands, hand classes or both. Default: hands only.
+  HandDetail detail = 4;
+}
+
+enum HandDetail {
+  // PlayerRange.hands and the arrays parallel to it, as always.
+  HAND_DETAIL_HANDS = 0;
+  // Hands and PlayerRange.classes (Hold'em only).
+  HAND_DETAIL_HANDS_AND_CLASSES = 1;
+  // Only PlayerRange.classes: hands, reach, ev, equity, strategy and locked
+  // stay empty. The compact choice for preflop nodes. Hold'em only:
+  // INVALID_ARGUMENT for PLO4.
+  HAND_DETAIL_CLASSES = 2;
 }
 
 enum NodeType {
@@ -60,9 +100,29 @@ message NodeAction {
   double frequency = 4;
 }
 
-// One player's range at a node. The three arrays are parallel.
+// One of the 169 Hold'em starting-hand classes ("AA", "AKs", "AKo") at a
+// node, summed over its combos.
+message HandClass {
+  string name = 1;
+  // Average reach over the class's combos that the board allows: 1 when all
+  // of them get here with full weight. For a preflop range this is the
+  // class's weight in the range.
+  float weight = 2;
+  // Sum of the reach of its combos (how many combos of the class are here).
+  float combos = 3;
+  // Reach-weighted average EV and equity of its combos.
+  float ev = 4;
+  float equity = 5;
+  // Acting player at an action node: how often the class takes each action,
+  // reach-weighted, in the order of GetNodeResponse.actions. Empty
+  // otherwise.
+  repeated float strategy = 6;
+}
+
+// One player's range at a node. The arrays are parallel.
 message PlayerRange {
-  // Hands as four characters, higher card first, e.g. "AhKd".
+  // Hands, higher card first: Hold'em as four characters, e.g. "AhKd"; PLO4
+  // as eight, cards ordered by rank, e.g. "AsKsQhJh".
   repeated string hands = 1;
   // How much of each hand gets here: its starting weight times the
   // probability of the player's own actions on the way. 0 for hands that a
@@ -76,6 +136,20 @@ message PlayerRange {
   // pot, 0 to 1, if both checked or called to the end.
   repeated float equity = 5;
   double range_equity = 6;
+
+  // Hands in the whole range (possible on the starting board). More than
+  // hands_size() when the response was cut to GetNodeRequest.max_hands.
+  uint32 total_hands = 7;
+  // Share of the range's total reach at this node that the listed hands
+  // hold: 1 when nothing was left out.
+  double shown_reach_fraction = 8;
+  // With HandDetail CLASSES or HANDS_AND_CLASSES (Hold'em): all 169 classes
+  // in 13x13 grid order: row by row from aces down, pairs on the diagonal,
+  // suited hands right of it, offsuit hands left of it ("AA", "AKs", "AQs",
+  // …, "AKo", "KK", "KQs", …).
+  repeated HandClass classes = 9;
+  // The player's position name (Job.positions).
+  string position = 10;
 }
 
 message GetRunoutReportRequest {
@@ -97,6 +171,12 @@ message Runout {
   // If a decision follows: whose it is and what they do with their range.
   Player player = 7;
   repeated NodeAction actions = 8;
+  // Every player's range EV and equity in seat order (also filled heads-up,
+  // where they repeat the oop_/ip_ fields).
+  repeated double evs = 9;
+  repeated double equities = 10;
+  // If a decision follows: the acting player's index in seat order.
+  uint32 acting_player = 11;
 }
 
 message GetRunoutReportResponse {
@@ -106,7 +186,8 @@ message GetRunoutReportResponse {
 
 message GetNodeResponse {
   NodeType type = 1;
-  // Action node: who acts. Fold node: who folded.
+  // Action node: who acts. Fold node: who folded. Two players only; see
+  // acting_player.
   Player player = 2;
   // The path of this node as the client gave it.
   string path = 3;
@@ -115,25 +196,127 @@ message GetNodeResponse {
   repeated NodeAction actions = 4;
   // Action nodes: the acting player's strategy, one value per action and
   // hand: strategy[action * hand_count + hand], with hands in the order of
-  // that player's PlayerRange.
+  // that player's PlayerRange (as sent, after any max_hands cut).
   repeated float strategy = 5;
 
   // Chance nodes: the cards that can come.
   repeated string next_cards = 6;
 
+  // Two players: the same as players[0] and players[1].
   PlayerRange oop = 7;
   PlayerRange ip = 8;
 
   // Pot at this node, including bets made since the start of the spot.
   double pot = 9;
-  // Chips each player has put in since the start of the spot.
+  // Two players: chips each has put in since the start of the spot.
   double oop_committed = 10;
   double ip_committed = 11;
 
   // The job's iteration count when this was read.
   uint32 iteration = 12;
 
-  // Action nodes: for each hand of the acting player, whether its strategy
-  // here is locked.
+  // Action nodes: for each hand of the acting player (as sent), whether its
+  // strategy here is locked.
   repeated bool locked = 13;
+
+  // Every player in seat order (Job.positions). Always filled.
+  repeated PlayerRange players = 14;
+  // Action node: index of the acting player in `players`. Fold node: the
+  // player who folded.
+  uint32 acting_player = 15;
+  // Per player in seat order: chips put in since the start of the spot,
+  // whether they have folded, whether they are all-in.
+  repeated double committed = 16;
+  repeated bool folded = 17;
+  repeated bool all_in = 18;
+  // The board at this node: the spot's board plus the cards dealt on the
+  // way, e.g. "Ks Td 7h 2c". Empty preflop.
+  string board = 19;
+  // EVs and equities are sampled estimates (Monte Carlo engine).
+  bool ev_estimated = 20;
+}
+
+message ListPreflopScenariosRequest {
+  string job_id = 1;
+  // Deepest pots to list: 2 = up to single-raised pots, 3 = up to 3-bet
+  // pots, 4 = up to 4-bet pots (default), 5 or more = everything.
+  uint32 max_raises = 2;
+}
+
+enum PreflopScenarioKind {
+  PREFLOP_SCENARIO_KIND_UNSPECIFIED = 0;
+  // Nobody raised: limps, or the small blind completed.
+  PREFLOP_SCENARIO_KIND_LIMPED = 1;
+  // One raise, called.
+  PREFLOP_SCENARIO_KIND_SINGLE_RAISED = 2;
+  PREFLOP_SCENARIO_KIND_THREE_BET = 3;
+  PREFLOP_SCENARIO_KIND_FOUR_BET = 4;
+  // Five raises or more.
+  PREFLOP_SCENARIO_KIND_FIVE_BET_PLUS = 5;
+}
+
+// A preflop line that ends with the flop being dealt.
+message PreflopScenario {
+  // Readable name, e.g. "BTN open, BB call" or "CO open, BTN 3-bet, CO call".
+  string name = 1;
+  // The line in the positional form, e.g. "BTN:raise2.5/BB:call". Works as
+  // GetNodeRequest.path and GetPreflopRangesRequest.path.
+  string path = 2;
+  PreflopScenarioKind kind = 3;
+  // Players who see the flop, in seat order.
+  repeated string positions = 4;
+  // Position of the last raiser; empty in a limped pot.
+  string aggressor = 5;
+  // Pot, and the smallest stack behind among the players left, in big
+  // blinds.
+  double pot = 6;
+  double effective_stack = 7;
+  // How often the line is played under the solved strategies, over all
+  // deals (0 to 1).
+  double frequency = 8;
+}
+
+message ListPreflopScenariosResponse {
+  repeated PreflopScenario scenarios = 1;
+}
+
+message GetPreflopRangesRequest {
+  string job_id = 1;
+  // A preflop line as in GetNodeRequest.path (either form), usually a
+  // PreflopScenario.path. Any preflop node works.
+  string path = 2;
+}
+
+message PreflopRange {
+  string position = 1;
+  // All 169 classes in grid order (see PlayerRange.classes). `weight` is the
+  // class's weight in the range: how often the player's own actions on the
+  // line are taken with it.
+  repeated HandClass classes = 2;
+  // The same weights as range text ("AA, AKs:0.75, …"), ready for
+  // Spot.oop_range / Spot.players[].range.
+  string range = 3;
+  // Big blinds put in preflop, and behind.
+  double committed = 4;
+  double stack = 5;
+}
+
+message GetPreflopRangesResponse {
+  // The line in the full form, every action spelled out.
+  string path = 1;
+  // The line ends where the flop is dealt: the preflop betting is over with
+  // two or more players left.
+  bool complete = 2;
+  // Every player who has not folded, in seat order.
+  repeated PreflopRange players = 3;
+  double pot = 4;
+  // Smallest stack behind among the players left.
+  double effective_stack = 5;
+  // A postflop spot for this line, ready to submit once the client sets the
+  // board and the tree: variant, pot, stacks, ranges and positions filled in
+  // (oop_range / ip_range / effective_stack for two players, `players` for
+  // more), rake copied from the preflop spot.
+  Spot spot = 6;
+  // The job's iteration count when this was read.
+  uint32 iteration = 7;
 }

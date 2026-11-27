@@ -15,8 +15,16 @@ message BetSizing {
 }
 
 message StreetSizing {
+  // Heads-up: the out-of-position and the in-position player.
   BetSizing oop = 1;
   BetSizing ip = 2;
+  // Sizes for every player who has none of their own: in a multiway spot
+  // all players without an entry in `players`; heads-up a player whose
+  // `oop` / `ip` field is not set at all.
+  BetSizing all = 3;
+  // Multiway, optional: sizes per player, in the order of Spot.players.
+  // Shorter than the player list (or empty) means `all` for the rest.
+  repeated BetSizing players = 4;
 }
 
 message TreeSettings {
@@ -30,11 +38,109 @@ message TreeSettings {
   optional double allin_threshold_pct = 5;
 }
 
-// A heads-up postflop spot.
+// The poker game being played.
+enum Variant {
+  // No-Limit Hold'em, two hole cards.
+  VARIANT_HOLDEM = 0;
+  // Omaha with four hole cards (PLO4): exactly two hole cards and three board
+  // cards make a hand. Pot-limit unless Spot.pot_limit says otherwise.
+  VARIANT_OMAHA4 = 1;
+}
+
+// Which solver works on a spot.
+enum Engine {
+  // The server chooses: EXACT for a heads-up postflop spot whose full tree
+  // fits the server's limits, MONTE_CARLO for everything else (multiway,
+  // preflop, heads-up spots too large to solve exactly).
+  ENGINE_AUTO = 0;
+  // Vector CFR over every hand, no abstraction. Heads-up postflop only.
+  // Fails with RESOURCE_EXHAUSTED when the tree does not fit.
+  ENGINE_EXACT = 1;
+  // External-sampling Monte Carlo CFR for 2 to 9 players, with hands grouped
+  // into buckets (see Abstraction). Exploitability is an estimate.
+  ENGINE_MONTE_CARLO = 2;
+}
+
+// One player of a spot with more than two players (or, optionally, of a
+// heads-up spot instead of oop_range / ip_range / effective_stack).
+message PlayerSpot {
+  // Position name shown to the user and used in preflop paths, e.g. "BTN".
+  // Must be unique within the spot. Empty: "P1", "P2", … by seat.
+  string position = 1;
+  // The player's range in text form: Hold'em as in Spot.oop_range, PLO4 as
+  // the Omaha syntax (e.g. "AAxx, KQJTds, top15%").
+  string range = 2;
+  // Chips behind at the start of the spot. 0: Spot.effective_stack.
+  double stack = 3;
+}
+
+// How the Monte Carlo engine groups hands. Ignored by the exact engine, which
+// never abstracts.
+message Abstraction {
+  // Keep every hand apart (no bucketing). Only feasible for small spots.
+  bool lossless = 1;
+  // Buckets per street. 0 or unset: the engine's default for the street.
+  // Preflop Hold'em is always lossless (169 classes).
+  optional uint32 preflop_buckets = 2;
+  optional uint32 flop_buckets = 3;
+  optional uint32 turn_buckets = 4;
+  optional uint32 river_buckets = 5;
+}
+
+// A preflop solve: the betting starts with the blinds and the job's solution
+// covers the preflop tree (see PreflopSettings.solve_postflop). Spot.board,
+// the ranges, pot and stacks are then ignored: everyone starts with every
+// hand and `stack_bb` behind.
+message PreflopSettings {
+  // Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Positions are
+  // named SB, BB, UTG, UTG1, UTG2, LJ, HJ, CO, BTN as the table size needs
+  // them (heads-up: BTN and BB, the button posting the small blind). Seats
+  // are numbered in postflop order: SB, BB, then UTG … BTN; heads-up BB, BTN.
+  uint32 players = 1;
+  // Stack of every player before posting, in big blinds.
+  double stack_bb = 2;
+  // Blinds and ante in big blinds. Defaults: small blind 0.5, big blind 1,
+  // no ante.
+  optional double small_blind = 3;
+  optional double big_blind = 4;
+  double ante = 5;
+  // The ante is a single big-blind ante paid by the big blind (else every
+  // player pays `ante`).
+  bool bb_ante = 6;
+  // Opening raise sizes ("raise to", in big blinds) for every position but
+  // the small blind. Default: 2.5.
+  repeated double open_sizes_bb = 7;
+  // Small blind opening sizes ("raise to", in big blinds). Default: 3.
+  repeated double sb_open_sizes_bb = 8;
+  // Whether a player may limp in (call the big blind first in). The small
+  // blind completing counts as a limp.
+  bool allow_limp = 9;
+  // 3-bet sizes as multiples of the open, in position and out of position.
+  // Defaults 3.0 and 4.0.
+  optional double three_bet_ip_multiplier = 10;
+  optional double three_bet_oop_multiplier = 11;
+  // 4-bet size as a multiple of the 3-bet; later raises use it too.
+  // Default 2.3.
+  optional double four_bet_multiplier = 12;
+  // Whether a player may call a raise when they have not put money in yet
+  // (cold call). Off: such players fold or re-raise. The big blind may always
+  // call.
+  bool allow_cold_calls = 13;
+  // Most raises preflop, the open counting as the first. Default 4 (open,
+  // 3-bet, 4-bet, 5-bet all-in).
+  optional uint32 raise_cap = 14;
+  // Also play the flop, turn and river with Spot.tree's sizes. Off: the hand
+  // is valued at the flop by equity, without further betting.
+  bool solve_postflop = 15;
+}
+
+// A spot to solve: heads-up or multiway postflop, or a preflop solve.
 message Spot {
   // Three, four or five cards, e.g. "Ks Td 7h".
   string board = 1;
-  // Ranges in the usual text form, e.g. "QQ+, AKs, AQo:0.5, A5s-A2s".
+  // Ranges in the usual text form, e.g. "QQ+, AKs, AQo:0.5, A5s-A2s". PLO4:
+  // the Omaha syntax, e.g. "AAxx, KQJTds, top15%" (see OmahaRange::parse).
+  // Heads-up only; ignored when `players` is set.
   string oop_range = 2;
   string ip_range = 3;
   // Pot at the start of the spot, in any chip unit (typically big blinds).
@@ -45,6 +151,47 @@ message Spot {
   double rake_pct = 6;
   double rake_cap = 7;
   TreeSettings tree = 8;
+
+  // Default: Hold'em. For PLO4 the ranges use the Omaha syntax.
+  Variant variant = 9;
+  // Pot-limit betting: no bet larger than the pot, no raise larger than a
+  // pot-size raise (larger sizes are cut down to that). Default: on for PLO4,
+  // off for Hold'em.
+  optional bool pot_limit = 10;
+
+  // Multiway: the players in postflop order of action, first to act first
+  // (e.g. SB, BB, BTN). Needed for more than two players; for two players it
+  // may replace oop_range / ip_range / effective_stack (players[0] is OOP).
+  // When set, oop_range and ip_range are ignored.
+  repeated PlayerSpot players = 11;
+
+  // Set for a preflop solve; see PreflopSettings.
+  PreflopSettings preflop = 12;
+
+  // Monte Carlo hand abstraction.
+  Abstraction abstraction = 13;
+  // Which solver to use. Default: AUTO.
+  Engine engine = 14;
+}
+
+// How to read Job.exploitability_pct.
+enum ExploitabilityKind {
+  EXPLOITABILITY_KIND_UNSPECIFIED = 0;
+  // Exact: the average gain of a best response against the current
+  // strategies, computed over the full tree. 0 means Nash equilibrium.
+  EXPLOITABILITY_KIND_EXACT = 1;
+  // Exact, but in the game with the job's locks held fixed: the distance
+  // from the best play given the locks, not from the unlocked equilibrium.
+  EXPLOITABILITY_KIND_LOCKED_GAME = 2;
+  // Heads-up Monte Carlo: an estimate of the best-response gain, measured
+  // on sampled deals and on the abstracted game. Has the usual two-player
+  // meaning (0 = equilibrium) up to sampling noise and abstraction error.
+  EXPLOITABILITY_KIND_ESTIMATED_TWO_PLAYER = 3;
+  // Three or more players: the estimated sum of what each player could gain
+  // by best-responding while the others keep their strategies. CFR has no
+  // Nash guarantee with more than two players, so a low number means "hard
+  // to exploit unilaterally", not "equilibrium". Label it as such.
+  EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY = 4;
 }
 
 // A player's strategy fixed for some hands at one decision.
@@ -56,7 +203,7 @@ message NodeLock {
 }
 
 message HandLock {
-  // The hand as GetNode names it, e.g. "AhKd".
+  // The hand as GetNode names it, e.g. "AhKd", or for PLO4 "AsKsQhJh".
   string hand = 1;
   // How often it takes each action, in the order of the node's actions.
   // Scaled to add up to one.
@@ -69,4 +216,11 @@ message SolveSettings {
   // Stop once exploitability is at or below this percentage of the pot.
   // Default 0.3.
   optional double target_exploitability_pct = 2;
+  // Stop after this many seconds of solving (time paused or queued does not
+  // count). 0: no time limit. Applies to both engines.
+  double max_seconds = 3;
+  // Monte Carlo engine: stop after this many sampled iterations (one
+  // iteration samples one deal and walks the tree once per player).
+  // max_iterations does not apply to it. 0: the server's default budget.
+  uint64 mc_iterations = 4;
 }

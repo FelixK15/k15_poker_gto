@@ -89,6 +89,26 @@ message Job {
   // Only in the reply to Submit: this is an existing job for the same spot,
   // returned instead of queuing a new one.
   bool reused = 20;
+
+  // EV of every player from the latest measurement, in chips, in seat order
+  // (Spot.players order; heads-up OOP then IP, the same as oop_ev / ip_ev,
+  // which stay filled for two players). Preflop: in big blinds relative to
+  // the stack before posting.
+  repeated double evs = 21;
+  // What exploitability_pct means. Unspecified on jobs saved by older
+  // servers, which were all EXACT or (with locks) LOCKED_GAME.
+  ExploitabilityKind exploitability_kind = 22;
+  // Players in the spot and their position names, in seat order. Heads-up
+  // postflop spots without names get "OOP" and "IP".
+  uint32 player_count = 23;
+  repeated string positions = 24;
+  // The engine the job runs on (never AUTO once accepted).
+  Engine engine = 25;
+  // Monte Carlo: sampled iterations so far (`iteration` is capped at 2^32-1
+  // and holds the same number).
+  uint64 mc_iterations = 26;
+  // Monte Carlo: EVs and exploitability are sampled estimates.
+  bool ev_estimated = 27;
 }
 
 message SubmitJobRequest {
