@@ -730,6 +730,7 @@ class _SolutionScreenState extends State<SolutionScreen> {
             const SizedBox(height: 10),
             RunoutReport(
               runouts: _runouts!,
+              firstSeat: NodeSeats(node, _job).positions.first,
               onPick: (card) => _go([..._path, card]),
             ),
           ],

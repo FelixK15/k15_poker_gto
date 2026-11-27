@@ -659,10 +659,19 @@ class CardPicker extends StatelessWidget {
 /// One tile per card that can come: what the spot is worth after it and what
 /// the next player does. Tapping a tile deals the card.
 class RunoutReport extends StatelessWidget {
-  const RunoutReport({super.key, required this.runouts, required this.onPick});
+  const RunoutReport({
+    super.key,
+    required this.runouts,
+    required this.onPick,
+    this.firstSeat = 'OOP',
+  });
 
   final List<Runout> runouts;
   final ValueChanged<String> onPick;
+
+  /// Position of the first player in seat order, whose value orders the
+  /// cards.
+  final String firstSeat;
 
   @override
   Widget build(BuildContext context) {
@@ -677,7 +686,7 @@ class RunoutReport extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Cards by OOP\'s value after them. The bar shows what the next '
+          'Cards by $firstSeat\'s value after them. The bar shows what the next '
           'player does.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
