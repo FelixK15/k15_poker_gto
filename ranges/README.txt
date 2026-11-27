@@ -16,6 +16,23 @@ over the 169 hand classes, engine gto::mc), made with
 file's "settings:" line and documented in engine/include/gto/mc/preflop.h.
 
 
+How they were made (i9-14900K, 32 threads, 27 Nov 2026)
+-------------------------------------------------------
+
+  preset   decisions info sets memory time  iterations open (% of hands, UTG..SB)  expl.* scenarios
+  6max100    9,772   1.65 M    30 MB  400 s 1.77 G     14 17 20 26 54               0.27%  113
+  6max200   13,483   2.28 M    41 MB  400 s 2.02 G     14 17 20 27 54               0.51%  111
+  6max300   13,874   2.34 M    43 MB  400 s 2.02 G     15 17 20 27 54               0.63%  114
+  9max100   11,408   1.93 M    36 MB  440 s 0.43 G     11 11 12 14 16 20 26 54      0.46%  312
+  9max200   11,408   1.93 M    36 MB  440 s 0.35 G     11 11 13 14 16 20 27 53      0.77%  318
+  9max300   11,408   1.93 M    36 MB  440 s 0.35 G     11 12 13 15 17 20 27 53      1.18%  319
+
+  * estimated exploitability, % of the starting pot (no Nash guarantee).
+  Between half-time and the end every position's opening frequency moved by
+  less than 0.5 points; single hand classes near indifference still flip
+  (up to ~30% at 6-max, ~70% for one 9-max class), so read mixed cells as
+  "either action".
+
 Main approximation
 ------------------
 
