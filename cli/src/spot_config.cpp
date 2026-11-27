@@ -40,6 +40,13 @@ Range read_range(const json& ranges, const char* player) {
   return *range;
 }
 
+OmahaRange read_omaha_range(const json& ranges, const char* player) {
+  std::string error;
+  const auto range = OmahaRange::parse(ranges.at(player).get<std::string>(), &error);
+  if (!range) throw ConfigError(std::string("ranges.") + player + ": " + error);
+  return *range;
+}
+
 LoadedSpot read_spot(const json& root) {
   LoadedSpot loaded;
   SpotConfig& spot = loaded.spot;
@@ -48,9 +55,23 @@ LoadedSpot read_spot(const json& root) {
   if (!board) throw ConfigError("board: cannot read the cards");
   spot.board = *board;
 
+  const std::string variant = root.value("variant", std::string("holdem"));
+  if (variant == "omaha4" || variant == "plo" || variant == "plo4") {
+    spot.variant = Variant::Omaha4;
+  } else if (variant != "holdem") {
+    throw ConfigError("variant: expected \"holdem\" or \"omaha4\", not \"" + variant + "\"");
+  }
+
   const json& ranges = root.at("ranges");
-  spot.ranges[kOop] = read_range(ranges, "oop");
-  spot.ranges[kIp] = read_range(ranges, "ip");
+  if (spot.variant == Variant::Omaha4) {
+    spot.omaha_ranges[kOop] = read_omaha_range(ranges, "oop");
+    spot.omaha_ranges[kIp] = read_omaha_range(ranges, "ip");
+    // PLO is pot-limit unless the tree says otherwise.
+    spot.tree.pot_limit = true;
+  } else {
+    spot.ranges[kOop] = read_range(ranges, "oop");
+    spot.ranges[kIp] = read_range(ranges, "ip");
+  }
 
   spot.tree.pot = root.at("pot").get<double>();
   spot.tree.effective_stack = root.at("effective_stack").get<double>();
@@ -71,6 +92,7 @@ LoadedSpot read_spot(const json& root) {
       spot.tree.sizing[street][kIp] = read_sizing(object, "ip");
     }
     spot.tree.raise_cap = tree.value("raise_cap", spot.tree.raise_cap);
+    spot.tree.pot_limit = tree.value("pot_limit", spot.tree.pot_limit);
     if (tree.contains("allin_threshold_pct")) {
       spot.tree.allin_threshold = tree.at("allin_threshold_pct").get<double>() / 100.0;
     }

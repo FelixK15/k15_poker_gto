@@ -47,6 +47,65 @@ struct ClassRow {
   double ev_weight = 0;
 };
 
+void print_action_header(const gto::NodeReport& report, const char* first, int width) {
+  std::printf("%-*s %7s", width, first, "combos");
+  for (const gto::Action& action : report.actions) {
+    std::printf(" %9s", gto::action_label(action).c_str());
+  }
+  std::printf(" %9s\n", "EV");
+}
+
+/// PLO has far too many hands for classes: the overall frequencies, then the
+/// hands that reach the node most often, one by one (the best first among
+/// equals).
+void print_four_card_node(const gto::Solver& solver, const gto::NodeReport& report) {
+  constexpr std::size_t kShown = 25;
+  const auto player = static_cast<std::size_t>(report.player);
+  const auto& hands = solver.game().hands[player];
+  const auto& reach = report.reach[player];
+  const std::size_t actions = report.actions.size();
+
+  std::vector<std::size_t> reached;
+  std::vector<double> total_action(actions, 0.0);
+  double total_reach = 0, total_ev = 0;
+  for (std::size_t h = 0; h < hands.size(); ++h) {
+    if (!(reach[h] > 0)) continue;
+    reached.push_back(h);
+    total_reach += reach[h];
+    total_ev += static_cast<double>(reach[h]) * report.ev[player][h];
+    for (std::size_t action = 0; action < actions; ++action) {
+      total_action[action] += static_cast<double>(reach[h]) * report.frequency(action, h);
+    }
+  }
+  if (total_reach <= 0) {
+    std::puts("No hands reach this node.");
+    return;
+  }
+
+  print_action_header(report, "hand", 9);
+  std::printf("%-9s %7.2f", "all", total_reach);
+  for (const double weight : total_action) std::printf(" %8.1f%%", 100.0 * weight / total_reach);
+  std::printf(" %9.2f\n", total_ev / total_reach);
+
+  const std::size_t shown = std::min(kShown, reached.size());
+  std::partial_sort(reached.begin(), reached.begin() + static_cast<std::ptrdiff_t>(shown),
+                    reached.end(), [&](std::size_t a, std::size_t b) {
+                      // Equal reach (at the root, say): the better hands first.
+                      if (reach[a] != reach[b]) return reach[a] > reach[b];
+                      const float ev_a = report.ev[player][a], ev_b = report.ev[player][b];
+                      return ev_a != ev_b ? ev_a > ev_b : a < b;
+                    });
+  std::printf("Most-reached %zu of %zu hands:\n", shown, reached.size());
+  for (std::size_t i = 0; i < shown; ++i) {
+    const std::size_t h = reached[i];
+    std::printf("%-9s %7.3f", gto::hand_name(hands[h]).c_str(), reach[h]);
+    for (std::size_t action = 0; action < actions; ++action) {
+      std::printf(" %8.1f%%", 100.0 * report.frequency(action, h));
+    }
+    std::printf(" %9.2f\n", report.ev[player][h]);
+  }
+}
+
 void print_node(const gto::Solver& solver, const gto::NodeRef& ref, const std::string& path) {
   const gto::NodeReport report = solver.report(ref);
 
@@ -70,6 +129,10 @@ void print_node(const gto::Solver& solver, const gto::NodeRef& ref, const std::s
   const auto& reach = report.reach[player];
   const std::size_t actions = report.actions.size();
   std::printf("%s to act\n", report.player == gto::kOop ? "OOP" : "IP");
+  if (!hands.empty() && hands.front().num_cards != 2) {
+    print_four_card_node(solver, report);
+    return;
+  }
 
   std::map<int, ClassRow> rows;
   std::vector<double> total_action(actions, 0.0);
@@ -98,11 +161,7 @@ void print_node(const gto::Solver& solver, const gto::NodeRef& ref, const std::s
     return;
   }
 
-  std::printf("%-5s %7s", "hand", "combos");
-  for (const gto::Action& action : report.actions) {
-    std::printf(" %9s", gto::action_label(action).c_str());
-  }
-  std::printf(" %9s\n", "EV");
+  print_action_header(report, "hand", 5);
 
   for (const auto& [order, row] : rows) {
     std::printf("%-5s %7.2f", row.name.c_str(), row.combos);

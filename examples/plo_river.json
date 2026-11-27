@@ -1,0 +1,30 @@
+// Pot-Limit Omaha (four hole cards), a river in a single-raised pot, 100BB
+// deep. Chips are big blinds; sizes are percentages of the pot, and bets and
+// raises are capped at the pot ("pot_limit" defaults to true for omaha4).
+//
+// PLO ranges: "top6%" takes the strongest 6% of combos by a fixed preflop
+// point-count heuristic; "AAxx", "KQJx", "AKQJds", "AsKsQhJh" also work.
+//
+// Try: --node check --node bet6.6/call
+{
+  "variant": "omaha4",
+  "board": "Qs Jh 8d 5c 2s",
+  "pot": 20,
+  "effective_stack": 90,
+  "ranges": {
+    "oop": "top6%",
+    "ip": "top5%, AAxx:0.5"
+  },
+  "tree": {
+    "river": {
+      "oop": { "bet_pct": [33, 75], "raise_pct": [100], "allin": true },
+      "ip": { "bet_pct": [33, 75, 100], "raise_pct": [100], "allin": true }
+    },
+    "raise_cap": 3
+  },
+  "solve": {
+    "max_iterations": 1000,
+    "target_exploitability_pct": 0.3,
+    "check_interval": 25
+  }
+}
