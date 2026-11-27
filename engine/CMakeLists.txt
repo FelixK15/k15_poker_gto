@@ -9,6 +9,7 @@ add_library(solver STATIC
   src/cpu.cpp
   src/game_tree.cpp
   src/hand_evaluator.cpp
+  src/omaha.cpp
   src/range.cpp
   src/solver.cpp
   src/spot.cpp
