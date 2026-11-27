@@ -318,6 +318,45 @@ const PreflopSettings$json = {
       '17': true
     },
     {'1': 'solve_postflop', '3': 15, '4': 1, '5': 8, '10': 'solvePostflop'},
+    {
+      '1': 'allow_sb_complete',
+      '3': 16,
+      '4': 1,
+      '5': 8,
+      '10': 'allowSbComplete'
+    },
+    {
+      '1': 'allow_cold_call_3bet',
+      '3': 17,
+      '4': 1,
+      '5': 8,
+      '10': 'allowColdCall3bet'
+    },
+    {
+      '1': 'allow_cold_call_4bet',
+      '3': 18,
+      '4': 1,
+      '5': 8,
+      '10': 'allowColdCall4bet'
+    },
+    {
+      '1': 'squeeze_per_caller',
+      '3': 19,
+      '4': 1,
+      '5': 1,
+      '9': 6,
+      '10': 'squeezePerCaller',
+      '17': true
+    },
+    {
+      '1': 'open_sizes_by_position',
+      '3': 20,
+      '4': 3,
+      '5': 11,
+      '6': '.gto.v1.PositionSizes',
+      '10': 'openSizesByPosition'
+    },
+    {'1': 'preset', '3': 21, '4': 1, '5': 9, '10': 'preset'},
   ],
   '8': [
     {'1': '_small_blind'},
@@ -326,6 +365,7 @@ const PreflopSettings$json = {
     {'1': '_three_bet_oop_multiplier'},
     {'1': '_four_bet_multiplier'},
     {'1': '_raise_cap'},
+    {'1': '_squeeze_per_caller'},
   ],
 };
 
@@ -341,9 +381,29 @@ final $typed_data.Uint8List preflopSettingsDescriptor = $convert.base64Decode(
     'FIA1IVdGhyZWVCZXRPb3BNdWx0aXBsaWVyiAEBEjMKE2ZvdXJfYmV0X211bHRpcGxpZXIYDCAB'
     'KAFIBFIRZm91ckJldE11bHRpcGxpZXKIAQESKAoQYWxsb3dfY29sZF9jYWxscxgNIAEoCFIOYW'
     'xsb3dDb2xkQ2FsbHMSIAoJcmFpc2VfY2FwGA4gASgNSAVSCHJhaXNlQ2FwiAEBEiUKDnNvbHZl'
-    'X3Bvc3RmbG9wGA8gASgIUg1zb2x2ZVBvc3RmbG9wQg4KDF9zbWFsbF9ibGluZEIMCgpfYmlnX2'
-    'JsaW5kQhoKGF90aHJlZV9iZXRfaXBfbXVsdGlwbGllckIbChlfdGhyZWVfYmV0X29vcF9tdWx0'
-    'aXBsaWVyQhYKFF9mb3VyX2JldF9tdWx0aXBsaWVyQgwKCl9yYWlzZV9jYXA=');
+    'X3Bvc3RmbG9wGA8gASgIUg1zb2x2ZVBvc3RmbG9wEioKEWFsbG93X3NiX2NvbXBsZXRlGBAgAS'
+    'gIUg9hbGxvd1NiQ29tcGxldGUSLwoUYWxsb3dfY29sZF9jYWxsXzNiZXQYESABKAhSEWFsbG93'
+    'Q29sZENhbGwzYmV0Ei8KFGFsbG93X2NvbGRfY2FsbF80YmV0GBIgASgIUhFhbGxvd0NvbGRDYW'
+    'xsNGJldBIxChJzcXVlZXplX3Blcl9jYWxsZXIYEyABKAFIBlIQc3F1ZWV6ZVBlckNhbGxlcogB'
+    'ARJKChZvcGVuX3NpemVzX2J5X3Bvc2l0aW9uGBQgAygLMhUuZ3RvLnYxLlBvc2l0aW9uU2l6ZX'
+    'NSE29wZW5TaXplc0J5UG9zaXRpb24SFgoGcHJlc2V0GBUgASgJUgZwcmVzZXRCDgoMX3NtYWxs'
+    'X2JsaW5kQgwKCl9iaWdfYmxpbmRCGgoYX3RocmVlX2JldF9pcF9tdWx0aXBsaWVyQhsKGV90aH'
+    'JlZV9iZXRfb29wX211bHRpcGxpZXJCFgoUX2ZvdXJfYmV0X211bHRpcGxpZXJCDAoKX3JhaXNl'
+    'X2NhcEIVChNfc3F1ZWV6ZV9wZXJfY2FsbGVy');
+
+@$core.Deprecated('Use positionSizesDescriptor instead')
+const PositionSizes$json = {
+  '1': 'PositionSizes',
+  '2': [
+    {'1': 'position', '3': 1, '4': 1, '5': 9, '10': 'position'},
+    {'1': 'sizes_bb', '3': 2, '4': 3, '5': 1, '10': 'sizesBb'},
+  ],
+};
+
+/// Descriptor for `PositionSizes`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List positionSizesDescriptor = $convert.base64Decode(
+    'Cg1Qb3NpdGlvblNpemVzEhoKCHBvc2l0aW9uGAEgASgJUghwb3NpdGlvbhIZCghzaXplc19iYh'
+    'gCIAMoAVIHc2l6ZXNCYg==');
 
 @$core.Deprecated('Use spotDescriptor instead')
 const Spot$json = {

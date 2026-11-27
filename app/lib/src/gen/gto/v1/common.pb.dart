@@ -533,6 +533,12 @@ class PreflopSettings extends $pb.GeneratedMessage {
     $core.bool? allowColdCalls,
     $core.int? raiseCap,
     $core.bool? solvePostflop,
+    $core.bool? allowSbComplete,
+    $core.bool? allowColdCall3bet,
+    $core.bool? allowColdCall4bet,
+    $core.double? squeezePerCaller,
+    $core.Iterable<PositionSizes>? openSizesByPosition,
+    $core.String? preset,
   }) {
     final result = PreflopSettings._();
     if (players != null) result.players = players;
@@ -552,6 +558,13 @@ class PreflopSettings extends $pb.GeneratedMessage {
     if (allowColdCalls != null) result.allowColdCalls = allowColdCalls;
     if (raiseCap != null) result.raiseCap = raiseCap;
     if (solvePostflop != null) result.solvePostflop = solvePostflop;
+    if (allowSbComplete != null) result.allowSbComplete = allowSbComplete;
+    if (allowColdCall3bet != null) result.allowColdCall3bet = allowColdCall3bet;
+    if (allowColdCall4bet != null) result.allowColdCall4bet = allowColdCall4bet;
+    if (squeezePerCaller != null) result.squeezePerCaller = squeezePerCaller;
+    if (openSizesByPosition != null)
+      result.openSizesByPosition.addAll(openSizesByPosition);
+    if (preset != null) result.preset = preset;
     return result;
   }
 
@@ -585,6 +598,15 @@ class PreflopSettings extends $pb.GeneratedMessage {
     ..aOB(13, _omitFieldNames ? '' : 'allowColdCalls')
     ..aI(14, _omitFieldNames ? '' : 'raiseCap', fieldType: $pb.PbFieldType.OU3)
     ..aOB(15, _omitFieldNames ? '' : 'solvePostflop')
+    ..aOB(16, _omitFieldNames ? '' : 'allowSbComplete')
+    ..aOB(17, _omitFieldNames ? '' : 'allowColdCall3bet',
+        protoName: 'allow_cold_call_3bet')
+    ..aOB(18, _omitFieldNames ? '' : 'allowColdCall4bet',
+        protoName: 'allow_cold_call_4bet')
+    ..aD(19, _omitFieldNames ? '' : 'squeezePerCaller')
+    ..pPM<PositionSizes>(20, _omitFieldNames ? '' : 'openSizesByPosition',
+        subBuilder: PositionSizes.$_createMessage)
+    ..aOS(21, _omitFieldNames ? '' : 'preset')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -609,10 +631,12 @@ class PreflopSettings extends $pb.GeneratedMessage {
           PreflopSettings.$_createMessage);
   static PreflopSettings? _defaultInstance;
 
-  /// Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Positions are
-  /// named SB, BB, UTG, UTG1, UTG2, LJ, HJ, CO, BTN as the table size needs
-  /// them (heads-up: BTN and BB, the button posting the small blind). Seats
-  /// are numbered in postflop order: SB, BB, then UTG … BTN; heads-up BB, BTN.
+  /// Players at the table, 2 to 9 (6 for 6-max, 9 for 9-max). Seats are
+  /// numbered in the order of preflop action: UTG, UTG1, UTG2, LJ, HJ, CO,
+  /// BTN, SB, BB as the table size needs them (6-max: UTG, HJ, CO, BTN, SB,
+  /// BB; 3-handed: BTN, SB, BB; heads-up: BTN, BB, the button posting the
+  /// small blind). Job.positions and every per-player array of a preflop job
+  /// use this order; postflop the SB acts first (heads-up the BB).
   @$pb.TagNumber(1)
   $core.int get players => $_getIZ(0);
   @$pb.TagNumber(1)
@@ -723,9 +747,9 @@ class PreflopSettings extends $pb.GeneratedMessage {
   @$pb.TagNumber(12)
   void clearFourBetMultiplier() => $_clearField(12);
 
-  /// Whether a player may call a raise when they have not put money in yet
-  /// (cold call). Off: such players fold or re-raise. The big blind may always
-  /// call.
+  /// Players who have not put money in yet may call an open (cold call). The
+  /// blinds may always call an open; whoever has raised or called may always
+  /// call a re-raise.
   @$pb.TagNumber(13)
   $core.bool get allowColdCalls => $_getBF(12);
   @$pb.TagNumber(13)
@@ -746,8 +770,10 @@ class PreflopSettings extends $pb.GeneratedMessage {
   @$pb.TagNumber(14)
   void clearRaiseCap() => $_clearField(14);
 
-  /// Also play the flop, turn and river with Spot.tree's sizes. Off: the hand
-  /// is valued at the flop by equity, without further betting.
+  /// Also play the flop (no turn or river betting) with Spot.tree.flop sizes
+  /// and strength buckets; Spot.tree.raise_cap applies (default 1). Off: the
+  /// hand is valued at the flop by equity, without further betting (every
+  /// player realises all of their equity: the main approximation).
   @$pb.TagNumber(15)
   $core.bool get solvePostflop => $_getBF(14);
   @$pb.TagNumber(15)
@@ -756,6 +782,125 @@ class PreflopSettings extends $pb.GeneratedMessage {
   $core.bool hasSolvePostflop() => $_has(14);
   @$pb.TagNumber(15)
   void clearSolvePostflop() => $_clearField(15);
+
+  /// The small blind may complete even when allow_limp is off.
+  @$pb.TagNumber(16)
+  $core.bool get allowSbComplete => $_getBF(15);
+  @$pb.TagNumber(16)
+  set allowSbComplete($core.bool value) => $_setBool(15, value);
+  @$pb.TagNumber(16)
+  $core.bool hasAllowSbComplete() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearAllowSbComplete() => $_clearField(16);
+
+  /// Cold calls of 3-bets, and of 4-bets and more.
+  @$pb.TagNumber(17)
+  $core.bool get allowColdCall3bet => $_getBF(16);
+  @$pb.TagNumber(17)
+  set allowColdCall3bet($core.bool value) => $_setBool(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasAllowColdCall3bet() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearAllowColdCall3bet() => $_clearField(17);
+
+  @$pb.TagNumber(18)
+  $core.bool get allowColdCall4bet => $_getBF(17);
+  @$pb.TagNumber(18)
+  set allowColdCall4bet($core.bool value) => $_setBool(17, value);
+  @$pb.TagNumber(18)
+  $core.bool hasAllowColdCall4bet() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearAllowColdCall4bet() => $_clearField(18);
+
+  /// Added to a 3-bet or 4-bet per caller of the raise being re-raised, in
+  /// multiples of that raise (squeeze sizing). Default 1.
+  @$pb.TagNumber(19)
+  $core.double get squeezePerCaller => $_getN(18);
+  @$pb.TagNumber(19)
+  set squeezePerCaller($core.double value) => $_setDouble(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasSqueezePerCaller() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearSqueezePerCaller() => $_clearField(19);
+
+  /// Open sizes for single positions, replacing open_sizes_bb there.
+  @$pb.TagNumber(20)
+  $pb.PbList<PositionSizes> get openSizesByPosition => $_getList(19);
+
+  /// A tuned preset: "hu", "6max" or "9max". When set, everything above but
+  /// stack_bb and the rake comes from the preset (sizes follow the nearest of
+  /// 100, 200 and 300 BB): the settings the shipped preflop library uses.
+  @$pb.TagNumber(21)
+  $core.String get preset => $_getSZ(20);
+  @$pb.TagNumber(21)
+  set preset($core.String value) => $_setString(20, value);
+  @$pb.TagNumber(21)
+  $core.bool hasPreset() => $_has(20);
+  @$pb.TagNumber(21)
+  void clearPreset() => $_clearField(21);
+}
+
+class PositionSizes extends $pb.GeneratedMessage {
+  factory PositionSizes({
+    $core.String? position,
+    $core.Iterable<$core.double>? sizesBb,
+  }) {
+    final result = PositionSizes._();
+    if (position != null) result.position = position;
+    if (sizesBb != null) result.sizesBb.addAll(sizesBb);
+    return result;
+  }
+
+  PositionSizes._();
+
+  factory PositionSizes.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      PositionSizes()..mergeFromBuffer(data, registry);
+  factory PositionSizes.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      PositionSizes()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PositionSizes',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'gto.v1'),
+      createEmptyInstance: PositionSizes.$_createMessage)
+    ..aOS(1, _omitFieldNames ? '' : 'position')
+    ..p<$core.double>(2, _omitFieldNames ? '' : 'sizesBb', $pb.PbFieldType.KD)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PositionSizes clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PositionSizes copyWith(void Function(PositionSizes) updates) =>
+      super.copyWith((message) => updates(message as PositionSizes))
+          as PositionSizes;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  @$core.Deprecated('Use PositionSizes() / PositionSizes.new instead')
+  static PositionSizes create() => PositionSizes._();
+  static $pb.GeneratedMessage $_createMessage() => PositionSizes._();
+  @$core.override
+  PositionSizes createEmptyInstance() => PositionSizes._();
+  @$core.pragma('dart2js:noInline')
+  static PositionSizes getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<PositionSizes>(
+          PositionSizes.$_createMessage);
+  static PositionSizes? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get position => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set position($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPosition() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPosition() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<$core.double> get sizesBb => $_getList(1);
 }
 
 /// A spot to solve: heads-up or multiway postflop, or a preflop solve.

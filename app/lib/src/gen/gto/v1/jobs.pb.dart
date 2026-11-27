@@ -349,9 +349,9 @@ class Job extends $pb.GeneratedMessage {
   void clearReused() => $_clearField(20);
 
   /// EV of every player from the latest measurement, in chips, in seat order
-  /// (Spot.players order; heads-up OOP then IP, the same as oop_ev / ip_ev,
+  /// (Spot.players order, preflop UTG … BB; heads-up OOP then IP, the same as oop_ev / ip_ev,
   /// which stay filled for two players). Preflop: in big blinds relative to
-  /// the stack before posting.
+  /// the stack before posting blinds and antes (so folding the BB is -1).
   @$pb.TagNumber(21)
   $pb.PbList<$core.double> get evs => $_getList(20);
 

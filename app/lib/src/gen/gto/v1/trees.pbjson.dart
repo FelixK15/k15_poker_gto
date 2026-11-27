@@ -68,6 +68,7 @@ const EstimateTreeResponse$json = {
     },
     {'1': 'player_count', '3': 15, '4': 1, '5': 13, '10': 'playerCount'},
     {'1': 'positions', '3': 16, '4': 3, '5': 9, '10': 'positions'},
+    {'1': 'abstraction', '3': 17, '4': 3, '5': 9, '10': 'abstraction'},
   ],
 };
 
@@ -83,4 +84,5 @@ final $typed_data.Uint8List estimateTreeResponseDescriptor = $convert.base64Deco
     'VneV9lbnRyaWVzGAwgASgEUg9zdHJhdGVneUVudHJpZXMSJgoGZW5naW5lGA0gASgOMg4uZ3Rv'
     'LnYxLkVuZ2luZVIGZW5naW5lEksKE2V4cGxvaXRhYmlsaXR5X2tpbmQYDiABKA4yGi5ndG8udj'
     'EuRXhwbG9pdGFiaWxpdHlLaW5kUhJleHBsb2l0YWJpbGl0eUtpbmQSIQoMcGxheWVyX2NvdW50'
-    'GA8gASgNUgtwbGF5ZXJDb3VudBIcCglwb3NpdGlvbnMYECADKAlSCXBvc2l0aW9ucw==');
+    'GA8gASgNUgtwbGF5ZXJDb3VudBIcCglwb3NpdGlvbnMYECADKAlSCXBvc2l0aW9ucxIgCgthYn'
+    'N0cmFjdGlvbhgRIAMoCVILYWJzdHJhY3Rpb24=');

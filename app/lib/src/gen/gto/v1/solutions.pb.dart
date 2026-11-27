@@ -449,7 +449,10 @@ class PlayerRange extends $pb.GeneratedMessage {
   void clearRangeEv() => $_clearField(4);
 
   /// Equity of each hand against the other player's range: its share of the
-  /// pot, 0 to 1, if both checked or called to the end.
+  /// pot, 0 to 1, if both checked or called to the end. Exact engine only:
+  /// empty (and range_equity 0) for Monte Carlo solutions. Monte Carlo EVs
+  /// are sampled (GetNodeResponse.ev_estimated); `ev` is empty for a player
+  /// with more than 5,000 hands reaching the node (wide PLO ranges).
   @$pb.TagNumber(5)
   $pb.PbList<$core.double> get equity => $_getList(4);
 
@@ -947,7 +950,8 @@ class GetNodeResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(5)
   $pb.PbList<$core.double> get strategy => $_getList(4);
 
-  /// Chance nodes: the cards that can come.
+  /// Chance nodes: the cards that can come. Where a whole flop is dealt
+  /// (preflop solves), the next path entry names three of them at once.
   @$pb.TagNumber(6)
   $pb.PbList<$core.String> get nextCards => $_getList(5);
 
@@ -1033,7 +1037,8 @@ class GetNodeResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(15)
   void clearActingPlayer() => $_clearField(15);
 
-  /// Per player in seat order: chips put in since the start of the spot,
+  /// Per player in seat order: chips put in since the start of the spot
+  /// (preflop solves: including the blinds posted),
   /// whether they have folded, whether they are all-in.
   @$pb.TagNumber(16)
   $pb.PbList<$core.double> get committed => $_getList(15);

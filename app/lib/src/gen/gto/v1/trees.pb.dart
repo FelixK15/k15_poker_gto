@@ -98,6 +98,7 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
     $1.ExploitabilityKind? exploitabilityKind,
     $core.int? playerCount,
     $core.Iterable<$core.String>? positions,
+    $core.Iterable<$core.String>? abstraction,
   }) {
     final result = EstimateTreeResponse._();
     if (nodes != null) result.nodes = nodes;
@@ -117,6 +118,7 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
       result.exploitabilityKind = exploitabilityKind;
     if (playerCount != null) result.playerCount = playerCount;
     if (positions != null) result.positions.addAll(positions);
+    if (abstraction != null) result.abstraction.addAll(abstraction);
     return result;
   }
 
@@ -166,6 +168,7 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
     ..aI(15, _omitFieldNames ? '' : 'playerCount',
         fieldType: $pb.PbFieldType.OU3)
     ..pPS(16, _omitFieldNames ? '' : 'positions')
+    ..pPS(17, _omitFieldNames ? '' : 'abstraction')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -228,7 +231,8 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(4)
   void clearIpHands() => $_clearField(4);
 
-  /// Memory for regrets and strategies, and for the tree itself.
+  /// Memory for regrets and strategies, and for the tree itself (Monte
+  /// Carlo: tree_bytes includes the bucket tables and hand lists).
   @$pb.TagNumber(5)
   $fixnum.Int64 get strategyBytes => $_getI64(4);
   @$pb.TagNumber(5)
@@ -295,8 +299,8 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
   @$pb.TagNumber(11)
   void clearInfoSets() => $_clearField(11);
 
-  /// Exact engine: action-hand pairs over all decisions (each costs two
-  /// values in strategy_bytes).
+  /// Action-hand pairs over all decisions (Monte Carlo: action-bucket
+  /// pairs, the table entries). Each costs two values in strategy_bytes.
   @$pb.TagNumber(12)
   $fixnum.Int64 get strategyEntries => $_getI64(11);
   @$pb.TagNumber(12)
@@ -338,6 +342,11 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(16)
   $pb.PbList<$core.String> get positions => $_getList(15);
+
+  /// Monte Carlo: how hands are grouped on each street with betting, one
+  /// line per street, e.g. "flop: lossless (1,326 hands)". Show as is.
+  @$pb.TagNumber(17)
+  $pb.PbList<$core.String> get abstraction => $_getList(16);
 }
 
 const $core.bool _omitFieldNames =
