@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <numeric>
 
 #include <gtest/gtest.h>
@@ -517,6 +518,16 @@ TEST(JobManager, KeepsJobsAndSolutionsAcrossRestarts) {
   EXPECT_TRUE(fs::exists(dir.path() / (done_id + ".job")));
   EXPECT_TRUE(fs::exists(dir.path() / (done_id + ".state")));
   EXPECT_TRUE(fs::exists(dir.path() / (paused_id + ".state")));
+  {
+    // Saved zstd-compressed.
+    std::ifstream state(dir.path() / (done_id + ".state"), std::ios::binary);
+    unsigned char magic[4] = {};
+    state.read(reinterpret_cast<char*>(magic), 4);
+    EXPECT_EQ(magic[0], 0x28);
+    EXPECT_EQ(magic[1], 0xB5);
+    EXPECT_EQ(magic[2], 0x2F);
+    EXPECT_EQ(magic[3], 0xFD);
+  }
 
   JobManager jobs(config);
   EXPECT_EQ(jobs.list().size(), 3u);

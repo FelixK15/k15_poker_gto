@@ -11,6 +11,7 @@
 #include <spdlog/spdlog.h>
 
 #include "convert.h"
+#include "zstd_stream.h"
 
 namespace gto::server {
 
@@ -185,6 +186,19 @@ bool write_atomically(const fs::path& path, const std::function<bool(std::ostrea
   return true;
 }
 
+/// Saved solver states are zstd-compressed. States from before compression
+/// still load.
+bool save_state(const Solver& solver, std::ostream& out) {
+  return write_compressed(out, [&](std::ostream& compressed) {
+    solver.save(compressed);
+    return static_cast<bool>(compressed);
+  });
+}
+
+bool load_state(Solver& solver, std::istream& in, std::string* error) {
+  return read_maybe_compressed(in, [&](std::istream& state) { return solver.load(state, error); });
+}
+
 }  // namespace
 
 JobManager::JobManager(JobManagerConfig config) : config_(std::move(config)) {
@@ -244,8 +258,7 @@ void JobManager::write_job(const v1::Job& job) const {
 bool JobManager::write_state(const std::string& id, const Solution& solution) const {
   if (config_.data_dir.empty()) return true;
   const bool ok = write_atomically(state_file(id), [&](std::ostream& out) {
-    solution.solver->save(out);
-    return static_cast<bool>(out);
+    return save_state(*solution.solver, out);
   });
   if (!ok) spdlog::error("cannot write the solution of job {}", id);
   return ok;
@@ -646,10 +659,10 @@ std::shared_ptr<JobManager::Solution> JobManager::load_solution(
   bool loaded = true;
   if (!initial_state.empty()) {
     std::istringstream in(initial_state, std::ios::binary);
-    loaded = solver.load(in, &load_error);
+    loaded = load_state(solver, in, &load_error);
   } else if (have_file) {
     std::ifstream in(state_file(job.id()), std::ios::binary);
-    loaded = in && solver.load(in, &load_error);
+    loaded = in && load_state(solver, in, &load_error);
   } else if (job.has_solution() && !config_.data_dir.empty()) {
     loaded = false;
   }
@@ -1010,8 +1023,7 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
     }
     if (config_.data_dir.empty()) {
       std::ostringstream buffer(std::ios::binary);
-      solution->solver->save(buffer);
-      if (!buffer) {
+      if (!save_state(*solution->solver, buffer)) {
         return make_error(ErrorKind::ResourceExhausted,
                           "the solution is too large to copy in memory; start the server "
                           "with a data directory to re-solve it");
@@ -1019,8 +1031,7 @@ Error JobManager::resolve(const v1::ResolveRequest& request, v1::Job* out) {
       state = std::move(buffer).str();
     } else {
       const bool ok = write_atomically(state_file(id), [&](std::ostream& file) {
-        solution->solver->save(file);
-        return static_cast<bool>(file);
+        return save_state(*solution->solver, file);
       });
       if (!ok) return make_error(ErrorKind::Internal, "cannot write the new job to disk");
     }

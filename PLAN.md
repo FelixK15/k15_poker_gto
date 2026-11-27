@@ -180,8 +180,14 @@ keeps the client stateless and makes deep links and "copy line" trivial.
 ### 4.2 Operation
 - **Auth:** bearer token. Remote servers use TLS; local mode binds to loopback only.
 - **Resources:** configurable RAM and thread budget. One solve at a time by default, others queue.
-- **Persistence:** solutions saved in a versioned binary format (zstd-compressed). The job list
-  survives a restart.
+- **Persistence:** solutions saved in a versioned binary format, zstd-compressed (level 3,
+  checksummed). Before compressing, each 1 MiB chunk is regrouped by byte position within the
+  4-byte values (all first bytes, then all second bytes …), which lines up signs and exponents;
+  zstd alone found almost nothing in the floats. States shrink to 53% (`flop_3bet`), 74%
+  (`turn_srp`) and 91% (`flop_srp_wide` after 60 iterations, 2.1 GB): regrets of a large,
+  young solve are close to noise. Saving and loading that state takes about 2 and 3 s instead of
+  0.7 s. Files from before compression still load. The re-solve copy held in memory (no data
+  directory) is compressed the same way. The job list survives a restart.
 - **Reuse:** a submit of a spot that an existing job already answers returns that job (marked
   `reused`) instead of solving again: one that is done and reached the requested target or
   iteration count, or one queued or running with settings at least as strict. Spots match when
@@ -273,11 +279,11 @@ Durations are rough guesses for one focused developer, not commitments.
 | M0 | Skeleton | **Done.** Repo builds on Windows; proto compiles to C++ and Dart. Linux build and CI not yet run | 1 week |
 | M1 | Engine core | **Done.** Cards, evaluator, ranges, tree builder, DCFR solver with exploitability; river spots solve via `gto-cli`; Kuhn poker and a river spot with a known answer pass | 3–4 weeks |
 | M2 | Full postflop | **Done, except the cross-check.** Chance nodes, so turn and flop spots solve; suit isomorphism; multithreading; Leduc poker reaches its known value; check-down EVs match brute-force equity. Still open: comparing full spots against TexasSolver / postflop-solver | 4–6 weeks |
-| M3 | Server | **Done, except compression.** Jobs with a queue, pause, resume, cancel and delete; progress stream; solutions kept on disk and browsable node by node, also while solving; size estimate; access token. TLS followed in M7. Still open: compressing saved solutions | 3 weeks |
+| M3 | Server | **Done.** Jobs with a queue, pause, resume, cancel and delete; progress stream; solutions kept on disk (zstd-compressed) and browsable node by node, also while solving; size estimate; access token. TLS followed in M7 | 3 weeks |
 | M4 | Client MVP | **Done on Windows.** Connect screen that starts the solver on this computer or connects to a server with a token; spot setup with a live size estimate; jobs list with pause, resume, cancel, delete; solution browser with the strategy matrix, breadcrumb, card picker and per-hand details. TLS and shipping the server with the app followed in M7 | 4–5 weeks |
 | M5 | Range library | **Done.** Preflop line picker for 6-max and 9-max at 100/200/300BB (single-raised, 3-bet and 4-bet pots) that fills in ranges, pot and stacks; range editor on the 13×13 grid with weights, text import (PioSOLVER and GTO+ forms) and saved ranges; tree presets; board picker. The ranges are rule-based approximations, see section 6. Not done: editing single suit combinations on the grid (they can be typed) | 2–3 weeks |
 | M6 | Node locking | **Done.** Per-hand locks in the engine; a re-solve is a new job that starts from the parent's solution with the locks in force; lock dialog (whole range or one hand class), lock list, and a comparison with the parent in the client. Not done: painting different frequencies per hand in one go, and a side-by-side compare view | 3–4 weeks |
-| M7 | Android + polish | **Done in part.** TLS on server and client; equity per hand and range; EV and equity views of the grid; runout report at deals; the app returns to the connect screen when its own solver stops; the solver ships inside the Windows app; packaging script; Android debug build. Not done: running on an Android device, an installer (zip only), building the Docker image (written, untested), compression of saved solutions | 3–4 weeks |
+| M7 | Android + polish | **Done in part.** TLS on server and client; equity per hand and range; EV and equity views of the grid; runout report at deals; the app returns to the connect screen when its own solver stops; the solver ships inside the Windows app; packaging script; Android build, tested on a real device; compression of saved solutions. Not done: an Android release signing key (release APKs are signed with the debug key), an app icon (Flutter's default on Android), an installer (zip only), building the Docker image (written, untested) | 3–4 weeks |
 | M8 | Performance | **Two rounds done.** First: single-pass showdown from steps prepared per board; flat, branch-free fold evaluation; vectorisable strategy loops; AVX2 build; all first-card deals of a pass run as one parallel batch. Second: showdowns from running sums with independent per-hand reads; 16-bit storage with stochastic rounding, chosen automatically for large trees. Not done: profiler-guided tuning, the fold and strategy loops (see section 3.3) | ongoing |
 
 The lock hook in the CFR traversal and the un-merge support in the tree builder are designed in
