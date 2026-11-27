@@ -14,6 +14,35 @@ import 'dart:core' as $core;
 
 import 'package:protobuf/protobuf.dart' as $pb;
 
+class HandDetail extends $pb.ProtobufEnum {
+  /// PlayerRange.hands and the arrays parallel to it, as always.
+  static const HandDetail HAND_DETAIL_HANDS =
+      HandDetail._(0, _omitEnumNames ? '' : 'HAND_DETAIL_HANDS');
+
+  /// Hands and PlayerRange.classes (Hold'em only).
+  static const HandDetail HAND_DETAIL_HANDS_AND_CLASSES =
+      HandDetail._(1, _omitEnumNames ? '' : 'HAND_DETAIL_HANDS_AND_CLASSES');
+
+  /// Only PlayerRange.classes: hands, reach, ev, equity, strategy and locked
+  /// stay empty. The compact choice for preflop nodes. Hold'em only:
+  /// INVALID_ARGUMENT for PLO4.
+  static const HandDetail HAND_DETAIL_CLASSES =
+      HandDetail._(2, _omitEnumNames ? '' : 'HAND_DETAIL_CLASSES');
+
+  static const $core.List<HandDetail> values = <HandDetail>[
+    HAND_DETAIL_HANDS,
+    HAND_DETAIL_HANDS_AND_CLASSES,
+    HAND_DETAIL_CLASSES,
+  ];
+
+  static final $core.List<HandDetail?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static HandDetail? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const HandDetail._(super.value, super.name);
+}
+
 class NodeType extends $pb.ProtobufEnum {
   static const NodeType NODE_TYPE_UNSPECIFIED =
       NodeType._(0, _omitEnumNames ? '' : 'NODE_TYPE_UNSPECIFIED');
@@ -101,6 +130,49 @@ class ActionType extends $pb.ProtobufEnum {
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 
   const ActionType._(super.value, super.name);
+}
+
+class PreflopScenarioKind extends $pb.ProtobufEnum {
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_UNSPECIFIED =
+      PreflopScenarioKind._(
+          0, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_UNSPECIFIED');
+
+  /// Nobody raised: limps, or the small blind completed.
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_LIMPED =
+      PreflopScenarioKind._(
+          1, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_LIMPED');
+
+  /// One raise, called.
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_SINGLE_RAISED =
+      PreflopScenarioKind._(
+          2, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_SINGLE_RAISED');
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_THREE_BET =
+      PreflopScenarioKind._(
+          3, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_THREE_BET');
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_FOUR_BET =
+      PreflopScenarioKind._(
+          4, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_FOUR_BET');
+
+  /// Five raises or more.
+  static const PreflopScenarioKind PREFLOP_SCENARIO_KIND_FIVE_BET_PLUS =
+      PreflopScenarioKind._(
+          5, _omitEnumNames ? '' : 'PREFLOP_SCENARIO_KIND_FIVE_BET_PLUS');
+
+  static const $core.List<PreflopScenarioKind> values = <PreflopScenarioKind>[
+    PREFLOP_SCENARIO_KIND_UNSPECIFIED,
+    PREFLOP_SCENARIO_KIND_LIMPED,
+    PREFLOP_SCENARIO_KIND_SINGLE_RAISED,
+    PREFLOP_SCENARIO_KIND_THREE_BET,
+    PREFLOP_SCENARIO_KIND_FOUR_BET,
+    PREFLOP_SCENARIO_KIND_FIVE_BET_PLUS,
+  ];
+
+  static final $core.List<PreflopScenarioKind?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 5);
+  static PreflopScenarioKind? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const PreflopScenarioKind._(super.value, super.name);
 }
 
 const $core.bool _omitEnumNames =

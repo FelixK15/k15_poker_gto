@@ -91,6 +91,13 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
     $core.bool? tooLarge,
     $core.bool? canSolve,
     $fixnum.Int64? memoryBudgetBytes,
+    $core.Iterable<$core.int>? playerHands,
+    $fixnum.Int64? infoSets,
+    $fixnum.Int64? strategyEntries,
+    $1.Engine? engine,
+    $1.ExploitabilityKind? exploitabilityKind,
+    $core.int? playerCount,
+    $core.Iterable<$core.String>? positions,
   }) {
     final result = EstimateTreeResponse._();
     if (nodes != null) result.nodes = nodes;
@@ -102,6 +109,14 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
     if (tooLarge != null) result.tooLarge = tooLarge;
     if (canSolve != null) result.canSolve = canSolve;
     if (memoryBudgetBytes != null) result.memoryBudgetBytes = memoryBudgetBytes;
+    if (playerHands != null) result.playerHands.addAll(playerHands);
+    if (infoSets != null) result.infoSets = infoSets;
+    if (strategyEntries != null) result.strategyEntries = strategyEntries;
+    if (engine != null) result.engine = engine;
+    if (exploitabilityKind != null)
+      result.exploitabilityKind = exploitabilityKind;
+    if (playerCount != null) result.playerCount = playerCount;
+    if (positions != null) result.positions.addAll(positions);
     return result;
   }
 
@@ -136,6 +151,21 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
     ..a<$fixnum.Int64>(
         9, _omitFieldNames ? '' : 'memoryBudgetBytes', $pb.PbFieldType.OU6,
         defaultOrMaker: $fixnum.Int64.ZERO)
+    ..p<$core.int>(
+        10, _omitFieldNames ? '' : 'playerHands', $pb.PbFieldType.KU3)
+    ..a<$fixnum.Int64>(
+        11, _omitFieldNames ? '' : 'infoSets', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..a<$fixnum.Int64>(
+        12, _omitFieldNames ? '' : 'strategyEntries', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..aE<$1.Engine>(13, _omitFieldNames ? '' : 'engine',
+        enumValues: $1.Engine.values)
+    ..aE<$1.ExploitabilityKind>(14, _omitFieldNames ? '' : 'exploitabilityKind',
+        enumValues: $1.ExploitabilityKind.values)
+    ..aI(15, _omitFieldNames ? '' : 'playerCount',
+        fieldType: $pb.PbFieldType.OU3)
+    ..pPS(16, _omitFieldNames ? '' : 'positions')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -248,6 +278,66 @@ class EstimateTreeResponse extends $pb.GeneratedMessage {
   $core.bool hasMemoryBudgetBytes() => $_has(8);
   @$pb.TagNumber(9)
   void clearMemoryBudgetBytes() => $_clearField(9);
+
+  /// Hands each player can hold on the board, in seat order (oop_hands and
+  /// ip_hands stay filled for two players).
+  @$pb.TagNumber(10)
+  $pb.PbList<$core.int> get playerHands => $_getList(9);
+
+  /// Monte Carlo: information sets of the abstracted game (betting sequences
+  /// times buckets). 0 for the exact engine; see strategy_entries.
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get infoSets => $_getI64(10);
+  @$pb.TagNumber(11)
+  set infoSets($fixnum.Int64 value) => $_setInt64(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasInfoSets() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearInfoSets() => $_clearField(11);
+
+  /// Exact engine: action-hand pairs over all decisions (each costs two
+  /// values in strategy_bytes).
+  @$pb.TagNumber(12)
+  $fixnum.Int64 get strategyEntries => $_getI64(11);
+  @$pb.TagNumber(12)
+  set strategyEntries($fixnum.Int64 value) => $_setInt64(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasStrategyEntries() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearStrategyEntries() => $_clearField(12);
+
+  /// The engine a submit of this spot would run on (never AUTO).
+  @$pb.TagNumber(13)
+  $1.Engine get engine => $_getN(12);
+  @$pb.TagNumber(13)
+  set engine($1.Engine value) => $_setField(13, value);
+  @$pb.TagNumber(13)
+  $core.bool hasEngine() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearEngine() => $_clearField(13);
+
+  /// What the job's exploitability would mean.
+  @$pb.TagNumber(14)
+  $1.ExploitabilityKind get exploitabilityKind => $_getN(13);
+  @$pb.TagNumber(14)
+  set exploitabilityKind($1.ExploitabilityKind value) => $_setField(14, value);
+  @$pb.TagNumber(14)
+  $core.bool hasExploitabilityKind() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearExploitabilityKind() => $_clearField(14);
+
+  /// Players and their position names, in seat order.
+  @$pb.TagNumber(15)
+  $core.int get playerCount => $_getIZ(14);
+  @$pb.TagNumber(15)
+  set playerCount($core.int value) => $_setUnsignedInt32(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasPlayerCount() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearPlayerCount() => $_clearField(15);
+
+  @$pb.TagNumber(16)
+  $pb.PbList<$core.String> get positions => $_getList(15);
 }
 
 const $core.bool _omitFieldNames =

@@ -1,3 +1,4 @@
+import 'package:fixnum/fixnum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:grpc/grpc.dart';
@@ -158,5 +159,60 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('jobs-error')), findsNothing);
     expect(find.text('Done'), findsOneWidget);
+  });
+
+  testWidgets('labels Monte Carlo estimates and lists every player EV', (
+    tester,
+  ) async {
+    final api = FakeApi();
+    api.jobs.add(
+      Job(
+        id: 'mw',
+        name: 'BB CO BTN',
+        state: JobState.JOB_STATE_RUNNING,
+        spot: Spot(board: 'Ks Td 7h', pot: 10, effectiveStack: 95),
+        settings: SolveSettings(mcIterations: Int64(20000000)),
+        engine: Engine.ENGINE_MONTE_CARLO,
+        mcIterations: Int64(5000000),
+        measured: true,
+        exploitabilityPct: 0.8,
+        exploitabilityKind:
+            ExploitabilityKind.EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY,
+        evs: [-1.2, 3.4, 7.8],
+        evEstimated: true,
+        positions: ['BB', 'CO', 'BTN'],
+        playerCount: 3,
+        hasSolution: true,
+      ),
+    );
+    api.jobs.add(sampleJob(id: 'done'));
+    await pumpJobs(tester, api);
+
+    expect(
+      tester.widget<Text>(find.byKey(const Key('progress-mw'))).data,
+      '5M of 20M samples · ≈ 0.80% of pot (estimate; no equilibrium '
+      'guarantee with 3+ players)',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('ev-mw'))).data,
+      startsWith('EV ≈ BB -1.20, CO 3.40, BTN 7.80'),
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('kind-mw'))).data,
+      'NLH · 3 players · Monte Carlo',
+    );
+    // An exact heads-up job keeps its wording.
+    expect(
+      tester.widget<Text>(find.byKey(const Key('progress-done'))).data,
+      contains('0.42% of pot exploitable'),
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const Key('ev-done'))).data,
+      startsWith('EV: OOP 4.21, IP 5.79'),
+    );
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.byType(LinearProgressIndicator),
+    );
+    expect(bar.value, closeTo(0.25, 1e-9));
   });
 }

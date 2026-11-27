@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../api/gto_api.dart';
 import '../common/format.dart';
 import '../common/playing_card.dart';
+import '../common/solve_labels.dart';
 import 'action_style.dart';
 import 'matrix_model.dart';
+import 'node_view.dart';
 import 'strategy_matrix.dart';
 
 /// A titled block of the side panel.
@@ -88,15 +90,18 @@ class FrequencyBar extends StatelessWidget {
   }
 }
 
-/// Pot, and both players' EV and equity.
+/// Pot, and every player's EV, equity, combos and chips at this node.
 class NodeSummary extends StatelessWidget {
-  const NodeSummary({super.key, required this.node});
+  const NodeSummary({super.key, required this.node, required this.job});
 
   final GetNodeResponse node;
+  final Job job;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final seats = NodeSeats(node, job);
+    final positions = seats.positions;
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -104,16 +109,81 @@ class NodeSummary extends StatelessWidget {
       fontWeight: FontWeight.w600,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
-    TableRow row(String label, String oop, String ip, {Key? key}) => TableRow(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Text(label, key: key, style: muted),
-        ),
-        Text(oop, style: number, textAlign: TextAlign.right),
-        Text(ip, style: number, textAlign: TextAlign.right),
-      ],
+    final approx = node.evEstimated ? '≈' : '';
+    Widget cell(String text, {TextStyle? style, Key? key}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Text(
+        text,
+        key: key,
+        style: style ?? number,
+        textAlign: TextAlign.right,
+      ),
     );
+
+    String status(int seat) {
+      if (seats.folded(seat)) return 'folded';
+      if (seats.allIn(seat)) return 'all-in';
+      if (seats.isAction && seats.acting == seat) return 'to act';
+      return '';
+    }
+
+    final rows = <TableRow>[
+      TableRow(
+        children: [
+          const SizedBox(),
+          cell('EV', style: muted, key: const Key('node-ev')),
+          cell('Equity', style: muted, key: const Key('node-equity')),
+          cell('Combos', style: muted),
+          cell('In / behind', style: muted),
+        ],
+      ),
+      for (var seat = 0; seat < seats.count; ++seat)
+        TableRow(
+          key: ValueKey('seat-$seat'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: positions[seat],
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: seats.isAction && seats.acting == seat
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: seats.folded(seat)
+                            ? theme.colorScheme.onSurfaceVariant
+                            : null,
+                      ),
+                    ),
+                    if (status(seat).isNotEmpty)
+                      TextSpan(text: ' ${status(seat)}', style: muted),
+                  ],
+                ),
+              ),
+            ),
+            cell(
+              seats.folded(seat)
+                  ? '–'
+                  : '$approx${seats.ranges[seat].rangeEv.toStringAsFixed(2)}',
+            ),
+            cell(
+              seats.folded(seat)
+                  ? '–'
+                  : formatPercent(seats.ranges[seat].rangeEquity),
+            ),
+            cell(
+              seats.folded(seat) ? '–' : seats.combos(seat).toStringAsFixed(0),
+            ),
+            cell(
+              '${formatChips(seats.committed(seat))} / '
+              '${formatChips(seats.behind(seat))}',
+              style: muted,
+            ),
+          ],
+        ),
+    ];
 
     return PanelSection(
       title: 'Spot',
@@ -122,33 +192,34 @@ class NodeSummary extends StatelessWidget {
         key: const Key('node-pot'),
         style: theme.textTheme.titleSmall,
       ),
-      child: Table(
-        columnWidths: const {
-          0: FlexColumnWidth(1.2),
-          1: FlexColumnWidth(),
-          2: FlexColumnWidth(),
-        },
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TableRow(
-            children: [
-              const SizedBox(),
-              Text('OOP', style: muted, textAlign: TextAlign.right),
-              Text('IP', style: muted, textAlign: TextAlign.right),
-            ],
+          Table(
+            columnWidths: const {
+              0: FlexColumnWidth(1.4),
+              1: FlexColumnWidth(),
+              2: FlexColumnWidth(),
+              3: FlexColumnWidth(),
+              4: FlexColumnWidth(1.3),
+            },
+            defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+            children: rows,
           ),
-          row(
-            'EV',
-            node.oop.rangeEv.toStringAsFixed(2),
-            node.ip.rangeEv.toStringAsFixed(2),
-            key: const Key('node-ev'),
-          ),
-          row(
-            'Equity',
-            formatPercent(node.oop.rangeEquity),
-            formatPercent(node.ip.rangeEquity),
-            key: const Key('node-equity'),
-          ),
+          if (job.measured) ...[
+            const SizedBox(height: 6),
+            Tooltip(
+              message: exploitabilityMeaning(job.exploitabilityKind),
+              child: Text(
+                exploitabilityLabel(
+                  job.exploitabilityPct,
+                  job.exploitabilityKind,
+                ),
+                key: const Key('node-exploitability'),
+                style: muted,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -162,40 +233,52 @@ class ActionSummary extends StatelessWidget {
   const ActionSummary({
     super.key,
     required this.node,
-    required this.model,
+    required this.who,
+    required this.totalCombos,
+    required this.comboCounts,
     required this.colors,
-    required this.viewed,
     required this.highlight,
     required this.onHighlight,
   });
 
+  /// Combos per action of the viewed player's grid, or null if the player
+  /// does not act here.
+  static List<double>? matrixCombos(MatrixModel model) {
+    if (model.actionCount == 0) return null;
+    final counts = List.filled(model.actionCount, 0.0);
+    for (final cell in model.cells) {
+      for (var a = 0; a < model.actionCount; ++a) {
+        counts[a] += cell.actionReach[a];
+      }
+    }
+    return counts;
+  }
+
   final GetNodeResponse node;
-  final MatrixModel model;
+
+  /// The viewed player's position name.
+  final String who;
+  final double totalCombos;
+
+  /// Combos taking each action; null if [who] does not act here.
+  final List<double>? comboCounts;
   final List<Color> colors;
-  final Player viewed;
   final int? highlight;
   final ValueChanged<int?> onHighlight;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final who = viewed == Player.PLAYER_OOP ? 'OOP' : 'IP';
     final combos = Text(
-      '${model.totalReach.toStringAsFixed(1)} combos in $who\'s range here',
+      '${totalCombos.toStringAsFixed(1)} combos in $who\'s range here',
       key: const Key('range-combos'),
       style: theme.textTheme.bodySmall?.copyWith(
         color: theme.colorScheme.onSurfaceVariant,
       ),
     );
-    if (model.actionCount == 0) {
+    final counts = comboCounts;
+    if (counts == null || counts.length != node.actions.length) {
       return PanelSection(title: '$who range', child: combos);
-    }
-
-    final comboCounts = List.filled(model.actionCount, 0.0);
-    for (final cell in model.cells) {
-      for (var a = 0; a < model.actionCount; ++a) {
-        comboCounts[a] += cell.actionReach[a];
-      }
     }
 
     return PanelSection(
@@ -239,7 +322,7 @@ class ActionSummary extends StatelessWidget {
                         key: Key('summary-${node.actions[i].label}'),
                         title: actionTitle(node.actions[i]),
                         frequency: node.actions[i].frequency,
-                        combos: comboCounts[i],
+                        combos: counts[i],
                         color: colors[i],
                         selected: highlight == i,
                         dimmed: highlight != null && highlight != i,
@@ -576,10 +659,19 @@ class CardPicker extends StatelessWidget {
 /// One tile per card that can come: what the spot is worth after it and what
 /// the next player does. Tapping a tile deals the card.
 class RunoutReport extends StatelessWidget {
-  const RunoutReport({super.key, required this.runouts, required this.onPick});
+  const RunoutReport({
+    super.key,
+    required this.runouts,
+    required this.onPick,
+    this.firstSeat = 'OOP',
+  });
 
   final List<Runout> runouts;
   final ValueChanged<String> onPick;
+
+  /// Position of the first player in seat order, whose value orders the
+  /// cards.
+  final String firstSeat;
 
   @override
   Widget build(BuildContext context) {
@@ -594,7 +686,7 @@ class RunoutReport extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Cards by OOP\'s value after them. The bar shows what the next '
+          'Cards by $firstSeat\'s value after them. The bar shows what the next '
           'player does.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,

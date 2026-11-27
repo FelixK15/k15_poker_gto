@@ -213,7 +213,7 @@ void main() {
     });
 
     test('puts the right player out of position', () {
-      PreflopScenario s(String opener, String defender) =>
+      LibraryScenario s(String opener, String defender) =>
           PreflopLibrary.scenario(
             format: TableFormat.sixMax,
             stack: 100,
@@ -230,7 +230,7 @@ void main() {
     });
 
     test('sizes the pots as the lines say', () {
-      PreflopScenario s(PotType type, String opener, String defender) =>
+      LibraryScenario s(PotType type, String opener, String defender) =>
           PreflopLibrary.scenario(
             format: TableFormat.sixMax,
             stack: 100,
@@ -274,7 +274,7 @@ void main() {
     });
 
     test('splits the defender into callers and 3-bettors', () {
-      PreflopScenario s(PotType type) => PreflopLibrary.scenario(
+      LibraryScenario s(PotType type) => PreflopLibrary.scenario(
         format: TableFormat.sixMax,
         stack: 100,
         potType: type,

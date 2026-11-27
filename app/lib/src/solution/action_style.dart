@@ -62,8 +62,13 @@ String actionTitle(NodeAction action) {
 /// A step of a path for the breadcrumb: "bet6.93" becomes "Bet 6.93", a card
 /// such as "Ts" becomes "T♠".
 String pathStepTitle(String step) {
-  final card = cardTitle(step);
-  if (card != null) return card;
+  final cards = dealtCards(step);
+  if (cards != null) return cards.map(cardTitle).join(' ');
+  // Preflop solves may name the player: "BTN:raise2.5".
+  final colon = step.indexOf(':');
+  if (colon > 0) {
+    return '${step.substring(0, colon)} ${pathStepTitle(step.substring(colon + 1))}';
+  }
   final match = RegExp(r'^([a-z]+)([\d.]*)$').firstMatch(step.toLowerCase());
   if (match == null) return step;
   final word = match.group(1)!;
@@ -72,6 +77,16 @@ String pathStepTitle(String step) {
       ? 'All-in'
       : '${word[0].toUpperCase()}${word.substring(1)}';
   return amount.isEmpty ? title : '$title $amount';
+}
+
+/// The cards a path step deals: one card ("Ts"), or the three of a flop
+/// dealt at once in a preflop solve ("Ks7d2c"). Null for an action.
+List<String>? dealtCards(String step) {
+  if (step.length != 2 && step.length != 6) return null;
+  final cards = [
+    for (var i = 0; i < step.length; i += 2) step.substring(i, i + 2),
+  ];
+  return cards.every((card) => cardTitle(card) != null) ? cards : null;
 }
 
 const _suitSymbols = {'s': '♠', 'h': '♥', 'd': '♦', 'c': '♣'};

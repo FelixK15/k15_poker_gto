@@ -291,6 +291,80 @@ void main() {
       );
     });
 
+    test('solves heads-up PLO and sizes up a multiway spot', () async {
+      final api = await LocalServer.start(
+        executable: serverPath,
+        dataDir: dataDir.path,
+      );
+      addTearDown(api.close);
+      if (!supportsVariants(api.info)) {
+        markTestSkipped('the server predates API 1.4');
+        return;
+      }
+      final plo = Spot(
+        board: 'Kc 8d 5h 3s 2d',
+        oopRange: 'AAQQ, QQJJ',
+        ipRange: 'KKxx:0.25, T9xx:0.1',
+        pot: 100,
+        effectiveStack: 100,
+        variant: Variant.VARIANT_OMAHA4,
+        tree: TreeSettings(
+          river: StreetSizing(
+            oop: BetSizing(betPct: [100]),
+            ip: BetSizing(betPct: [100]),
+          ),
+        ),
+      );
+      final estimate = await api.estimate(plo);
+      expect(estimate.engine, Engine.ENGINE_EXACT);
+      expect(
+        estimate.exploitabilityKind,
+        ExploitabilityKind.EXPLOITABILITY_KIND_EXACT,
+      );
+      final job = await api.submit(
+        plo,
+        SolveSettings(maxIterations: 200, targetExploitabilityPct: 0.5),
+        'dart live PLO',
+      );
+      final done = (await api.watch(job.id).toList()).last;
+      expect(done.state, JobState.JOB_STATE_DONE);
+      expect(done.positions, ['OOP', 'IP']);
+      expect(done.evs, hasLength(2));
+      final node = await api.getNode(job.id, '', maxHands: 20);
+      expect(node.players, hasLength(2));
+      expect(node.players[1].hands.length, lessThanOrEqualTo(20));
+      expect(node.players[1].hands.first, hasLength(8));
+      expect(node.players[1].totalHands, greaterThan(20));
+
+      // Multiway: refused until the Monte Carlo engine is in, then sized.
+      final multiway = Spot(
+        board: 'Kc 8d 5h',
+        pot: 10,
+        effectiveStack: 95,
+        players: [
+          PlayerSpot(position: 'BB', range: '22+, A2s+'),
+          PlayerSpot(position: 'CO', range: '22+, A2s+'),
+          PlayerSpot(position: 'BTN', range: '22+, A2s+'),
+        ],
+        tree: TreeSettings(
+          flop: StreetSizing(all: BetSizing(betPct: [50])),
+          turn: StreetSizing(all: BetSizing(betPct: [50])),
+          river: StreetSizing(all: BetSizing(betPct: [50])),
+        ),
+      );
+      try {
+        final sized = await api.estimate(multiway);
+        expect(sized.engine, Engine.ENGINE_MONTE_CARLO);
+        expect(
+          sized.exploitabilityKind,
+          ExploitabilityKind.EXPLOITABILITY_KIND_ESTIMATED_MULTIWAY,
+        );
+        expect(sized.positions, ['BB', 'CO', 'BTN']);
+      } on GrpcError catch (error) {
+        expect(error.code, StatusCode.failedPrecondition);
+      }
+    });
+
     test('reports a missing executable', () async {
       await expectLater(
         LocalServer.start(

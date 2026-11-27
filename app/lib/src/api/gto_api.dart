@@ -17,6 +17,14 @@ export '../gen/gto/v1/trees.pb.dart';
 /// API contract major version this client speaks. See proto/gto/v1/server.proto.
 const int clientApiMajor = 1;
 
+/// The API minor version that brought PLO, multiway spots and preflop solves.
+/// An older server would ignore those fields and solve something else.
+const int variantsApiMinor = 4;
+
+/// Whether the server understands PLO, multiway and preflop spots.
+bool supportsVariants(GetInfoResponse info) =>
+    info.apiMinor >= variantsApiMinor;
+
 /// Everything the app asks of a solver server. The screens depend on this
 /// interface only, so tests can hand them a fake.
 abstract class GtoApi {
@@ -42,7 +50,25 @@ abstract class GtoApi {
   /// The job now and after every change, until it ends.
   Stream<Job> watch(String id);
 
-  Future<GetNodeResponse> getNode(String jobId, String path);
+  /// The node at [path]. [maxHands] caps the hands listed per player (0:
+  /// the server default, every hand for Hold'em and 2,000 for PLO);
+  /// [detail] asks for hand classes as well as, or instead of, hands.
+  Future<GetNodeResponse> getNode(
+    String jobId,
+    String path, {
+    int maxHands = 0,
+    HandDetail detail = HandDetail.HAND_DETAIL_HANDS,
+  });
+
+  /// Preflop solves: the lines that reach the flop, ready for
+  /// [getPreflopRanges]. [maxRaises] 0 means the server default.
+  Future<List<PreflopScenario>> listPreflopScenarios(
+    String jobId, {
+    int maxRaises = 0,
+  });
+
+  /// Preflop solves: every remaining player's range after the line [path].
+  Future<GetPreflopRangesResponse> getPreflopRanges(String jobId, String path);
 
   /// How each card that can come at the chance node [path] changes the spot.
   Future<List<Runout>> getRunouts(String jobId, String path);
@@ -209,11 +235,38 @@ class GrpcGtoApi implements GtoApi {
 
   // Reading back a large solution from disk can take a while.
   @override
-  Future<GetNodeResponse> getNode(String jobId, String path) =>
-      _solutions.getNode(
-        GetNodeRequest(jobId: jobId, path: path),
-        options: _options(const Duration(minutes: 5)),
-      );
+  Future<GetNodeResponse> getNode(
+    String jobId,
+    String path, {
+    int maxHands = 0,
+    HandDetail detail = HandDetail.HAND_DETAIL_HANDS,
+  }) => _solutions.getNode(
+    GetNodeRequest(
+      jobId: jobId,
+      path: path,
+      maxHands: maxHands,
+      detail: detail,
+    ),
+    options: _options(const Duration(minutes: 5)),
+  );
+
+  @override
+  Future<List<PreflopScenario>> listPreflopScenarios(
+    String jobId, {
+    int maxRaises = 0,
+  }) async => (await _solutions.listPreflopScenarios(
+    ListPreflopScenariosRequest(jobId: jobId, maxRaises: maxRaises),
+    options: _options(const Duration(minutes: 5)),
+  )).scenarios;
+
+  @override
+  Future<GetPreflopRangesResponse> getPreflopRanges(
+    String jobId,
+    String path,
+  ) => _solutions.getPreflopRanges(
+    GetPreflopRangesRequest(jobId: jobId, path: path),
+    options: _options(const Duration(minutes: 5)),
+  );
 
   @override
   Future<List<Runout>> getRunouts(String jobId, String path) async =>

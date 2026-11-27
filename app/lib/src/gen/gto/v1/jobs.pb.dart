@@ -44,6 +44,13 @@ class Job extends $pb.GeneratedMessage {
     $core.Iterable<$1.NodeLock>? locks,
     $core.bool? warmStartPending,
     $core.bool? reused,
+    $core.Iterable<$core.double>? evs,
+    $1.ExploitabilityKind? exploitabilityKind,
+    $core.int? playerCount,
+    $core.Iterable<$core.String>? positions,
+    $1.Engine? engine,
+    $fixnum.Int64? mcIterations,
+    $core.bool? evEstimated,
   }) {
     final result = Job._();
     if (id != null) result.id = id;
@@ -66,6 +73,14 @@ class Job extends $pb.GeneratedMessage {
     if (locks != null) result.locks.addAll(locks);
     if (warmStartPending != null) result.warmStartPending = warmStartPending;
     if (reused != null) result.reused = reused;
+    if (evs != null) result.evs.addAll(evs);
+    if (exploitabilityKind != null)
+      result.exploitabilityKind = exploitabilityKind;
+    if (playerCount != null) result.playerCount = playerCount;
+    if (positions != null) result.positions.addAll(positions);
+    if (engine != null) result.engine = engine;
+    if (mcIterations != null) result.mcIterations = mcIterations;
+    if (evEstimated != null) result.evEstimated = evEstimated;
     return result;
   }
 
@@ -108,6 +123,18 @@ class Job extends $pb.GeneratedMessage {
         subBuilder: $1.NodeLock.$_createMessage)
     ..aOB(19, _omitFieldNames ? '' : 'warmStartPending')
     ..aOB(20, _omitFieldNames ? '' : 'reused')
+    ..p<$core.double>(21, _omitFieldNames ? '' : 'evs', $pb.PbFieldType.KD)
+    ..aE<$1.ExploitabilityKind>(22, _omitFieldNames ? '' : 'exploitabilityKind',
+        enumValues: $1.ExploitabilityKind.values)
+    ..aI(23, _omitFieldNames ? '' : 'playerCount',
+        fieldType: $pb.PbFieldType.OU3)
+    ..pPS(24, _omitFieldNames ? '' : 'positions')
+    ..aE<$1.Engine>(25, _omitFieldNames ? '' : 'engine',
+        enumValues: $1.Engine.values)
+    ..a<$fixnum.Int64>(
+        26, _omitFieldNames ? '' : 'mcIterations', $pb.PbFieldType.OU6,
+        defaultOrMaker: $fixnum.Int64.ZERO)
+    ..aOB(27, _omitFieldNames ? '' : 'evEstimated')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -320,6 +347,69 @@ class Job extends $pb.GeneratedMessage {
   $core.bool hasReused() => $_has(19);
   @$pb.TagNumber(20)
   void clearReused() => $_clearField(20);
+
+  /// EV of every player from the latest measurement, in chips, in seat order
+  /// (Spot.players order; heads-up OOP then IP, the same as oop_ev / ip_ev,
+  /// which stay filled for two players). Preflop: in big blinds relative to
+  /// the stack before posting.
+  @$pb.TagNumber(21)
+  $pb.PbList<$core.double> get evs => $_getList(20);
+
+  /// What exploitability_pct means. Unspecified on jobs saved by older
+  /// servers, which were all EXACT or (with locks) LOCKED_GAME.
+  @$pb.TagNumber(22)
+  $1.ExploitabilityKind get exploitabilityKind => $_getN(21);
+  @$pb.TagNumber(22)
+  set exploitabilityKind($1.ExploitabilityKind value) => $_setField(22, value);
+  @$pb.TagNumber(22)
+  $core.bool hasExploitabilityKind() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearExploitabilityKind() => $_clearField(22);
+
+  /// Players in the spot and their position names, in seat order. Heads-up
+  /// postflop spots without names get "OOP" and "IP".
+  @$pb.TagNumber(23)
+  $core.int get playerCount => $_getIZ(22);
+  @$pb.TagNumber(23)
+  set playerCount($core.int value) => $_setUnsignedInt32(22, value);
+  @$pb.TagNumber(23)
+  $core.bool hasPlayerCount() => $_has(22);
+  @$pb.TagNumber(23)
+  void clearPlayerCount() => $_clearField(23);
+
+  @$pb.TagNumber(24)
+  $pb.PbList<$core.String> get positions => $_getList(23);
+
+  /// The engine the job runs on (never AUTO once accepted).
+  @$pb.TagNumber(25)
+  $1.Engine get engine => $_getN(24);
+  @$pb.TagNumber(25)
+  set engine($1.Engine value) => $_setField(25, value);
+  @$pb.TagNumber(25)
+  $core.bool hasEngine() => $_has(24);
+  @$pb.TagNumber(25)
+  void clearEngine() => $_clearField(25);
+
+  /// Monte Carlo: sampled iterations so far (`iteration` is capped at 2^32-1
+  /// and holds the same number).
+  @$pb.TagNumber(26)
+  $fixnum.Int64 get mcIterations => $_getI64(25);
+  @$pb.TagNumber(26)
+  set mcIterations($fixnum.Int64 value) => $_setInt64(25, value);
+  @$pb.TagNumber(26)
+  $core.bool hasMcIterations() => $_has(25);
+  @$pb.TagNumber(26)
+  void clearMcIterations() => $_clearField(26);
+
+  /// Monte Carlo: EVs and exploitability are sampled estimates.
+  @$pb.TagNumber(27)
+  $core.bool get evEstimated => $_getBF(26);
+  @$pb.TagNumber(27)
+  set evEstimated($core.bool value) => $_setBool(26, value);
+  @$pb.TagNumber(27)
+  $core.bool hasEvEstimated() => $_has(26);
+  @$pb.TagNumber(27)
+  void clearEvEstimated() => $_clearField(27);
 }
 
 class SubmitJobRequest extends $pb.GeneratedMessage {
