@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <sstream>
 
 #include "gto/mc/solver.h"
@@ -131,6 +132,41 @@ TEST(McKuhn, OneThreadIsDeterministicAndStateRoundTrips) {
   std::stringstream broken(sb.str().substr(0, 30));
   EXPECT_FALSE(c->load(broken, &error));
   EXPECT_EQ(c->iterations(), 20'000u);
+}
+
+TEST(McKuhn, SolveStopsOnBudgetCallbackAndCancel) {
+  auto solver = Solver::create(kuhn(2), {.threads = 2});
+  ASSERT_TRUE(solver);
+  SolveOptions options;
+  options.max_iterations = 12'345;
+  SolveResult result = solver->solve(options);
+  EXPECT_EQ(result.iterations, 12'345u);
+  EXPECT_EQ(solver->iterations(), 12'345u);
+  EXPECT_FALSE(result.stopped);
+
+  int calls = 0;
+  options.max_iterations = 0;
+  options.progress_interval_seconds = 0;
+  options.on_progress = [&](const Progress& p) {
+    EXPECT_GT(p.iterations, 12'345u);
+    return ++calls < 3;
+  };
+  result = solver->solve(options);
+  EXPECT_TRUE(result.stopped);
+  EXPECT_EQ(calls, 3);
+
+  std::atomic<bool> cancel{true};
+  options.on_progress = nullptr;
+  options.cancel = &cancel;
+  result = solver->solve(options);
+  EXPECT_TRUE(result.stopped);
+  EXPECT_EQ(result.iterations, 0u);
+
+  options.cancel = nullptr;
+  options.max_seconds = 0.05;
+  result = solver->solve(options);
+  EXPECT_GE(result.seconds, 0.05);
+  EXPECT_GT(result.iterations, 0u);
 }
 
 }  // namespace
