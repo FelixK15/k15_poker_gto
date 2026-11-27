@@ -111,6 +111,13 @@ bool GameConfig::validate(std::string* error) const {
       !(preflop.per_caller >= 0)) {
     return fail("preflop sizes must be positive");
   }
+  if (!preflop.open_bb_by_seat.empty() &&
+      static_cast<int>(preflop.open_bb_by_seat.size()) != num_players) {
+    return fail("per-seat open sizes need one entry per player");
+  }
+  for (const auto& sizes : preflop.open_bb_by_seat) {
+    if (!valid_sizes(sizes)) return fail("preflop sizes must be positive");
+  }
   if (raise_cap < 0 || preflop.raise_cap < 0) return fail("the raise cap cannot be negative");
   if (!(allin_threshold >= 0 && allin_threshold <= 1)) {
     return fail("the all-in threshold must be between 0 and 1");
