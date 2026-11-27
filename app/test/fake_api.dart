@@ -17,6 +17,7 @@ class FakeApi implements GtoApi {
     serverVersion: '0.1.0',
     engineVersion: '0.1.0',
     apiMajor: 1,
+    apiMinor: 4,
     os: 'linux',
     logicalCores: 16,
     totalMemoryBytes: Int64(32) << 30,
@@ -126,8 +127,21 @@ class FakeApi implements GtoApi {
   @override
   Stream<Job> watch(String id) => Stream.fromIterable([_job(id)]);
 
+  /// max_hands and detail of every node request, in order.
+  final List<({int maxHands, HandDetail detail})> nodeOptions = [];
+
+  /// Preflop scenarios by job id, and ranges by "jobId:path".
+  final Map<String, List<PreflopScenario>> preflopScenarios = {};
+  final Map<String, GetPreflopRangesResponse> preflopRanges = {};
+
   @override
-  Future<GetNodeResponse> getNode(String jobId, String path) async {
+  Future<GetNodeResponse> getNode(
+    String jobId,
+    String path, {
+    int maxHands = 0,
+    HandDetail detail = HandDetail.HAND_DETAIL_HANDS,
+  }) async {
+    nodeOptions.add((maxHands: maxHands, detail: detail));
     nodeRequests.add(path);
     nodeRequestsByJob.add('$jobId:$path');
     final isChild = jobs.any(
@@ -138,6 +152,32 @@ class FakeApi implements GtoApi {
       throw GrpcError.notFound("path '$path': no such line");
     }
     return node;
+  }
+
+  @override
+  Future<List<PreflopScenario>> listPreflopScenarios(
+    String jobId, {
+    int maxRaises = 0,
+  }) async {
+    calls.add('scenarios $jobId');
+    final result = preflopScenarios[jobId];
+    if (result == null) {
+      throw const GrpcError.failedPrecondition('not a preflop solve');
+    }
+    return result;
+  }
+
+  @override
+  Future<GetPreflopRangesResponse> getPreflopRanges(
+    String jobId,
+    String path,
+  ) async {
+    calls.add('ranges $jobId:$path');
+    final result = preflopRanges['$jobId:$path'];
+    if (result == null) {
+      throw GrpcError.invalidArgument("path '$path': no such line");
+    }
+    return result;
   }
 
   @override

@@ -45,8 +45,8 @@ enum PotType {
 const List<int> stackDepths = [100, 200, 300];
 
 /// A spot to solve, as the library fills it in.
-class PreflopScenario {
-  PreflopScenario({
+class LibraryScenario {
+  LibraryScenario({
     required this.description,
     required this.oopPosition,
     required this.ipPosition,
@@ -83,7 +83,7 @@ class PreflopLibrary {
 
   /// Builds the spot in which [opener] raises first in and [defender]
   /// continues, for the given pot type and stack depth.
-  static PreflopScenario scenario({
+  static LibraryScenario scenario({
     required TableFormat format,
     required int stack,
     required PotType potType,
@@ -148,7 +148,7 @@ class PreflopLibrary {
             '$defender calls';
     }
 
-    return PreflopScenario(
+    return LibraryScenario(
       description: description,
       oopPosition: defenderIsOop ? defender : opener,
       ipPosition: defenderIsOop ? opener : defender,

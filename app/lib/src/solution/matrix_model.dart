@@ -138,6 +138,44 @@ class MatrixModel {
     return MatrixModel._(cells, actions, total);
   }
 
+  /// Builds the grid from the server's 169 hand classes (in grid order), for
+  /// nodes read with HandDetail CLASSES, such as preflop. Pass the node's
+  /// [actionCount] if this is the acting player's range.
+  factory MatrixModel.fromClasses(
+    List<HandClass> classes, {
+    int actionCount = 0,
+  }) {
+    final empty = MatrixModel.fromRange(PlayerRange());
+    final byName = {for (final c in classes) c.name: c};
+    final actions =
+        actionCount > 0 && classes.any((c) => c.strategy.length == actionCount)
+        ? actionCount
+        : 0;
+    final cells = [
+      for (final template in empty.cells)
+        MatrixCell(template.label, template.combos, actions),
+    ];
+    var total = 0.0;
+    for (final cell in cells) {
+      final source = byName[cell.label];
+      if (source == null) continue;
+      // Preflop classes carry the weight; postflop ones the combo count.
+      final reach = source.combos > 0
+          ? source.combos.toDouble()
+          : source.weight * cell.combos;
+      cell.reach = reach;
+      cell._evTimesReach = source.ev * reach;
+      cell._equityTimesReach = source.equity * reach;
+      if (source.strategy.length == actions) {
+        for (var a = 0; a < actions; ++a) {
+          cell.actionReach[a] = source.strategy[a] * reach;
+        }
+      }
+      total += reach;
+    }
+    return MatrixModel._(cells, actions, total);
+  }
+
   /// 169 cells, row by row.
   final List<MatrixCell> cells;
 
